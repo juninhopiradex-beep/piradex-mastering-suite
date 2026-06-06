@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piradex Mastering Suite</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="logo">
+      <span class="logo-main">PIRADEX</span>
+      <span class="logo-sub">MASTERING SUITE</span>
+    </div>
+    <div class="hdr-divider"></div>
+    <div class="hdr-engine">ENGINE v2.0</div>
+    <div class="hdr-right">
+      <span class="hdr-label">PRESET</span>
+      <span id="hdr-preset" class="hdr-preset-name">Kizomba</span>
+      <button class="bypass" id="bypass-btn" onclick="toggleBypass()">BYPASS</button>
+    </div>
+  </div>
+
+  <div class="presets-bar">
+    <span class="presets-label">Presets</span>
+    <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
+    <div class="preset-chip" onclick="setPreset('kuduro',this)">Kuduro</div>
+    <div class="preset-chip" onclick="setPreset('zouk',this)">Zouk</div>
+    <div class="preset-chip" onclick="setPreset('gzouk',this)">Gzouk</div>
+    <div class="preset-chip" onclick="setPreset('semba',this)">Semba</div>
+    <div class="preset-chip" onclick="setPreset('afrohouse',this)">Afro-House</div>
+    <div class="preset-chip" onclick="setPreset('rnb',this)">R&amp;B</div>
+    <div class="preset-chip" onclick="setPreset('afrobeats',this)">Afrobeats</div>
+  </div>
+
+  <div class="preset-info">
+    <span class="pi-name" id="pi-name">KIZOMBA</span>
+    <span class="pi-desc" id="pi-desc">Graves quentes, mids suaves, loudness moderado — sensualidade e groove</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active">MASTER</div>
+    <div class="tab">EQ</div>
+    <div class="tab">COMP</div>
+    <div class="tab">DYN</div>
+    <div class="tab">SHAPE</div>
+    <div class="tab">WIDTH</div>
+    <div class="tab">EXCITE</div>
+    <div class="tab">LOUD</div>
+    <div class="tab">LIMIT</div>
+    <div class="tab">REF</div>
+  </div>
+
+  <div class="main">
+    <div class="panel">
+      <div class="plabel">AI MASTER · ONE CLICK</div>
+      <button class="remaster-btn" onclick="doRemaster()">✓ RE-MASTER</button>
+      <div class="sugs" id="sugs">
+        <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Warm low-end boost @ 80Hz</span><span class="sval c2" id="s1v">+2.1 dB</span></div>
+        <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Mid presence controlled</span><span class="sval c3" id="s2v">-1.4 dB</span></div>
+        <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo width enhanced</span><span class="sval c5" id="s3v">+12%</span></div>
+      </div>
+    </div>
+
+    <div class="panel panel-spectrum">
+      <div class="plabel">SPECTRUM ANALYZER</div>
+      <canvas id="spec"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="plabel">I / O</div>
+      <div class="io-wrap">
+        <div class="io-item">
+          <svg width="50" height="50" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
+            <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c6)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
+            <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">-3.4</text>
+          </svg>
+          <div class="io-label">INPUT</div>
+        </div>
+        <div class="io-item">
+          <svg width="50" height="50" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
+            <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round" id="out-arc"/>
+            <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="out-val">+5.8</text>
+          </svg>
+          <div class="io-label">OUTPUT</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="out-panel">
+      <div class="out-label">OUT</div>
+      <div class="vu-wrap">
+        <div class="vu-track"><div class="vu-fill vu-l" id="vu-l"></div></div>
+        <div class="vu-track"><div class="vu-fill vu-r" id="vu-r"></div></div>
+      </div>
+      <div class="lufs-n" id="lufs-n">-8.4</div>
+      <div class="lufs-s">LUFS</div>
+    </div>
+  </div>
+
+  <div class="macros">
+    <div class="macros-top">
+      <button class="source-btn" onclick="document.getElementById('sf').click()">
+        <i class="ti ti-upload"></i> SOURCE
+      </button>
+      <input type="file" id="sf" accept="audio/*">
+      <span class="fname" id="fname">Nenhum arquivo carregado</span>
+    </div>
+    <div class="knobs-row" id="knobs-row"></div>
+  </div>
+
+  <div class="pira-section">
+    <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
+  </div>
+
+  <div class="sbar">
+    <span class="stxt" id="stxt">AGUARDANDO ÁUDIO...</span>
+    <span class="slufs" id="slufs">— LUFS</span>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
