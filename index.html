@@ -22,6 +22,7 @@
       <span class="hdr-label">PRESET</span>
       <span id="hdr-preset" class="hdr-preset-name">Kizomba</span>
       <button class="bypass" id="bypass-btn" onclick="toggleBypass()">BYPASS</button>
+      <span id="license-badge" onclick="openLicenseModal()" style="font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);cursor:pointer;letter-spacing:2px;font-family:Orbitron,monospace;font-weight:700;">DEMO</span>
     </div>
   </div>
 
@@ -35,6 +36,7 @@
     <div class="preset-chip" onclick="setPreset('afrohouse',this)">Afro-House</div>
     <div class="preset-chip" onclick="setPreset('rnb',this)">R&amp;B</div>
     <div class="preset-chip" onclick="setPreset('afrobeats',this)">Afrobeats</div>
+    <div class="preset-chip" onclick="setPreset('house',this)">House</div>
   </div>
 
   <div class="preset-info">
@@ -333,6 +335,92 @@
   </div>
 
 </div>
+<!-- LOGIN SCREEN -->
+  <div class="login-screen" id="login-screen">
+    <div class="login-box">
+      <div class="login-header">
+        <span class="login-logo">PIRADEX</span>
+        <span class="login-sub">MASTERING SUITE</span>
+      </div>
+      <div class="login-body">
+        <label class="login-label">Email ou utilizador</label>
+        <input class="login-input" id="login-user" type="text" placeholder="email@beatfreakstudio.com" autocomplete="username">
+        <label class="login-label">Senha de acesso</label>
+        <input class="login-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+        <button class="login-btn" onclick="doLogin()">ENTRAR NO PIRADEX</button>
+        <div class="login-error" id="login-error"></div>
+      </div>
+      <div class="login-footer">
+        Não tens acesso? <a href="https://www.beatfreakstudio.com" target="_blank">beatfreakstudio.com</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- LICENSE MODAL -->
+  <div class="paywall-modal" id="license-modal" style="display:none">
+    <div class="paywall-box license-box" style="border-color:rgba(45,255,138,0.4);box-shadow:0 0 60px rgba(45,255,138,0.15);">
+      <div class="paywall-header" style="background:linear-gradient(90deg,#2dff8a,#2dd4ff);">
+        <div class="paywall-title">🔑 ACTIVAR LICENÇA FULL</div>
+        <button class="pm-close" onclick="closeLicenseModal()" style="background:rgba(0,0,0,0.15)">✕</button>
+      </div>
+      <div class="paywall-body">
+        <div class="paywall-desc">
+          Introduz o teu código de licença para desbloquear a <strong>versão completa</strong> com exportações ilimitadas.
+        </div>
+        <label class="login-label" style="text-align:center;display:block;margin-bottom:8px;">CÓDIGO DE LICENÇA</label>
+        <input class="login-input" id="license-input" type="text"
+          placeholder="PRDX-XXXX-XXXX-XXXX"
+          maxlength="19"
+          style="text-align:center;font-family:Orbitron,monospace;letter-spacing:3px;font-size:15px;"
+          oninput="formatLicenseInput(this)"
+          onkeydown="if(event.key==='Enter')activateLicense()">
+        <div class="login-error" id="license-error" style="text-align:center;"></div>
+        <button class="paywall-cta" onclick="activateLicense()" style="margin-top:14px;background:linear-gradient(90deg,#2dff8a,#2dd4ff);animation:none;">ACTIVAR LICENÇA</button>
+        <div class="paywall-skip" style="margin-top:10px;">Não tens licença? <a href="https://www.beatfreakstudio.com" target="_blank" style="color:var(--c5);">Compra em beatfreakstudio.com</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYWALL MODAL -->
+  <div class="paywall-modal" id="paywall-modal">
+    <div class="paywall-box">
+      <div class="paywall-header">
+        <div class="paywall-title">🎧 CONTINUA A MASTERIZAR</div>
+      </div>
+      <div class="paywall-body">
+        <div class="paywall-desc">
+          A tua <strong>primeira masterização foi exportada</strong> com sucesso!<br>
+          Para continuar a usar o Piradex Mastering Suite escolhe o teu plano.
+        </div>
+        <div class="paywall-plans">
+          <div class="plan" id="plan-basic" onclick="selectPlan(this)">
+            <span class="plan-name">BASIC</span>
+            <span class="plan-price">€9</span>
+            <span class="plan-period">por mês</span>
+            <div class="plan-features">5 exportações/mês<br>Todos os presets<br>WAV 16-bit</div>
+          </div>
+          <div class="plan popular selected" id="plan-pro" onclick="selectPlan(this)">
+            <span class="plan-badge">POPULAR</span>
+            <span class="plan-name">PRO</span>
+            <span class="plan-price">€19</span>
+            <span class="plan-period">por mês</span>
+            <div class="plan-features">Exportações ilimitadas<br>Todos os presets<br>WAV 24-bit + PIRADEX AI</div>
+          </div>
+          <div class="plan" id="plan-studio" onclick="selectPlan(this)">
+            <span class="plan-name">STUDIO</span>
+            <span class="plan-price">€49</span>
+            <span class="plan-period">por mês</span>
+            <div class="plan-features">Tudo do PRO<br>Licença comercial<br>Suporte prioritário</div>
+          </div>
+        </div>
+        <button class="paywall-cta" onclick="goPay()">SUBSCREVER AGORA</button>
+        <button onclick="openLicenseModal()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-bottom:8px;">🔑 JÁ TENHO LICENÇA</button>
+        <div class="paywall-skip">Ou <a onclick="skipPaywall()">continua sem exportar</a> — os presets e preview ficam sempre disponíveis.</div>
+        <div class="paywall-secure"><i class="ti ti-lock"></i> Pagamento seguro · beatfreakstudio.com</div>
+      </div>
+    </div>
+  </div>
+
 <script src="app.js"></script>
 </body>
 </html>
