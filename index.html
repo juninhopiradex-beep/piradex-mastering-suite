@@ -11,7 +11,6 @@
 <body>
 <div class="wrap">
 
-  <!-- HEADER -->
   <div class="hdr">
     <div class="logo">
       <span class="logo-main">PIRADEX</span>
@@ -26,7 +25,6 @@
     </div>
   </div>
 
-  <!-- PRESETS -->
   <div class="presets-bar">
     <span class="presets-label">Presets</span>
     <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
@@ -44,7 +42,6 @@
     <span class="pi-desc" id="pi-desc">Graves quentes, mids suaves, loudness moderado — sensualidade e groove</span>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
     <div class="tab active">MASTER</div>
     <div class="tab">EQ</div>
@@ -58,7 +55,6 @@
     <div class="tab">REF</div>
   </div>
 
-  <!-- MAIN GRID -->
   <div class="main">
     <div class="panel">
       <div class="plabel">AI MASTER · ONE CLICK</div>
@@ -69,12 +65,10 @@
         <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo width enhanced</span><span class="sval c5" id="s3v">+12%</span></div>
       </div>
     </div>
-
     <div class="panel panel-spectrum">
       <div class="plabel">SPECTRUM ANALYZER</div>
       <canvas id="spec"></canvas>
     </div>
-
     <div class="panel">
       <div class="plabel">I / O</div>
       <div class="io-wrap">
@@ -96,27 +90,24 @@
         </div>
       </div>
     </div>
-
     <div class="out-panel">
       <div class="out-label">OUT</div>
       <div class="vu-wrap">
         <div class="vu-track"><div class="vu-fill vu-l" id="vu-l"></div></div>
         <div class="vu-track"><div class="vu-fill vu-r" id="vu-r"></div></div>
       </div>
-      <div class="lufs-n" id="lufs-n">-8.4</div>
+      <div class="lufs-n" id="lufs-n">-9.0</div>
       <div class="lufs-s">LUFS</div>
     </div>
   </div>
 
-  <!-- MACROS -->
   <div class="macros">
     <div class="knobs-row" id="knobs-row"></div>
   </div>
 
-  <!-- PLAYER SECTION -->
+  <!-- PLAYER -->
   <div class="player-section">
     <div class="player-top">
-      <!-- DROP ZONE -->
       <div class="drop-zone" id="drop-zone"
         onclick="document.getElementById('sf').click()"
         ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -127,14 +118,12 @@
         <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
       </div>
       <input type="file" id="sf" accept="audio/*">
-
-      <!-- WAVEFORM -->
       <div class="waveform-wrap" id="waveform-wrap" style="display:none">
         <div class="waveform-labels">
           <span id="track-name" class="track-name">—</span>
           <span id="track-dur" class="track-dur">0:00</span>
         </div>
-        <div class="waveform-container">
+        <div class="waveform-container" id="waveform-container">
           <canvas id="waveform-canvas" height="64"></canvas>
           <div class="waveform-progress" id="waveform-progress"></div>
           <div class="waveform-cursor" id="waveform-cursor"></div>
@@ -146,9 +135,7 @@
       </div>
     </div>
 
-    <!-- CONTROLS -->
-    <div class="player-controls" id="player-controls">
-      <!-- BEFORE / AFTER TOGGLE -->
+    <div class="player-controls">
       <div class="ab-toggle">
         <button class="ab-btn active" id="btn-before" onclick="setMode('before')">
           <i class="ti ti-player-play"></i> BEFORE
@@ -157,44 +144,57 @@
           <i class="ti ti-sparkles"></i> AFTER
         </button>
       </div>
-
-      <!-- TRANSPORT -->
       <div class="transport">
-        <button class="ctrl-btn" onclick="seekRelative(-10)" title="Recuar 10s"><i class="ti ti-player-skip-back"></i></button>
+        <button class="ctrl-btn" onclick="seekRelative(-10)"><i class="ti ti-player-skip-back"></i></button>
         <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlay()">
           <i class="ti ti-player-play" id="play-icon"></i>
         </button>
-        <button class="ctrl-btn" onclick="seekRelative(10)" title="Avançar 10s"><i class="ti ti-player-skip-forward"></i></button>
-        <button class="ctrl-btn" onclick="stopAudio()" title="Stop"><i class="ti ti-player-stop"></i></button>
+        <button class="ctrl-btn" onclick="seekRelative(10)"><i class="ti ti-player-skip-forward"></i></button>
+        <button class="ctrl-btn" onclick="stopAudio()"><i class="ti ti-player-stop"></i></button>
       </div>
-
-      <!-- VOLUME -->
       <div class="vol-wrap">
         <i class="ti ti-volume" style="color:var(--muted2);font-size:14px;"></i>
         <input type="range" id="vol-slider" min="0" max="100" value="80" oninput="setVolume(this.value)">
         <span id="vol-val">80%</span>
       </div>
+      <!-- EXPORT BUTTON -->
+      <button class="export-btn" id="export-btn" onclick="exportMastered()" style="display:none">
+        <i class="ti ti-download"></i> EXPORTAR WAV · -9 LUFS
+      </button>
     </div>
 
-    <!-- MODE INDICATOR -->
-    <div class="mode-bar" id="mode-bar">
+    <div class="mode-bar">
       <div class="mode-dot" id="mode-dot"></div>
       <span id="mode-txt">Carrega um ficheiro para começar</span>
     </div>
   </div>
 
-  <!-- PIRADEX BUTTON -->
   <div class="pira-section">
     <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
   </div>
 
-  <!-- STATUS BAR -->
   <div class="sbar">
     <span class="stxt" id="stxt">AGUARDANDO ÁUDIO...</span>
-    <span class="slufs" id="slufs">— LUFS</span>
+    <span class="slufs" id="slufs">-9.0 LUFS</span>
   </div>
 
 </div>
+<div class="piradex-modal" id="piradex-modal" style="display:none">
+    <div class="piradex-modal-box">
+      <div class="pm-header">
+        <div class="pm-title">⚡ PIRADEX MODE ATIVO</div>
+        <button class="pm-close" onclick="closePiradexModal()">✕</button>
+      </div>
+      <div class="pm-sub">Modo turbo — IA a analisar e masterizar automaticamente</div>
+      <div class="pm-body" id="piradex-ai-msg">
+        <span class="ai-loading">🤖 IA a analisar...</span>
+      </div>
+      <div class="pm-footer">
+        <button class="pm-reanalyse" onclick="runPiradexAI()">🔄 Re-analisar com IA</button>
+        <button class="pm-export" onclick="closePiradexModal();exportMastered()">📤 Exportar masterizado</button>
+      </div>
+    </div>
+  </div>
 <script src="app.js"></script>
 </body>
 </html>
