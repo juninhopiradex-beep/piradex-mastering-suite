@@ -11,7 +11,6 @@
 <body>
 <div class="wrap">
 
-  <!-- HEADER -->
   <div class="hdr">
     <div class="logo">
       <span class="logo-main">PIRADEX</span>
@@ -26,7 +25,6 @@
     </div>
   </div>
 
-  <!-- PRESETS -->
   <div class="presets-bar">
     <span class="presets-label">Presets</span>
     <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
@@ -44,7 +42,6 @@
     <span class="pi-desc" id="pi-desc">Graves quentes, mids suaves, loudness moderado — sensualidade e groove</span>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
     <div class="tab active" onclick="openTab('master',this)">MASTER</div>
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
@@ -57,13 +54,11 @@
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
   </div>
 
-  <!-- TAB PANELS -->
-
-  <!-- MASTER TAB -->
-  <div class="tab-panel active" id="tab-master">
+  <!-- MASTER -->
+  <div class="tab-panel" id="tab-master" style="display:block">
     <div class="main">
       <div class="panel">
-        <div class="plabel">AI MASTER · ONE CLICK</div>
+        <div class="plabel">ANÁLISE · IA</div>
         <div class="sugs">
           <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Warm low-end boost @ 80Hz</span><span class="sval c2" id="s1v">+2.1 dB</span></div>
           <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Mid presence controlled</span><span class="sval c3" id="s2v">-1.4 dB</span></div>
@@ -81,7 +76,7 @@
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
               <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c6)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">-3.4</text>
+              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="io-in">-3.4</text>
             </svg>
             <div class="io-label">INPUT</div>
           </div>
@@ -89,7 +84,7 @@
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
               <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">+5.8</text>
+              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="io-out">+5.8</text>
             </svg>
             <div class="io-label">OUTPUT</div>
           </div>
@@ -101,60 +96,30 @@
           <div class="vu-track"><div class="vu-fill vu-l" id="vu-l"></div></div>
           <div class="vu-track"><div class="vu-fill vu-r" id="vu-r"></div></div>
         </div>
-        <div class="lufs-n" id="lufs-n">-9.0</div>
+        <div class="lufs-n" id="lufs-n">—</div>
         <div class="lufs-s">LUFS</div>
       </div>
     </div>
     <div class="macros"><div class="knobs-row" id="knobs-row"></div></div>
   </div>
 
-  <!-- EQ TAB -->
+  <!-- EQ -->
   <div class="tab-panel" id="tab-eq">
     <div class="module-panel">
       <div class="module-title">EQUALIZER — 6 Band Parametric</div>
       <div class="eq-bands">
-        <div class="eq-band">
-          <div class="eq-band-label">SUB</div>
-          <div class="eq-band-freq">60 Hz</div>
-          <input type="range" class="eq-slider" id="eq-sub" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('sub',this.value)">
-          <div class="eq-band-val" id="eq-sub-v">0 dB</div>
-        </div>
-        <div class="eq-band">
-          <div class="eq-band-label">BASS</div>
-          <div class="eq-band-freq">150 Hz</div>
-          <input type="range" class="eq-slider" id="eq-bass" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('bass',this.value)">
-          <div class="eq-band-val" id="eq-bass-v">0 dB</div>
-        </div>
-        <div class="eq-band">
-          <div class="eq-band-label">LOW MID</div>
-          <div class="eq-band-freq">500 Hz</div>
-          <input type="range" class="eq-slider" id="eq-low" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('low',this.value)">
-          <div class="eq-band-val" id="eq-low-v">0 dB</div>
-        </div>
-        <div class="eq-band">
-          <div class="eq-band-label">MID</div>
-          <div class="eq-band-freq">1.2 kHz</div>
-          <input type="range" class="eq-slider" id="eq-mid" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('mid',this.value)">
-          <div class="eq-band-val" id="eq-mid-v">0 dB</div>
-        </div>
-        <div class="eq-band">
-          <div class="eq-band-label">HIGH</div>
-          <div class="eq-band-freq">4 kHz</div>
-          <input type="range" class="eq-slider" id="eq-high" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('high',this.value)">
-          <div class="eq-band-val" id="eq-high-v">0 dB</div>
-        </div>
-        <div class="eq-band">
-          <div class="eq-band-label">AIR</div>
-          <div class="eq-band-freq">12 kHz</div>
-          <input type="range" class="eq-slider" id="eq-air" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('air',this.value)">
-          <div class="eq-band-val" id="eq-air-v">0 dB</div>
-        </div>
+        <div class="eq-band"><div class="eq-band-label">SUB</div><div class="eq-band-freq">60 Hz</div><input type="range" class="eq-slider" id="eq-sub" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('sub',this.value)"><div class="eq-band-val" id="eq-sub-v">0 dB</div></div>
+        <div class="eq-band"><div class="eq-band-label">BASS</div><div class="eq-band-freq">150 Hz</div><input type="range" class="eq-slider" id="eq-bass" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('bass',this.value)"><div class="eq-band-val" id="eq-bass-v">0 dB</div></div>
+        <div class="eq-band"><div class="eq-band-label">LOW MID</div><div class="eq-band-freq">500 Hz</div><input type="range" class="eq-slider" id="eq-low" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('low',this.value)"><div class="eq-band-val" id="eq-low-v">0 dB</div></div>
+        <div class="eq-band"><div class="eq-band-label">MID</div><div class="eq-band-freq">1.2 kHz</div><input type="range" class="eq-slider" id="eq-mid" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('mid',this.value)"><div class="eq-band-val" id="eq-mid-v">0 dB</div></div>
+        <div class="eq-band"><div class="eq-band-label">HIGH</div><div class="eq-band-freq">4 kHz</div><input type="range" class="eq-slider" id="eq-high" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('high',this.value)"><div class="eq-band-val" id="eq-high-v">0 dB</div></div>
+        <div class="eq-band"><div class="eq-band-label">AIR</div><div class="eq-band-freq">12 kHz</div><input type="range" class="eq-slider" id="eq-air" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('air',this.value)"><div class="eq-band-val" id="eq-air-v">0 dB</div></div>
       </div>
-      <canvas id="eq-canvas" height="100" style="width:100%;margin-top:12px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);"></canvas>
+      <canvas id="eq-canvas" height="80"></canvas>
     </div>
   </div>
 
-  <!-- COMP TAB -->
+  <!-- COMP -->
   <div class="tab-panel" id="tab-comp">
     <div class="module-panel">
       <div class="module-title">COMPRESSOR — VCA Style</div>
@@ -170,21 +135,21 @@
     </div>
   </div>
 
-  <!-- DYN TAB -->
+  <!-- DYN -->
   <div class="tab-panel" id="tab-dyn">
     <div class="module-panel">
       <div class="module-title">DYNAMICS — Transient Shaper</div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>ATTACK SHAPE</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-attack" oninput="updateDyn()"><span id="dyn-attack-v">0</span></div>
         <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-sustain" oninput="updateDyn()"><span id="dyn-sustain-v">0</span></div>
-        <div class="mod-ctrl"><label>CLIP CEILING</label><input type="range" min="-6" max="0" value="-0.3" step="0.1" id="dyn-clip" oninput="updateDyn()"><span id="dyn-clip-v">-0.3 dBTP</span></div>
+        <div class="mod-ctrl"><label>CLIP CEILING</label><input type="range" min="-6" max="-0.1" value="-0.3" step="0.1" id="dyn-clip" oninput="updateDyn()"><span id="dyn-clip-v">-0.3 dBTP</span></div>
         <div class="mod-ctrl"><label>LOOKAHEAD</label><input type="range" min="0" max="20" value="5" step="1" id="dyn-look" oninput="updateDyn()"><span id="dyn-look-v">5 ms</span></div>
       </div>
       <div class="module-info">O Transient Shaper ajusta o envelope de ataque e sustain sem afectar o volume geral. Valores positivos de Attack aumentam a punch; valores negativos suavizam os transientes.</div>
     </div>
   </div>
 
-  <!-- SHAPE TAB -->
+  <!-- SHAPE -->
   <div class="tab-panel" id="tab-shape">
     <div class="module-panel">
       <div class="module-title">HARMONIC SHAPER — Saturation &amp; Warmth</div>
@@ -205,7 +170,7 @@
     </div>
   </div>
 
-  <!-- WIDTH TAB -->
+  <!-- WIDTH -->
   <div class="tab-panel" id="tab-width">
     <div class="module-panel">
       <div class="module-title">STEREO WIDTH — Mid/Side Processing</div>
@@ -213,17 +178,17 @@
         <div class="mod-ctrl"><label>WIDTH</label><input type="range" min="0" max="200" value="100" step="1" id="width-main" oninput="updateWidth()"><span id="width-main-v">100%</span></div>
         <div class="mod-ctrl"><label>MID GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="width-mid" oninput="updateWidth()"><span id="width-mid-v">0 dB</span></div>
         <div class="mod-ctrl"><label>SIDE GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="width-side" oninput="updateWidth()"><span id="width-side-v">0 dB</span></div>
-        <div class="mod-ctrl"><label>BASS MONO (&lt; Hz)</label><input type="range" min="40" max="300" value="120" step="10" id="width-bass-mono" oninput="updateWidth()"><span id="width-bass-mono-v">120 Hz</span></div>
+        <div class="mod-ctrl"><label>BASS MONO (Hz)</label><input type="range" min="40" max="300" value="120" step="10" id="width-bass-mono" oninput="updateWidth()"><span id="width-bass-mono-v">120 Hz</span></div>
       </div>
       <div class="width-meter">
         <div class="wm-label">CORRELATION</div>
-        <div class="wm-bar"><div class="wm-fill" id="wm-fill" style="width:75%;left:0;background:var(--c4)"></div></div>
+        <div class="wm-bar"><div class="wm-fill" id="wm-fill" style="width:75%;background:var(--c4)"></div></div>
         <div class="wm-labels"><span>-1 WIDE</span><span>MONO 0</span><span>+1 NARROW</span></div>
       </div>
     </div>
   </div>
 
-  <!-- EXCITE TAB -->
+  <!-- EXCITE -->
   <div class="tab-panel" id="tab-excite">
     <div class="module-panel">
       <div class="module-title">EXCITER — Psychoacoustic Enhancement</div>
@@ -237,14 +202,14 @@
     </div>
   </div>
 
-  <!-- LOUD TAB -->
+  <!-- LOUD -->
   <div class="tab-panel" id="tab-loud">
     <div class="module-panel">
       <div class="module-title">LOUDNESS — LUFS Normalisation</div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>TARGET LUFS</label><input type="range" min="-23" max="-6" value="-9" step="0.5" id="loud-target" oninput="updateLoud()"><span id="loud-target-v">-9.0 LUFS</span></div>
-        <div class="mod-ctrl"><label>TRUE PEAK CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
-        <div class="mod-ctrl"><label>INTEGRATED WINDOW</label><input type="range" min="1" max="30" value="3" step="1" id="loud-window" oninput="updateLoud()"><span id="loud-window-v">3 s</span></div>
+        <div class="mod-ctrl"><label>TRUE PEAK CEIL</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
+        <div class="mod-ctrl"><label>INT. WINDOW</label><input type="range" min="1" max="30" value="3" step="1" id="loud-window" oninput="updateLoud()"><span id="loud-window-v">3 s</span></div>
       </div>
       <div class="lufs-big-display">
         <div class="lufs-big-val" id="lufs-big-val">-9.0</div>
@@ -259,7 +224,7 @@
     </div>
   </div>
 
-  <!-- LIMIT TAB -->
+  <!-- LIMIT -->
   <div class="tab-panel" id="tab-limit">
     <div class="module-panel">
       <div class="module-title">LIMITER — Brickwall True Peak</div>
@@ -267,8 +232,9 @@
         <div class="mod-ctrl"><label>CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="lim-ceil" oninput="updateLimit()"><span id="lim-ceil-v">-1.0 dBTP</span></div>
         <div class="mod-ctrl"><label>RELEASE</label><input type="range" min="1" max="200" value="50" step="1" id="lim-rel" oninput="updateLimit()"><span id="lim-rel-v">50 ms</span></div>
         <div class="mod-ctrl"><label>LOOKAHEAD</label><input type="range" min="0" max="10" value="2" step="0.5" id="lim-look" oninput="updateLimit()"><span id="lim-look-v">2 ms</span></div>
-        <div class="mod-ctrl"><label>ISP DETECTION</label>
-          <select id="lim-isp" onchange="updateLimit()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
+        <div class="mod-ctrl">
+          <label>ISP DETECTION</label>
+          <select id="lim-isp" onchange="updateLimit()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';font-size:12px;">
             <option value="off">OFF</option>
             <option value="4x" selected>4x Oversampling</option>
             <option value="8x">8x Oversampling</option>
@@ -278,8 +244,8 @@
       </div>
       <div class="lim-meter-wrap">
         <div class="lim-bar-wrap">
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-l" style="height:60%"></div></div>
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-r" style="height:55%"></div></div>
+          <div class="lim-bar"><div class="lim-fill" id="lim-fill-l" style="height:0%"></div></div>
+          <div class="lim-bar"><div class="lim-fill" id="lim-fill-r" style="height:0%"></div></div>
         </div>
         <div class="lim-labels"><span>0</span><span>-6</span><span>-12</span><span>-24</span></div>
       </div>
@@ -341,12 +307,10 @@
     </div>
   </div>
 
-  <!-- PIRADEX BUTTON -->
   <div class="pira-section">
     <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
   </div>
 
-  <!-- STATUS -->
   <div class="sbar">
     <span class="stxt" id="stxt">AGUARDANDO ÁUDIO...</span>
     <span class="slufs" id="slufs">— LUFS</span>
