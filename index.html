@@ -10,6 +10,8 @@
 </head>
 <body>
 <div class="wrap">
+
+  <!-- HEADER -->
   <div class="hdr">
     <div class="logo">
       <span class="logo-main">PIRADEX</span>
@@ -24,6 +26,7 @@
     </div>
   </div>
 
+  <!-- PRESETS -->
   <div class="presets-bar">
     <span class="presets-label">Presets</span>
     <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
@@ -41,6 +44,7 @@
     <span class="pi-desc" id="pi-desc">Graves quentes, mids suaves, loudness moderado — sensualidade e groove</span>
   </div>
 
+  <!-- TABS -->
   <div class="tabs">
     <div class="tab active">MASTER</div>
     <div class="tab">EQ</div>
@@ -54,11 +58,12 @@
     <div class="tab">REF</div>
   </div>
 
+  <!-- MAIN GRID -->
   <div class="main">
     <div class="panel">
       <div class="plabel">AI MASTER · ONE CLICK</div>
       <button class="remaster-btn" onclick="doRemaster()">✓ RE-MASTER</button>
-      <div class="sugs" id="sugs">
+      <div class="sugs">
         <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Warm low-end boost @ 80Hz</span><span class="sval c2" id="s1v">+2.1 dB</span></div>
         <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Mid presence controlled</span><span class="sval c3" id="s2v">-1.4 dB</span></div>
         <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo width enhanced</span><span class="sval c5" id="s3v">+12%</span></div>
@@ -84,8 +89,8 @@
         <div class="io-item">
           <svg width="50" height="50" viewBox="0 0 50 50">
             <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
-            <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round" id="out-arc"/>
-            <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="out-val">+5.8</text>
+            <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round"/>
+            <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">+5.8</text>
           </svg>
           <div class="io-label">OUTPUT</div>
         </div>
@@ -103,27 +108,93 @@
     </div>
   </div>
 
+  <!-- MACROS -->
   <div class="macros">
-    <div class="macros-top">
-      <button class="source-btn" onclick="document.getElementById('sf').click()">
-        <i class="ti ti-upload"></i> SOURCE
-      </button>
-      <input type="file" id="sf" accept="audio/*">
-      <span class="fname" id="fname">Nenhum arquivo carregado</span>
-    </div>
     <div class="knobs-row" id="knobs-row"></div>
   </div>
 
+  <!-- PLAYER SECTION -->
+  <div class="player-section">
+    <div class="player-top">
+      <!-- DROP ZONE -->
+      <div class="drop-zone" id="drop-zone"
+        onclick="document.getElementById('sf').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleDrop(event)">
+        <i class="ti ti-music-up"></i>
+        <span class="dz-title">Arrasta o teu áudio aqui</span>
+        <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
+      </div>
+      <input type="file" id="sf" accept="audio/*">
+
+      <!-- WAVEFORM -->
+      <div class="waveform-wrap" id="waveform-wrap" style="display:none">
+        <div class="waveform-labels">
+          <span id="track-name" class="track-name">—</span>
+          <span id="track-dur" class="track-dur">0:00</span>
+        </div>
+        <div class="waveform-container">
+          <canvas id="waveform-canvas" height="64"></canvas>
+          <div class="waveform-progress" id="waveform-progress"></div>
+          <div class="waveform-cursor" id="waveform-cursor"></div>
+        </div>
+        <div class="time-row">
+          <span id="time-cur">0:00</span>
+          <span id="time-total">0:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="player-controls" id="player-controls">
+      <!-- BEFORE / AFTER TOGGLE -->
+      <div class="ab-toggle">
+        <button class="ab-btn active" id="btn-before" onclick="setMode('before')">
+          <i class="ti ti-player-play"></i> BEFORE
+        </button>
+        <button class="ab-btn" id="btn-after" onclick="setMode('after')">
+          <i class="ti ti-sparkles"></i> AFTER
+        </button>
+      </div>
+
+      <!-- TRANSPORT -->
+      <div class="transport">
+        <button class="ctrl-btn" onclick="seekRelative(-10)" title="Recuar 10s"><i class="ti ti-player-skip-back"></i></button>
+        <button class="ctrl-btn play-btn" id="play-btn" onclick="togglePlay()">
+          <i class="ti ti-player-play" id="play-icon"></i>
+        </button>
+        <button class="ctrl-btn" onclick="seekRelative(10)" title="Avançar 10s"><i class="ti ti-player-skip-forward"></i></button>
+        <button class="ctrl-btn" onclick="stopAudio()" title="Stop"><i class="ti ti-player-stop"></i></button>
+      </div>
+
+      <!-- VOLUME -->
+      <div class="vol-wrap">
+        <i class="ti ti-volume" style="color:var(--muted2);font-size:14px;"></i>
+        <input type="range" id="vol-slider" min="0" max="100" value="80" oninput="setVolume(this.value)">
+        <span id="vol-val">80%</span>
+      </div>
+    </div>
+
+    <!-- MODE INDICATOR -->
+    <div class="mode-bar" id="mode-bar">
+      <div class="mode-dot" id="mode-dot"></div>
+      <span id="mode-txt">Carrega um ficheiro para começar</span>
+    </div>
+  </div>
+
+  <!-- PIRADEX BUTTON -->
   <div class="pira-section">
     <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
   </div>
 
+  <!-- STATUS BAR -->
   <div class="sbar">
     <span class="stxt" id="stxt">AGUARDANDO ÁUDIO...</span>
     <span class="slufs" id="slufs">— LUFS</span>
   </div>
-</div>
 
+</div>
 <script src="app.js"></script>
 </body>
 </html>
