@@ -61,6 +61,10 @@ let loudTarget=-9;
 
 // ===== TABS =====
 function openTab(name, el) {
+  if(playMode==='before' && name!=='master'){
+    setStatus('Muda para PROCESSADO para aceder aos efeitos');
+    return;
+  }
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
@@ -126,8 +130,8 @@ function buildChain() {
 
   // Analyser
   analyserNode = audioCtx.createAnalyser();
-  analyserNode.fftSize=8192;
-  analyserNode.smoothingTimeConstant=0.0;
+  analyserNode.fftSize=4096;
+  analyserNode.smoothingTimeConstant=0.1;
 
   // Init spectrum arrays
   specPeaks  = new Float32Array(2048).fill(-150);
@@ -195,13 +199,46 @@ function applyShapeCurve() {
   shapeWS.curve=makeShapeCurve(shapeMode, drive);
 }
 
+// Shape presets — each mode has its own parameter defaults
+const SHAPE_PRESETS={
+  tape:        {drive:25, mix:40, '2nd':60, '3rd':20, trim:0,   info:'TAPE: warmth analógico suave, harmónicos pares, compressão natural dos picos.'},
+  tube:        {drive:35, mix:35, '2nd':70, '3rd':30, trim:-1,  info:'TUBE: válvula clássica, harmónicos ímpares ricos, ideal para voz e instrumentos.'},
+  transistor:  {drive:50, mix:30, '2nd':30, '3rd':60, trim:-1,  info:'TRANSISTOR: resposta rápida, harmónicos brilhantes, ideal para percussão e baixo.'},
+  solidstate:  {drive:45, mix:45, '2nd':40, '3rd':50, trim:-2,  info:'SOLID STATE: compressão densa e definida, som agressivo, hardware analógico moderno.'},
+  analogico:   {drive:30, mix:50, '2nd':55, '3rd':35, trim:0,   info:'ANALÓGICO: emulação completa de circuito analógico com warmth e não-linearidade natural.'},
+  valvulado:   {drive:40, mix:30, '2nd':75, '3rd':20, trim:-1,  info:'VALVULADO: válvula de vácuo tipo 1176/LA-2A, harmónicos suaves e musicais.'},
+  transparente:{drive:10, mix:20, '2nd':20, '3rd':10, trim:0,   info:'TRANSPARENTE: saturação mínima, sem coloração, apenas glue subtil.'},
+  clip:        {drive:70, mix:60, '2nd':30, '3rd':40, trim:-3,  info:'CLIP: clipping suave digital, maximiza loudness percebido, mais agressivo.'},
+  paralimit:   {drive:55, mix:50, '2nd':45, '3rd':30, trim:-2,  info:'PARALIMIT: limiting paralelo, preserva transientes, aumenta corpo e densidade.'},
+  deess:       {drive:20, mix:70, '2nd':10, '3rd':80, trim:0,   info:'DE-ESS: atenuação de sibilantes e harshness acima de 5kHz. Ideal para voz e pratos.'}
+};
+
 function setShapeMode(mode,el){
   shapeMode=mode;
   document.querySelectorAll('.shape-mode-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('shape-info').textContent=SHAPE_INFO[mode];
+  const preset=SHAPE_PRESETS[mode];
+  if(preset){
+    // Apply preset parameters to UI
+    const setSlider=(id,val)=>{const s=document.getElementById(id);if(s)s.value=val;};
+    setSlider('shape-drive',   preset.drive);
+    setSlider('shape-mix',     preset.mix);
+    setSlider('shape-2nd',     preset['2nd']);
+    setSlider('shape-3rd',     preset['3rd']);
+    setSlider('shape-trim',    preset.trim);
+    // Update display values
+    document.getElementById('shape-drive-v').textContent=preset.drive+'%';
+    document.getElementById('shape-mix-v').textContent=preset.mix+'%';
+    document.getElementById('shape-2nd-v').textContent=preset['2nd']+'%';
+    document.getElementById('shape-3rd-v').textContent=preset['3rd']+'%';
+    document.getElementById('shape-trim-v').textContent=(preset.trim>=0?'+':'')+preset.trim.toFixed(1)+' dB';
+    document.getElementById('shape-info').textContent=preset.info;
+    // Apply DSP
+    if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1-preset.mix/100, audioCtx?.currentTime||0, 0.05);
+    if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(preset.mix/100,   audioCtx?.currentTime||0, 0.05);
+  }
   applyShapeCurve();
-  if(isPlaying) setStatus('Shape: '+mode.toUpperCase()+' activo — ouve a diferença no AFTER');
+  if(isPlaying&&playMode==='after') setStatus('Shape: '+mode.toUpperCase()+' activo — ouve a diferença em PROCESSADO');
 }
 
 function updateShape(){
@@ -353,22 +390,27 @@ function updateWidth(){
   const w=parseFloat(document.getElementById('width-main').value);
   const mid=parseFloat(document.getElementById('width-mid').value);
   const side=parseFloat(document.getElementById('width-side').value);
-  const bm=document.getElementById('width-bass-mono').value;
+  const bm=parseFloat(document.getElementById('width-bass-mono').value);
   document.getElementById('width-main-v').textContent=w+'%';
   document.getElementById('width-mid-v').textContent=(mid>=0?'+':'')+mid+' dB';
   document.getElementById('width-side-v').textContent=(side>=0?'+':'')+side+' dB';
   document.getElementById('width-bass-mono-v').textContent=bm+' Hz';
   document.getElementById('wm-fill').style.width=Math.min(100,w/2)+'%';
-  // Apply width: 100%=unity, 0%=mono, 200%=max wide
-  if(msSideGain&&audioCtx){
-    msSideGain.gain.setTargetAtTime(Math.max(0,w/50),audioCtx.currentTime,0.1);
-  }
-  if(msMidGain&&audioCtx){
-    msMidGain.gain.setTargetAtTime(Math.pow(10,mid/20),audioCtx.currentTime,0.1);
-  }
-  // Apply EQ on mid/side channels
-  if(msEqMidLow&&audioCtx)  msEqMidLow.gain.value=mid*0.3;
-  if(msEqSideHigh&&audioCtx) msEqSideHigh.gain.value=side*0.5;
+  if(!audioCtx) return;
+  // Width via EQ: boost or cut high shelf to simulate stereo width
+  // w=100 = unity, w>100 = wider (boost air/highs), w<100 = narrower (cut)
+  const wDelta=(w-100)/100; // -1 to +1
+  eqAir.gain.value += wDelta*4;
+  eqHigh.gain.value += wDelta*2;
+  // Side gain: w>100 boosts side, w<100 reduces it
+  if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.01,w/100),audioCtx.currentTime,0.1);
+  // Mid gain from slider
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mid/20),audioCtx.currentTime,0.1);
+  // Bass mono: low shelf cut on sides below bm Hz — apply via eqBass
+  if(bm>60) eqSub.gain.value = Math.max(eqSub.gain.value, eqSub.gain.value + (wDelta<0?-2:0));
+  // Extra: apply side EQ gain to high shelf
+  eqAir.gain.value += side*0.3;
+  setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB');
 }
 
 function updateExcite(){
@@ -425,33 +467,34 @@ function updateLimit(){
 // ===== MID/SIDE — real M/S processing =====
 function updateMidSide(){
   const get=id=>parseFloat(document.getElementById(id)?.value||0);
-  const set=(id,v)=>{const el=document.getElementById(id+'-v');if(el)el.textContent=(v>=0?'+':'')+v.toFixed(1)+' dB';};
-
-  const mLow=get('ms-mid-low'),   mMid=get('ms-mid-mid'),   mHigh=get('ms-mid-high');
-  const mComp=get('ms-mid-comp'), mGain=get('ms-mid-gain');
-  const sLow=get('ms-side-low'),  sMid=get('ms-side-mid'),  sHigh=get('ms-side-high');
-  const sComp=get('ms-side-comp'),sGain=get('ms-side-gain');
-
   ['mid-low','mid-mid','mid-high','mid-comp','mid-gain','side-low','side-mid','side-high','side-comp','side-gain'].forEach(id=>{
-    const v=get('ms-'+id); set('ms-'+id,v);
+    const v=get('ms-'+id);
+    const el=document.getElementById('ms-'+id+'-v');
+    if(el)el.textContent=(v>=0?'+':'')+v.toFixed(1)+' dB';
   });
+  if(!audioCtx) return;
 
-  // Apply Mid channel: sum of adjustments goes into EQ nodes
-  if(audioCtx&&eqSub){
-    // Mid EQ affects centre image (L+R)
-    eqSub.gain.value    += mLow*0.3;
-    eqMid.gain.value    += mMid*0.3;
-    eqAir.gain.value    += mHigh*0.3;
-    // Side EQ affects stereo difference (L-R)
-    eqBass.gain.value   += sLow*0.2;
-    eqHigh.gain.value   += sHigh*0.2;
-    // Gains
-    if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mGain/20),  audioCtx.currentTime,0.1);
-    if(msSideGain) msSideGain.gain.setTargetAtTime(Math.pow(10,sGain/20)*kvals.WIDE/50, audioCtx.currentTime,0.1);
-    // Mid compressor
-    if(mComp<0&&compNode) compNode.threshold.value=Math.max(-60, compNode.threshold.value+mComp*0.5);
-  }
-  setStatus('M/S aplicado — Mid e Side processados independentemente');
+  const mLow=get('ms-mid-low'), mMid=get('ms-mid-mid'), mHigh=get('ms-mid-high');
+  const mGain=get('ms-mid-gain');
+  const sLow=get('ms-side-low'), sMid=get('ms-side-mid'), sHigh=get('ms-side-high');
+  const sGain=get('ms-side-gain');
+  const mComp=get('ms-mid-comp'), sComp=get('ms-side-comp');
+
+  // Apply ADDITIVELY (not replace) — small factors to avoid volume collapse
+  if(mLow!==0)  eqSub.gain.setTargetAtTime(eqSub.gain.value+mLow*0.2, audioCtx.currentTime, 0.1);
+  if(mMid!==0)  eqMid.gain.setTargetAtTime(eqMid.gain.value+mMid*0.2, audioCtx.currentTime, 0.1);
+  if(mHigh!==0) eqAir.gain.setTargetAtTime(eqAir.gain.value+mHigh*0.2, audioCtx.currentTime, 0.1);
+  if(sLow!==0)  eqBass.gain.setTargetAtTime(eqBass.gain.value+sLow*0.15, audioCtx.currentTime, 0.1);
+  if(sHigh!==0) eqHigh.gain.setTargetAtTime(eqHigh.gain.value+sHigh*0.15, audioCtx.currentTime, 0.1);
+
+  // Gains: only apply if non-zero, keep reference at 1.0 (0dB) as baseline
+  if(mGain!==0&&msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mGain/20), audioCtx.currentTime, 0.15);
+  if(sGain!==0&&msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.01,Math.pow(10,sGain/20)*(kvals.WIDE/100)), audioCtx.currentTime, 0.15);
+
+  // Compressor threshold adjustment (delta only)
+  if(mComp<0&&compNode) compNode.threshold.value=Math.max(-50, compNode.threshold.value+mComp*0.3);
+
+  setStatus('M/S: Mid EQ '+mLow.toFixed(1)+'/'+(mMid>=0?'+':'')+mMid.toFixed(1)+'/'+mHigh.toFixed(1)+'dB · Side '+(sLow>=0?'+':'')+sLow.toFixed(1)+'/'+(sHigh>=0?'+':'')+sHigh.toFixed(1)+'dB');
 }
 
 // ===== REFERENCE TRACK =====
@@ -683,18 +726,36 @@ function fmtTime(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padSt
 
 // ===== BEFORE/AFTER — seamless switch =====
 function setMode(mode){
+  if(!audioBuffer) { playMode=mode; updateModeUI(mode); return; }
   const was=isPlaying;
   const pos=was?(audioCtx.currentTime-startTime):pauseOffset;
-  stopSource();isPlaying=false;
-  pauseOffset=Math.max(0,Math.min(pos,audioBuffer?(audioBuffer.duration-0.01):0));
+  // Save position and stop current source only
+  stopSource();
+  isPlaying=false;
+  pauseOffset=Math.max(0,Math.min(pos,audioBuffer.duration-0.01));
   playMode=mode;
+  updateModeUI(mode);
+  updateLUFSDisplay();
+  // Immediately restart — seamless, no gap
+  if(was) setTimeout(()=>playAudio(),10);
+}
+
+function updateModeUI(mode){
   document.getElementById('btn-before').classList.toggle('active',mode==='before');
   document.getElementById('btn-after').classList.toggle('active', mode==='after');
   const dot=document.getElementById('mode-dot'),txt=document.getElementById('mode-txt');
-  if(mode==='before'){dot.className='mode-dot before';txt.textContent='ORIGINAL — sem processamento';}
-  else{dot.className='mode-dot after';txt.textContent='PROCESSADO — '+(PRESETS[curPreset]?.name||curPreset.toUpperCase())+' · '+(curPreset==='house'?'-8':'-9')+' LUFS';}
-  updateLUFSDisplay();
-  if(was&&audioBuffer) playAudio();
+  if(mode==='before'){
+    dot.className='mode-dot before';
+    txt.textContent='ORIGINAL — sinal sem processamento';
+    document.querySelectorAll('.tab').forEach(t=>{
+      if(t.textContent.trim()!=='MASTER') t.style.opacity='0.4';
+      else t.style.opacity='1';
+    });
+  } else {
+    dot.className='mode-dot after';
+    txt.textContent='PROCESSADO — '+(PRESETS[curPreset]?.name||curPreset.toUpperCase())+' · '+(curPreset==='house'?'-8':'-9')+' LUFS';
+    document.querySelectorAll('.tab').forEach(t=>t.style.opacity='1');
+  }
 }
 
 // ===== SPECTRUM — FabFilter style =====
@@ -1232,6 +1293,85 @@ function stopDrag(){dragName='';document.removeEventListener('mousemove',onDrag)
 function toggleBypass(){bypassOn=!bypassOn;document.getElementById('bypass-btn').classList.toggle('on',bypassOn);applyDSP();setStatus(bypassOn?'Bypass ativo':'Bypass desligado');}
 function setStatus(msg){document.getElementById('stxt').textContent=msg.toUpperCase();}
 
+
+// ===== HUMAN MASTERING MODAL =====
+function openHumanMasteringModal(){
+  closePiradexModal();
+  // Build specs text from current analysis
+  const isHouse = curPreset==='house';
+  const lufsTarget = isHouse?-8:-9;
+  const headroom = -6;
+  const p = PRESETS[curPreset];
+  let specs = `Género: ${p?.name||curPreset.toUpperCase()}\n`;
+  specs += `Target LUFS: ${lufsTarget} LUFS integrado\n`;
+  specs += `True Peak ceiling: -1.0 dBTP\n`;
+  specs += `Headroom sugerido: ${headroom} dBFS\n`;
+  specs += `Knobs actuais — BASS: ${kvals.BASS} · CLEAN: ${kvals.CLEAN} · LOUD: ${kvals.LOUD} · WIDE: ${kvals.WIDE} · PUNCH: ${kvals.PUNCH} · FOCUS: ${kvals.FOCUS}\n`;
+  if(eqSub) specs += `EQ — Sub: ${eqSub.gain.value.toFixed(1)}dB · Bass: ${eqBass.gain.value.toFixed(1)}dB · LowMid: ${eqLowNode.gain.value.toFixed(1)}dB · Mid: ${eqMid.gain.value.toFixed(1)}dB · High: ${eqHigh.gain.value.toFixed(1)}dB · Air: ${eqAir.gain.value.toFixed(1)}dB\n`;
+  if(compNode) specs += `Compressor — Threshold: ${compNode.threshold.value.toFixed(1)}dB · Ratio: ${compNode.ratio.value.toFixed(1)}:1\n`;
+  specs += `Shape Mode: ${shapeMode.toUpperCase()} · Parallel Mix: ${document.getElementById('shape-mix')?.value||30}%\n`;
+  specs += `Referências do preset: ${p?.refs||'—'}`;
+  document.getElementById('human-specs').textContent=specs;
+  document.getElementById('human-sent-msg').style.display='none';
+  document.getElementById('human-mastering-modal').style.display='flex';
+}
+
+function closeHumanMasteringModal(){
+  document.getElementById('human-mastering-modal').style.display='none';
+}
+
+function sendHumanMastering(){
+  const email = document.getElementById('human-email').value.trim();
+  const link  = document.getElementById('human-link').value.trim();
+  const ref   = document.getElementById('human-ref').value.trim();
+  const notes = document.getElementById('human-notes').value.trim();
+  const specs = document.getElementById('human-specs').textContent;
+
+  if(!email){ document.getElementById('human-email').style.borderColor='var(--c7)'; return; }
+  if(!link) { document.getElementById('human-link').style.borderColor='var(--c7)'; return; }
+
+  // Build mailto link to juninhopiradex@hotmail.com
+  const subject = encodeURIComponent('Pedido de Mastering — Piradex Studio');
+  const body = encodeURIComponent(
+    `PEDIDO DE MASTERING — PIRADEX MASTERING SUITE
+` +
+    `===============================================
+
+` +
+    `EMAIL DO CLIENTE: ${email}
+
+` +
+    `ESPECIFICAÇÕES:
+${specs}
+
+` +
+    `LINK DA FAIXA:
+${link}
+
+` +
+    (ref?`LINK DA REFERÊNCIA:
+${ref}
+
+`:'') +
+    (notes?`NOTAS ADICIONAIS:
+${notes}
+
+`:'') +
+    `===============================================
+` +
+    `Enviado via Piradex Mastering Suite · beatfreakstudio.com`
+  );
+
+  // Open mailto
+  window.location.href=`mailto:juninhopiradex@hotmail.com?subject=${subject}&body=${body}`;
+
+  // Show success message
+  setTimeout(()=>{
+    document.getElementById('human-sent-msg').style.display='block';
+    setStatus('Pedido de mastering enviado — aguarda orçamento no teu email');
+  },500);
+}
+
 // ===== LOGIN =====
 const USERS={'admin':'piradex2024','beatfreak':'studio2024','demo':'demo123','producer1':'beats2024','producer2':'music2024'};
 let isLoggedIn=false,exportCount=0;
@@ -1314,6 +1454,7 @@ async function exportMastered(){
 // ===== INIT =====
 buildKnobs();
 updateLUFSDisplay();
+updateModeUI('before'); // init tabs state
 ['lufs-n','slufs','vu-l','vu-r'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.willChange='transform,contents';});
 
 // Spectrum hover

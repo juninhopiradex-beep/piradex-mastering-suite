@@ -421,6 +421,11 @@
         <button class="pm-reanalyse" onclick="runPiradexAI()">🔄 Re-analisar</button>
         <button class="pm-export" onclick="closePiradexModal();exportMastered()">📤 Exportar</button>
       </div>
+      <div style="padding:8px 18px;border-top:1px solid var(--border);background:var(--bg3);text-align:center;">
+        <button onclick="openHumanMasteringModal()" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(184,85,247,0.4);background:rgba(184,85,247,0.08);color:var(--c6);font-family:'Rajdhani';font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all 0.15s;">
+          🎛️ ENVIAR PARA MASTERING HUMANO
+        </button>
+      </div>
     </div>
   </div>
 
@@ -492,6 +497,52 @@
       <div class="login-footer">Não tens acesso? <a href="https://www.beatfreakstudio.com" target="_blank">beatfreakstudio.com</a></div>
     </div>
   </div>
+
+  <!-- HUMAN MASTERING MODAL -->
+  <div class="paywall-modal" id="human-mastering-modal" style="display:none">
+    <div class="paywall-box" style="max-width:560px;border-color:rgba(184,85,247,0.4);box-shadow:0 0 60px rgba(184,85,247,0.2);">
+      <div class="paywall-header" style="background:linear-gradient(90deg,#b855f7,#ff3ab5,#2dd4ff);">
+        <div class="paywall-title">🎛️ MASTERING HUMANO — PIRADEX STUDIO</div>
+        <button class="pm-close" onclick="closeHumanMasteringModal()" style="background:rgba(0,0,0,0.2);">✕</button>
+      </div>
+      <div class="paywall-body" style="padding:18px 22px;">
+        <div style="font-size:11px;color:var(--muted2);margin-bottom:16px;line-height:1.7;padding:10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);">
+          <strong style="color:var(--c6);">📋 Especificações de masterização recomendadas:</strong><br>
+          <span id="human-specs">A carregar especificações...</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <label class="login-label">O teu email (para receber resposta)</label>
+            <input class="login-input" id="human-email" type="email" placeholder="o-teu-email@exemplo.com" style="margin-bottom:0">
+          </div>
+          <div>
+            <label class="login-label">Link da faixa (WeTransfer, Google Drive, Dropbox...)</label>
+            <input class="login-input" id="human-link" type="url" placeholder="https://wetransfer.com/..." style="margin-bottom:0">
+          </div>
+          <div>
+            <label class="login-label">Link da referência (opcional)</label>
+            <input class="login-input" id="human-ref" type="url" placeholder="link da música de referência" style="margin-bottom:0">
+          </div>
+          <div>
+            <label class="login-label">Notas adicionais</label>
+            <textarea id="human-notes" placeholder="Descreve o som que queres, estilo, mood, referências, preferências..." style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Rajdhani';font-size:13px;min-height:80px;resize:vertical;outline:none;line-height:1.5;"></textarea>
+          </div>
+        </div>
+        <button onclick="sendHumanMastering()" style="width:100%;padding:12px;margin-top:14px;border:none;border-radius:8px;cursor:pointer;font-family:'Orbitron',monospace;font-weight:700;font-size:12px;letter-spacing:2px;color:#000;background:linear-gradient(90deg,#b855f7,#ff3ab5);transition:filter 0.15s;">
+          📩 ENVIAR PEDIDO DE MASTERING
+        </button>
+        <div id="human-sent-msg" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(45,255,138,0.08);border:1px solid rgba(45,255,138,0.3);border-radius:6px;font-size:12px;color:var(--c4);text-align:center;line-height:1.6;">
+          ✅ <strong>Pedido enviado!</strong><br>
+          Receberás um orçamento no teu email em breve.<br>
+          <span style="font-size:10px;color:var(--muted2);">juninhopiradex@hotmail.com</span>
+        </div>
+        <div style="margin-top:10px;text-align:center;font-size:9px;color:var(--muted);letter-spacing:1px;">
+          ENVIADO PARA: juninhopiradex@hotmail.com · PIRADEX STUDIO
+        </div>
+      </div>
+    </div>
+  </div>
+
 
 </div>
 <script src="app.js"></script>
