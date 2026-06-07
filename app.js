@@ -41,9 +41,9 @@ const PRESETS = {
     knobs:{CLEAN:44,BASS:60,LOUD:68,WIDE:58,PUNCH:52,FOCUS:47},
     eq:{sub:1.1,bass:-0.2,low:0.1,mid:-0.5,high:-0.6,air:-0.2},
     sugs:[['Warm sub @ 70Hz','+1.1 dB','c2'],['Mid warmth','-0.5 dB','c3'],['Romantic width','+58%','c5']]},
-  house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor -8 LUFS',
-    knobs:{CLEAN:16,BASS:86,LOUD:85,WIDE:50,PUNCH:39,FOCUS:28},eq:{sub:5.1,bass:-0.6,low:-0.7,mid:-0.6,high:-0.3,air:-0.4},
-    sugs:[['Sub punch @ 50Hz','+5.1 dB','c2'],['Bass tightness','-0.6 dB','c3'],['Club energy','+85%','c7']]}
+  house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor',
+    knobs:{CLEAN:45,BASS:75,LOUD:72,WIDE:52,PUNCH:55,FOCUS:45},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
+    sugs:[['Sub punch @ 50Hz','+4.0 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club energy','+72%','c5']]}
 };
 
 const KNOBS_DEF   = ['CLEAN','BASS','LOUD','WIDE','PUNCH','FOCUS'];
@@ -71,6 +71,7 @@ let peakHoldTimerL=0, peakHoldTimerR=0;
 let lufsSmooth=-14, idlePhase=0;
 let shapeMode='tape';
 let lastWidthAirDelta=0;
+let widthAirOffset=0, widthHighOffset=0;
 let refBuffer=null, refStats=null;
 let specPeaks=null, specSmooth=null;
 let specHoverX=-1;
@@ -321,20 +322,21 @@ function applyDSP() {
     limiterNode.ratio.value     = 20;
   }
 
-  // ── Master gain: 50 = 1.0 (unity), 0 = 0.35, 100 = 2.0
-  // This preserves relative level between ORIGINAL and PROCESSADO at knob=50
+  // ── Master gain calibrated so LOUD=65 ≈ -9 LUFS output
+  // LOUD 50 = 1.0 (unity), LOUD 65 = 1.45 (~+3dB toward -9 LUFS)
+  // LOUD 0  = 0.1 (near silence), LOUD 100 = 2.5 (max)
   const gainFactor = loud <= 50
-    ? 0.35 + (loud/50) * 0.65   // 0→50: 0.35→1.0
-    : 1.0  + ((loud-50)/50) * 1.0; // 50→100: 1.0→2.0
+    ? 0.1 + (loud/50) * 0.9    // 0→50: 0.1→1.0
+    : 1.0 + ((loud-50)/50) * 1.5; // 50→100: 1.0→2.5
   masterGain.gain.setTargetAtTime(gainFactor, audioCtx.currentTime, 0.08);
 
-  // ── Width via EQ only (no gain manipulation)
+  // ── Width via EQ — ABSOLUTE SET (not additive, prevents residual)
+  // Store width contribution separately, apply as absolute offset
   const wDelta = (wide - 50) / 50; // -1 to +1
-  // Absolute set based on wide knob — avoids accumulation
-  const airFromWidth  = wDelta * 2.5;
-  const highFromWidth = wDelta * 1.5;
-  eqAir.gain.value   += airFromWidth;
-  eqHigh.gain.value  += highFromWidth;
+  // These are SET absolutely each call — no accumulation
+  widthAirOffset  = wDelta * 2.0;
+  widthHighOffset = wDelta * 1.2;
+  // Applied below after base EQ so they don't compound
 
   if(bypassOn){
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
@@ -343,6 +345,11 @@ function applyDSP() {
     masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
   }
 
+  // Apply width offsets on top of EQ (absolute, not additive)
+  if(typeof widthAirOffset!=='undefined'){
+    eqAir.gain.value  += widthAirOffset;
+    eqHigh.gain.value += widthHighOffset;
+  }
   syncEQSliders();
   updateLUFSDisplay();
 }
@@ -788,15 +795,42 @@ function setMode(mode){
   if(!audioBuffer) { playMode=mode; updateModeUI(mode); return; }
   const was=isPlaying;
   const pos=was?(audioCtx.currentTime-startTime):pauseOffset;
-  // Save position and stop current source only
   stopSource();
   isPlaying=false;
   pauseOffset=Math.max(0,Math.min(pos,audioBuffer.duration-0.01));
   playMode=mode;
+
+  if(mode==='before'){
+    // RESET ALL DSP to zero/bypass when going back to ORIGINAL
+    resetAllDSP();
+    resetModuleBypasses();
+  }
+
   updateModeUI(mode);
   updateLUFSDisplay();
-  // Immediately restart — seamless, no gap
   if(was) setTimeout(()=>playAudio(),10);
+}
+
+function resetAllDSP(){
+  if(!audioCtx) return;
+  // Zero all EQ
+  [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>{ if(f) f.gain.value=0; });
+  // Bypass compressor
+  if(compNode){ compNode.threshold.value=0; compNode.ratio.value=1; }
+  // Bypass limiter
+  if(limiterNode){ limiterNode.threshold.value=0; limiterNode.ratio.value=1; }
+  // Unity master gain
+  if(masterGain) masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  // Unity dry gain
+  if(dryGain) dryGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  // Unity side/mid
+  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,  audioCtx.currentTime, 0.05);
+  // Zero shape
+  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  // Reset width offsets
+  widthAirOffset=0; widthHighOffset=0;
 }
 
 function updateModeUI(mode){
@@ -1049,6 +1083,7 @@ function setPreset(key,el){
     eqSub.gain.value=p.eq.sub; eqBass.gain.value=p.eq.bass; eqLowNode.gain.value=p.eq.low;
     eqMid.gain.value=p.eq.mid; eqHigh.gain.value=p.eq.high; eqAir.gain.value=p.eq.air;
   }
+  resetModuleBypasses();
   refreshKnobs(); updateSugs(p.sugs); applyDSP(); syncEQSliders();
   const lufsTarget=key==='house'?'-8':'-9';
   setStatus('Preset '+p.name+' aplicado · Alvo '+lufsTarget+' LUFS');
@@ -1404,6 +1439,127 @@ function makeEditable(el, callback, min, max, suffix){
     };
     input.addEventListener('blur',finish);
     input.addEventListener('keydown',e=>{if(e.key==='Enter')finish();if(e.key==='Escape'){input.replaceWith(el);}});
+  });
+}
+
+
+// ===== MODULE BYPASS SYSTEM =====
+const moduleBypassState = {eq:false, comp:false, dyn:false, shape:false, width:false, excite:false, loud:false, limit:false, midside:false};
+
+// Saved values for each bypassed module
+const moduleBypassSaved = {};
+
+function toggleModuleBypass(module){
+  moduleBypassState[module] = !moduleBypassState[module];
+  const btn = document.getElementById('bypass-'+module);
+  const active = moduleBypassState[module];
+  if(btn){ btn.classList.toggle('bypass-active', active); btn.textContent = active ? 'BYPASSED' : 'BYPASS'; }
+  applyModuleBypass(module, active);
+}
+
+function applyModuleBypass(module, bypassed){
+  if(!audioCtx) return;
+  switch(module){
+    case 'eq':
+      if(bypassed){
+        moduleBypassSaved.eq = {sub:eqSub.gain.value,bass:eqBass.gain.value,low:eqLowNode.gain.value,mid:eqMid.gain.value,high:eqHigh.gain.value,air:eqAir.gain.value};
+        [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
+      } else if(moduleBypassSaved.eq) {
+        const s=moduleBypassSaved.eq;
+        eqSub.gain.value=s.sub;eqBass.gain.value=s.bass;eqLowNode.gain.value=s.low;
+        eqMid.gain.value=s.mid;eqHigh.gain.value=s.high;eqAir.gain.value=s.air;
+      }
+      break;
+    case 'comp':
+      if(bypassed){
+        moduleBypassSaved.comp={thr:compNode.threshold.value,ratio:compNode.ratio.value,atk:compNode.attack.value,rel:compNode.release.value};
+        compNode.threshold.value=0; compNode.ratio.value=1;
+      } else if(moduleBypassSaved.comp){
+        const s=moduleBypassSaved.comp;
+        compNode.threshold.value=s.thr;compNode.ratio.value=s.ratio;compNode.attack.value=s.atk;compNode.release.value=s.rel;
+      }
+      break;
+    case 'limit':
+      if(bypassed){
+        moduleBypassSaved.limit={thr:limiterNode.threshold.value,ratio:limiterNode.ratio.value};
+        limiterNode.threshold.value=0;limiterNode.ratio.value=1;
+      } else if(moduleBypassSaved.limit){
+        limiterNode.threshold.value=moduleBypassSaved.limit.thr;
+        limiterNode.ratio.value=moduleBypassSaved.limit.ratio;
+      }
+      break;
+    case 'shape':
+      if(bypassed){
+        moduleBypassSaved.shape={dry:shapeDryGain.gain.value,wet:shapeWetGain.gain.value};
+        shapeDryGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
+        shapeWetGain.gain.setTargetAtTime(0.0,audioCtx.currentTime,0.02);
+      } else if(moduleBypassSaved.shape){
+        shapeDryGain.gain.setTargetAtTime(moduleBypassSaved.shape.dry,audioCtx.currentTime,0.02);
+        shapeWetGain.gain.setTargetAtTime(moduleBypassSaved.shape.wet,audioCtx.currentTime,0.02);
+      }
+      break;
+    case 'width':
+      if(bypassed){
+        moduleBypassSaved.width={air:eqAir.gain.value,high:eqHigh.gain.value,side:msSideGain?.gain.value||1};
+        // Reset width — absolute zero width contribution
+        widthAirOffset=0; widthHighOffset=0;
+        if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+        applyDSP(); // reapply without width
+      } else {
+        widthAirOffset=0;widthHighOffset=0; // let applyDSP recalc
+        applyDSP();
+      }
+      break;
+    case 'excite':
+      if(bypassed){
+        moduleBypassSaved.excite={air:eqAir.gain.value};
+        eqAir.gain.value=0;
+      } else if(moduleBypassSaved.excite){
+        eqAir.gain.value=moduleBypassSaved.excite.air;
+      }
+      break;
+    case 'loud':
+      if(bypassed){
+        moduleBypassSaved.loud={gain:masterGain.gain.value};
+        masterGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+      } else if(moduleBypassSaved.loud){
+        masterGain.gain.setTargetAtTime(moduleBypassSaved.loud.gain,audioCtx.currentTime,0.05);
+      }
+      break;
+    case 'midside':
+      if(bypassed){
+        moduleBypassSaved.midside={mid:msMidGain?.gain.value||1,side:msSideGain?.gain.value||1};
+        if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+        if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+      } else if(moduleBypassSaved.midside){
+        if(msMidGain)  msMidGain.gain.setTargetAtTime(moduleBypassSaved.midside.mid,audioCtx.currentTime,0.05);
+        if(msSideGain) msSideGain.gain.setTargetAtTime(moduleBypassSaved.midside.side,audioCtx.currentTime,0.05);
+      }
+      break;
+    case 'dyn':
+      if(bypassed){
+        moduleBypassSaved.dyn={thr:compNode.threshold.value,ratio:compNode.ratio.value,atk:compNode.attack.value,rel:compNode.release.value,lim:limiterNode.threshold.value};
+        compNode.threshold.value=0;compNode.ratio.value=1;
+        limiterNode.threshold.value=0;limiterNode.ratio.value=1;
+      } else if(moduleBypassSaved.dyn){
+        const s=moduleBypassSaved.dyn;
+        compNode.threshold.value=s.thr;compNode.ratio.value=s.ratio;
+        compNode.attack.value=s.atk;compNode.release.value=s.rel;
+        limiterNode.threshold.value=s.lim;
+      }
+      break;
+  }
+  syncEQSliders();
+}
+
+// Reset all bypass states (called when switching presets or modes)
+function resetModuleBypasses(){
+  Object.keys(moduleBypassState).forEach(m=>{
+    if(moduleBypassState[m]){
+      moduleBypassState[m]=false;
+      const btn=document.getElementById('bypass-'+m);
+      if(btn){btn.classList.remove('bypass-active');btn.textContent='BYPASS';}
+    }
   });
 }
 

@@ -120,7 +120,7 @@
   <!-- EQ TAB -->
   <div class="tab-panel" id="tab-eq">
     <div class="module-panel">
-      <div class="module-title">EQUALIZER — 6 Band Parametric</div>
+      <div class="module-title-row"><div class="module-title">EQUALIZER — 6 Band Parametric</div><button class="module-bypass-btn" id="bypass-eq" onclick="toggleModuleBypass('eq')" title="Bypass EQ">BYPASS</button></div>
       <div class="eq-bands">
         <div class="eq-band">
           <div class="eq-band-label">SUB</div><div class="eq-band-freq">60 Hz</div>
@@ -160,7 +160,7 @@
   <!-- COMP TAB -->
   <div class="tab-panel" id="tab-comp">
     <div class="module-panel">
-      <div class="module-title">COMPRESSOR — VCA Style</div>
+      <div class="module-title-row"><div class="module-title">COMPRESSOR — VCA Style</div><button class="module-bypass-btn" id="bypass-comp" onclick="toggleModuleBypass('comp')" title="Bypass Compressor">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>THRESHOLD</label><input type="range" min="-60" max="0" value="-24" step="1" id="comp-thr" oninput="updateComp()"><span id="comp-thr-v">-24 dB</span></div>
         <div class="mod-ctrl"><label>RATIO</label><input type="range" min="1" max="20" value="4" step="0.5" id="comp-ratio" oninput="updateComp()"><span id="comp-ratio-v">4 : 1</span></div>
@@ -176,7 +176,7 @@
   <!-- DYN TAB -->
   <div class="tab-panel" id="tab-dyn">
     <div class="module-panel">
-      <div class="module-title">DYNAMICS — Transient Shaper</div>
+      <div class="module-title-row"><div class="module-title">DYNAMICS — Transient Shaper</div><button class="module-bypass-btn" id="bypass-dyn" onclick="toggleModuleBypass('dyn')" title="Bypass Dynamics">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>ATTACK SHAPE</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-attack" oninput="updateDyn()"><span id="dyn-attack-v">0</span></div>
         <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-sustain" oninput="updateDyn()"><span id="dyn-sustain-v">0</span></div>
@@ -190,7 +190,7 @@
   <!-- SHAPE TAB -->
   <div class="tab-panel" id="tab-shape">
     <div class="module-panel">
-      <div class="module-title">HARMONIC SHAPER — Saturation &amp; Parallel Mix</div>
+      <div class="module-title-row"><div class="module-title">HARMONIC SHAPER — Saturation &amp; Parallel Mix</div><button class="module-bypass-btn" id="bypass-shape" onclick="toggleModuleBypass('shape')" title="Bypass Shape">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>DRIVE</label><input type="range" min="0" max="100" value="0" step="1" id="shape-drive" oninput="updateShape()"><span id="shape-drive-v">0%</span></div>
         <div class="mod-ctrl"><label>PARALLEL MIX</label><input type="range" min="0" max="100" value="30" step="1" id="shape-mix" oninput="updateShape()"><span id="shape-mix-v">30%</span></div>
@@ -218,7 +218,7 @@
   <!-- WIDTH TAB -->
   <div class="tab-panel" id="tab-width">
     <div class="module-panel">
-      <div class="module-title">STEREO WIDTH — Mid/Side Processing</div>
+      <div class="module-title-row"><div class="module-title">STEREO WIDTH — Mid/Side Processing</div><button class="module-bypass-btn" id="bypass-width" onclick="toggleModuleBypass('width')" title="Bypass Width">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>WIDTH</label><input type="range" min="0" max="200" value="100" step="1" id="width-main" oninput="updateWidth()"><span id="width-main-v">100%</span></div>
         <div class="mod-ctrl"><label>MID GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="width-mid" oninput="updateWidth()"><span id="width-mid-v">0 dB</span></div>
@@ -236,7 +236,7 @@
   <!-- EXCITE TAB -->
   <div class="tab-panel" id="tab-excite">
     <div class="module-panel">
-      <div class="module-title">EXCITER — Psychoacoustic Enhancement</div>
+      <div class="module-title-row"><div class="module-title">EXCITER — Psychoacoustic Enhancement</div><button class="module-bypass-btn" id="bypass-excite" onclick="toggleModuleBypass('excite')" title="Bypass Exciter">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>FREQUENCY</label><input type="range" min="1000" max="16000" value="8000" step="500" id="exc-freq" oninput="updateExcite()"><span id="exc-freq-v">8 kHz</span></div>
         <div class="mod-ctrl"><label>AMOUNT</label><input type="range" min="0" max="100" value="0" step="1" id="exc-amount" oninput="updateExcite()"><span id="exc-amount-v">0%</span></div>
@@ -250,7 +250,7 @@
   <!-- LOUD TAB -->
   <div class="tab-panel" id="tab-loud">
     <div class="module-panel">
-      <div class="module-title">LOUDNESS — LUFS Normalisation</div>
+      <div class="module-title-row"><div class="module-title">LOUDNESS — LUFS Normalisation</div><button class="module-bypass-btn" id="bypass-loud" onclick="toggleModuleBypass('loud')" title="Bypass Loudness">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>TARGET LUFS</label><input type="range" min="-23" max="-6" value="-9" step="0.5" id="loud-target" oninput="updateLoud()"><span id="loud-target-v">-9.0 LUFS</span></div>
         <div class="mod-ctrl"><label>TRUE PEAK CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
@@ -273,7 +273,7 @@
   <!-- LIMIT TAB -->
   <div class="tab-panel" id="tab-limit">
     <div class="module-panel">
-      <div class="module-title">LIMITER — Brickwall True Peak</div>
+      <div class="module-title-row"><div class="module-title">LIMITER — Brickwall True Peak</div><button class="module-bypass-btn" id="bypass-limit" onclick="toggleModuleBypass('limit')" title="Bypass Limiter">BYPASS</button></div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="lim-ceil" oninput="updateLimit()"><span id="lim-ceil-v">-1.0 dBTP</span></div>
         <div class="mod-ctrl"><label>RELEASE</label><input type="range" min="1" max="200" value="50" step="1" id="lim-rel" oninput="updateLimit()"><span id="lim-rel-v">50 ms</span></div>
@@ -297,7 +297,7 @@
   <!-- MID/SIDE TAB -->
   <div class="tab-panel" id="tab-midside">
     <div class="module-panel">
-      <div class="module-title">MID/SIDE — Independent Channel Processing</div>
+      <div class="module-title-row"><div class="module-title">MID/SIDE — Independent Channel Processing</div><button class="module-bypass-btn" id="bypass-midside" onclick="toggleModuleBypass('midside')" title="Bypass M/S">BYPASS</button></div>
       <div class="ms-grid">
         <div class="ms-col">
           <div class="ms-col-title" style="color:var(--c5)">MID CHANNEL (Centre)</div>
