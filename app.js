@@ -20,11 +20,27 @@ const PRESETS = {
     knobs:{CLEAN:22,BASS:85,LOUD:52,WIDE:62,PUNCH:45,FOCUS:33},eq:{sub:4.8,bass:-0.5,low:-0.8,mid:-0.4,high:-0.3,air:0.0},
     sugs:[['Sub weight @ 50Hz','+4.8 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club width','+62%','c5']]},
   rnb:      {name:'R&B',      refs:'Mario · Ne-Yo · Usher · Chris Brown', desc:'Voz no topo, dinâmico, polido',
-    knobs:{CLEAN:22,BASS:59,LOUD:70,WIDE:55,PUNCH:64,FOCUS:50},eq:{sub:-1.2,bass:0.5,low:2.0,mid:0.4,high:0.0,air:-0.4},
+    knobs:{CLEAN:55,BASS:55,LOUD:55,WIDE:55,PUNCH:45,FOCUS:60},eq:{sub:-0.5,bass:0.3,low:0.5,mid:1.2,high:1.0,air:0.8},
     sugs:[['Low-mid body @ 500Hz','+2.0 dB','c2'],['Sub control','-1.2 dB','c3'],['Vocal presence','+0.4 dB','c5']]},
   afrobeats:{name:'AFROBEATS',refs:'Davido · Rema · Lojay', desc:'Sub pesado, groove colorido',
     knobs:{CLEAN:28,BASS:77,LOUD:47,WIDE:56,PUNCH:46,FOCUS:41},eq:{sub:2.1,bass:0.5,low:0.0,mid:0.0,high:0.0,air:0.0},
     sugs:[['Sub groove @ 60Hz','+2.1 dB','c2'],['Bass presence','+0.5 dB','c3'],['Afro width','+56%','c5']]},
+  amapiano: {name:'AMAPIANO', refs:'Asake · Olamide', desc:'Log drum pesado, piano suave, corpo nos low-mids — som sul-africano',
+    knobs:{CLEAN:46,BASS:49,LOUD:56,WIDE:60,PUNCH:61,FOCUS:53},
+    eq:{sub:-2.5,bass:1.0,low:1.3,mid:0.0,high:-0.4,air:-0.2},
+    sugs:[['Bass body @ 150Hz','+1.0 dB','c2'],['Low-mid presence','+1.3 dB','c3'],['Log drum punch','+61%','c5']]},
+  dancehall: {name:'DANCEHALL', refs:'Blaiz Fayah · Tribal Kush', desc:'Riddim energético, voz presente, espectro completo — estilo jamaicano/afro',
+    knobs:{CLEAN:58,BASS:40,LOUD:54,WIDE:58,PUNCH:63,FOCUS:71},
+    eq:{sub:-3.0,bass:-0.1,low:1.1,mid:1.3,high:0.7,air:0.7},
+    sugs:[['Vocal presence @ 1.5kHz','+1.3 dB','c2'],['High definition','+0.7 dB','c3'],['Riddim punch','+63%','c5']]},
+  reggaeton: {name:'REGGAETON', refs:'Daddy Yankee · Snow', desc:'Sub dominante, dembow pesado, kick profundo — som latino urbano',
+    knobs:{CLEAN:46,BASS:66,LOUD:57,WIDE:52,PUNCH:60,FOCUS:49},
+    eq:{sub:3.0,bass:-0.8,low:-0.9,mid:-0.3,high:-0.3,air:-0.2},
+    sugs:[['Sub dembow @ 60Hz','+3.0 dB','c2'],['Bass tightness','-0.8 dB','c3'],['Latino punch','+60%','c5']]},
+  kompa: {name:'KOMPA', refs:"Joe Dwe't File", desc:'Graves profundos, muito dinâmico, romantismo haitiano',
+    knobs:{CLEAN:44,BASS:60,LOUD:68,WIDE:58,PUNCH:52,FOCUS:47},
+    eq:{sub:1.1,bass:-0.2,low:0.1,mid:-0.5,high:-0.6,air:-0.2},
+    sugs:[['Warm sub @ 70Hz','+1.1 dB','c2'],['Mid warmth','-0.5 dB','c3'],['Romantic width','+58%','c5']]},
   house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor -8 LUFS',
     knobs:{CLEAN:16,BASS:86,LOUD:85,WIDE:50,PUNCH:39,FOCUS:28},eq:{sub:5.1,bass:-0.6,low:-0.7,mid:-0.6,high:-0.3,air:-0.4},
     sugs:[['Sub punch @ 50Hz','+5.1 dB','c2'],['Bass tightness','-0.6 dB','c3'],['Club energy','+85%','c7']]}
@@ -54,6 +70,7 @@ let vuL=0.02, vuR=0.02, peakHoldL=0, peakHoldR=0;
 let peakHoldTimerL=0, peakHoldTimerR=0;
 let lufsSmooth=-14, idlePhase=0;
 let shapeMode='tape';
+let lastWidthAirDelta=0;
 let refBuffer=null, refStats=null;
 let specPeaks=null, specSmooth=null;
 let specHoverX=-1;
@@ -147,6 +164,18 @@ function buildChain() {
   eqAir.connect(shapeDryGain); shapeDryGain.connect(shapeMixer);
   eqAir.connect(shapeWS); shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
   shapeMixer.connect(compNode);
+
+  // M/S encoder/decoder for proper mid-side processing
+  const msSplitter = audioCtx.createChannelSplitter(2);
+  const msMerger2  = audioCtx.createChannelMerger(2);
+  // Mid = L+R, Side = L-R (encoded via gain nodes)
+  const msLgain = audioCtx.createGain(); msLgain.gain.value= 0.5;
+  const msRgain = audioCtx.createGain(); msRgain.gain.value= 0.5;
+  const msLinv  = audioCtx.createGain(); msLinv.gain.value = 0.5;
+  const msRinv  = audioCtx.createGain(); msRinv.gain.value =-0.5;
+
+  msMidGain  = audioCtx.createGain(); msMidGain.gain.value=1.0;
+  msSideGain = audioCtx.createGain(); msSideGain.gain.value=1.0;
 
   compNode.connect(limiterNode); limiterNode.connect(masterGain);
   masterGain.connect(analyserNode);
@@ -272,12 +301,13 @@ function applyDSP() {
   }
 
   // EQ from knobs
-  eqSub.gain.value    = (bass -30)*0.20;
-  eqBass.gain.value   = (bass -40)*0.15;
-  eqLowNode.gain.value= (bass -50)*0.08;
+  // 50 = unity (no effect), 0 = full cut, 100 = full boost
+  eqSub.gain.value    = (bass -50)*0.20;
+  eqBass.gain.value   = (bass -50)*0.15;
+  eqLowNode.gain.value= (bass -50)*0.06;
   eqMid.gain.value    = (focus-50)*0.14;
   eqHigh.gain.value   = (clean-50)*0.10;
-  eqAir.gain.value    = (clean-30)*0.12;
+  eqAir.gain.value    = (clean-50)*0.10;
 
   // Compressor from PUNCH knob
   compNode.threshold.value = -50+(punch*0.36);
@@ -397,20 +427,19 @@ function updateWidth(){
   document.getElementById('width-bass-mono-v').textContent=bm+' Hz';
   document.getElementById('wm-fill').style.width=Math.min(100,w/2)+'%';
   if(!audioCtx) return;
-  // Width via EQ: boost or cut high shelf to simulate stereo width
-  // w=100 = unity, w>100 = wider (boost air/highs), w<100 = narrower (cut)
-  const wDelta=(w-100)/100; // -1 to +1
-  eqAir.gain.value += wDelta*4;
-  eqHigh.gain.value += wDelta*2;
-  // Side gain: w>100 boosts side, w<100 reduces it
-  if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.01,w/100),audioCtx.currentTime,0.1);
-  // Mid gain from slider
-  if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mid/20),audioCtx.currentTime,0.1);
-  // Bass mono: low shelf cut on sides below bm Hz — apply via eqBass
-  if(bm>60) eqSub.gain.value = Math.max(eqSub.gain.value, eqSub.gain.value + (wDelta<0?-2:0));
-  // Extra: apply side EQ gain to high shelf
-  eqAir.gain.value += side*0.3;
-  setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB');
+  // SET (not add) — prevents residual noise on repeated changes
+  // w=100 = unity, 0=narrow/mono, 200=max wide
+  const wNorm = w/100; // 0=mono, 1=unity, 2=double-wide
+  // Apply width via independent gain nodes
+  if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0, wNorm), audioCtx.currentTime, 0.08);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10, mid/20), audioCtx.currentTime, 0.08);
+  // High shelf for width perception — SET absolute value
+  const wDelta=(wNorm-1)*3; // -3 to +3 dB
+  eqAir.gain.setTargetAtTime( (eqAir.gain.value-lastWidthAirDelta||0)+wDelta, audioCtx.currentTime, 0.08);
+  lastWidthAirDelta=wDelta;
+  // Side EQ
+  eqHigh.gain.setTargetAtTime( Math.max(-12,Math.min(12, side*0.5)), audioCtx.currentTime, 0.08);
+  setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB · BassM: '+bm+'Hz');
 }
 
 function updateExcite(){
@@ -591,7 +620,11 @@ function analyseAndDisplayRef(name){
 
 function applyRefToPreset(){
   if(!refStats){setStatus('Carrega uma referência primeiro');return;}
-  // Reset all EQ first
+  if(playMode!=='before'){
+    setStatus('Volta ao modo ORIGINAL para aplicar a referência');
+    return;
+  }
+  // Reset all EQ first — replace everything
   if(audioCtx){
     eqSub.gain.value=0; eqBass.gain.value=0; eqLowNode.gain.value=0;
     eqMid.gain.value=0; eqHigh.gain.value=0; eqAir.gain.value=0;
@@ -611,7 +644,8 @@ function applyRefToPreset(){
   else if(refStats.dynRange<8) kvals.PUNCH=Math.max(20,kvals.PUNCH-10);
 
   refreshKnobs(); syncEQSliders(); applyDSP();
-  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+'  — ajusta os knobs por cima');
+  setMode('after'); // switch to PROCESSADO automatically
+  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+'  — agora em PROCESSADO · ajusta os knobs por cima');
 }
 
 // ===== FILE LOAD =====
@@ -633,6 +667,8 @@ function loadFile(file){
       document.getElementById('waveform-wrap').style.display='flex';
       document.getElementById('drop-zone').style.display='none';
       document.getElementById('export-btn').style.display='flex';
+      const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='flex';
+      const nb=document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
       drawWaveform(); applyDSP();
       setStatus('Pronto · BEFORE = original · AFTER = masterizado');
       if(refStats) analyseAndDisplayRef(refStats.name);
@@ -957,8 +993,8 @@ function updateMeters(){
   if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
   const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
   const lfl=document.getElementById('lim-fill-l'),lfr=document.getElementById('lim-fill-r');
-  if(lfl)lfl.style.transform='scaleY('+Math.min(1,vuL*1.1)+')';
-  if(lfr)lfr.style.transform='scaleY('+Math.min(1,vuR*1.1)+')';
+  if(lfl)lfl.style.width=Math.min(100,vuL*110)+'%';
+  if(lfr)lfr.style.width=Math.min(100,vuR*110)+'%';
 }
 
 function setVU(l,r){
@@ -1236,12 +1272,33 @@ function stopIODrag(){
 
 function applyIOGain(){
   if(!audioCtx) return;
-  const inFactor  = Math.pow(10, inputGainDb/20);
-  const outFactor = Math.pow(10, outputGainDb/20);
-  // Input gain: applied to dryGain when BEFORE, to eqSub input when AFTER
+  // Linear: -inf (mute) to +12dB. inputGainDb range: -60 to +12
+  // At -60dB: practically silent (0.001 factor)
+  const inFactor  = inputGainDb  <= -60 ? 0 : Math.pow(10, inputGainDb/20);
+  const outFactor = outputGainDb <= -60 ? 0 : Math.pow(10, outputGainDb/20);
   if(dryGain)    dryGain.gain.setTargetAtTime(0.85*inFactor, audioCtx.currentTime, 0.05);
-  // Output gain: applied to masterGain on top of current
-  if(masterGain) masterGain.gain.setTargetAtTime(masterGain.gain.value*outFactor, audioCtx.currentTime, 0.05);
+  if(masterGain){
+    const baseGain = piradexOn ? 1.8 : (0.35+(kvals.LOUD/100)*1.4);
+    masterGain.gain.setTargetAtTime(baseGain*outFactor, audioCtx.currentTime, 0.05);
+  }
+}
+
+function applyHeadroom(){
+  // Normalize audio to -6 dBFS peak headroom
+  if(!audioBuffer){ setStatus('Carrega uma faixa primeiro'); return; }
+  initAudio();
+  const data = audioBuffer.getChannelData(0);
+  let peak = 0;
+  for(let i=0;i<data.length;i++) peak=Math.max(peak,Math.abs(data[i]));
+  if(peak<=0){ setStatus('Áudio silencioso'); return; }
+  // -6 dBFS = 0.501
+  const targetPeak = 0.501;
+  const gainNeeded = targetPeak/peak;
+  const gainDb = 20*Math.log10(gainNeeded);
+  outputGainDb = Math.max(-24, Math.min(12, gainDb));
+  applyIOGain();
+  updateIODisplay();
+  setStatus('HEADROOM: pico ajustado para -6 dBFS · Output '+(gainDb>=0?'+':'')+gainDb.toFixed(1)+'dB');
 }
 
 function updateIODisplay(){
@@ -1280,6 +1337,48 @@ function continueAsDemo(){
   isFullVersion=false;
   updateLicenseBadge();
   setStatus('Modo DEMO — preview disponível · exportação limitada a 1 faixa');
+}
+
+
+// ===== NEW TRACK UPLOAD =====
+function newTrackUpload(){
+  stopAudio();
+  audioBuffer=null; refBuffer=null; refStats=null;
+  document.getElementById('drop-zone').style.display='flex';
+  document.getElementById('waveform-wrap').style.display='none';
+  document.getElementById('export-btn').style.display='none';
+  const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='none';
+  document.getElementById('new-track-btn').style.display='none';
+  // Reset to original mode
+  playMode='before'; updateModeUI('before');
+  // Reset IO
+  inputGainDb=0; outputGainDb=0; updateIODisplay();
+  setStatus('Pronto para nova faixa');
+  // Open file dialog
+  document.getElementById('sf').click();
+}
+
+
+// ===== EDITABLE VALUE INPUTS =====
+function makeEditable(el, callback, min, max, suffix){
+  el.title='Clica para editar o valor';
+  el.style.cursor='text';
+  el.addEventListener('dblclick',()=>{
+    const current=parseFloat(el.textContent)||0;
+    const input=document.createElement('input');
+    input.type='number'; input.min=min; input.max=max; input.step='0.1';
+    input.value=current;
+    input.style.cssText='width:55px;background:var(--bg3);border:1px solid var(--c1);border-radius:3px;color:var(--text);font-family:Orbitron,monospace;font-size:10px;padding:2px 4px;text-align:center;';
+    el.replaceWith(input); input.focus(); input.select();
+    const finish=()=>{
+      const val=Math.max(min,Math.min(max,parseFloat(input.value)||0));
+      el.textContent=(val>=0&&suffix!=='dB'?'':val>=0?'+':'')+val.toFixed(suffix==='%'?0:1)+(suffix||'');
+      input.replaceWith(el);
+      callback(val);
+    };
+    input.addEventListener('blur',finish);
+    input.addEventListener('keydown',e=>{if(e.key==='Enter')finish();if(e.key==='Escape'){input.replaceWith(el);}});
+  });
 }
 
 // ===== KNOBS =====
@@ -1349,23 +1448,19 @@ function openHumanMasteringModal(){
   const p = PRESETS[curPreset];
   let specs = `🎵 COMO DEVE VIR A MIX PARA MASTERIZAÇÃO\n`;
   specs += `═══════════════════════════════════════\n\n`;
-  specs += `• Sem compressão de master na mix (desliga o limiter do master bus)\n`;
-  specs += `• Headroom mínimo recomendado: -6 dBFS (pico máximo)\n`;
-  specs += `• Formato: WAV ou AIFF, 24-bit, sample rate original\n`;
+  specs += `• Desliga o master bus limiter/compressor antes de exportar\n`;
+  specs += `• Headroom obrigatório: -6 dBFS de pico máximo\n`;
+  specs += `• Formato: WAV ou AIFF, 24-bit mínimo, sample rate original\n`;
   specs += `• Sem normalização — entregar com dinâmica natural\n`;
-  specs += `• True Peak ceiling da mix: máximo -3 dBTP\n\n`;
-  specs += `🎛️ ESPECIFICAÇÕES DO PROJECTO\n`;
-  specs += `───────────────────────────────\n`;
+  specs += `• True Peak máximo na mix: -3 dBTP\n`;
+  specs += `• Atenção ao clipping em percussão e baixo\n`;
+  specs += `• Exports separados se possível: stems vocals + instrumentais\n\n`;
+  specs += `🎛️ PROJECTO\n`;
+  specs += `────────────\n`;
   specs += `• Género: ${p?.name||curPreset.toUpperCase()}\n`;
-  specs += `• Target LUFS final: ${lufsTarget} LUFS integrado\n`;
-  specs += `• True Peak ceiling master: -1.0 dBTP\n`;
-  specs += `• Referências do preset: ${p?.refs||'—'}\n\n`;
-  specs += `📊 ANÁLISE PIRADEX (configuração actual)\n`;
-  specs += `───────────────────────────────────────\n`;
-  if(eqSub) specs += `• EQ → Sub: ${eqSub.gain.value.toFixed(1)}dB · Bass: ${eqBass.gain.value.toFixed(1)}dB · LowMid: ${eqLowNode.gain.value.toFixed(1)}dB\n`;
-  if(eqMid) specs += `• EQ → Mid: ${eqMid.gain.value.toFixed(1)}dB · High: ${eqHigh.gain.value.toFixed(1)}dB · Air: ${eqAir.gain.value.toFixed(1)}dB\n`;
-  if(compNode) specs += `• Compressor → Threshold: ${compNode.threshold.value.toFixed(1)}dB · Ratio: ${compNode.ratio.value.toFixed(1)}:1\n`;
-  specs += `• Saturação: ${shapeMode.toUpperCase()} · Mix paralela: ${document.getElementById('shape-mix')?.value||30}%`;
+  specs += `• Target LUFS: ${lufsTarget} LUFS integrado\n`;
+  specs += `• True Peak final: -1.0 dBTP\n`;
+  specs += `• Referências: ${p?.refs||'a enviar separadamente'}`;
   document.getElementById('human-specs').textContent=specs;
   document.getElementById('human-sent-msg').style.display='none';
   document.getElementById('human-mastering-modal').style.display='flex';
@@ -1373,9 +1468,20 @@ function openHumanMasteringModal(){
 
 function closeHumanMasteringModal(){
   document.getElementById('human-mastering-modal').style.display='none';
+  // Reset form for next use
+  humanMasteringSent=false;
+  ['human-email','human-link','human-ref','human-notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const sentEl=document.getElementById('human-sent-msg');
+  if(sentEl) sentEl.style.display='none';
+  const sendBtn=document.querySelector('#human-mastering-modal button[onclick*="sendHuman"]');
+  if(sendBtn){ sendBtn.textContent='📩 ENVIAR PEDIDO DE MASTERING'; sendBtn.style.opacity='1'; sendBtn.style.background=''; sendBtn.style.pointerEvents='auto'; }
 }
 
+let humanMasteringSent = false;
 function sendHumanMastering(){
+  if(humanMasteringSent){ setStatus('Pedido já enviado — abre nova janela para enviar outro'); return; }
   const email = document.getElementById('human-email').value.trim();
   const link  = document.getElementById('human-link').value.trim();
   const ref   = document.getElementById('human-ref').value.trim();
@@ -1424,6 +1530,7 @@ ${notes}
   sendBtn.textContent='A enviar...';sendBtn.style.opacity='0.6';sendBtn.style.pointerEvents='none';
 
   // Try EmailJS first (if loaded), fallback to mailto
+  humanMasteringSent = true;
   if(typeof emailjs!=='undefined'){
     emailjs.send('piradex_service','piradex_template',{
       to_email:'juninhopiradex@hotmail.com',

@@ -39,6 +39,10 @@
       <div class="preset-chip" onclick="setPreset('afrohouse',this)">Afro-House</div>
       <div class="preset-chip" onclick="setPreset('rnb',this)">R&amp;B</div>
       <div class="preset-chip" onclick="setPreset('afrobeats',this)">Afrobeats</div>
+      <div class="preset-chip" onclick="setPreset('amapiano',this)">Amapiano</div>
+      <div class="preset-chip" onclick="setPreset('dancehall',this)">Dancehall</div>
+      <div class="preset-chip" onclick="setPreset('reggaeton',this)">Reggaeton</div>
+      <div class="preset-chip" onclick="setPreset('kompa',this)">Kompa</div>
       <div class="preset-chip" onclick="setPreset('house',this)">House</div>
     </div>
   </div>
@@ -282,12 +286,10 @@
           </select><span></span>
         </div>
       </div>
-      <div class="lim-meter-wrap">
-        <div class="lim-bar-wrap">
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-l" style="height:5%"></div></div>
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-r" style="height:5%"></div></div>
-        </div>
-        <div class="lim-labels"><span>0</span><span>-6</span><span>-12</span><span>-24</span></div>
+      <div class="lim-meter-horiz" style="margin-top:14px;">
+        <div class="lim-h-row"><div class="lim-h-label">L</div><div class="lim-h-track" style="flex:1"><div class="lim-h-fill" id="lim-fill-l" style="width:5%"></div></div></div>
+        <div class="lim-h-row"><div class="lim-h-label">R</div><div class="lim-h-track" style="flex:1"><div class="lim-h-fill" id="lim-fill-r" style="width:5%"></div></div></div>
+        <div class="lim-h-marks"><span>0 dBFS</span><span>-6</span><span>-12</span><span>-24</span></div>
       </div>
     </div>
   </div>
@@ -349,14 +351,19 @@
   <!-- PLAYER -->
   <div class="player-section">
     <div class="player-top">
-      <div class="drop-zone" id="drop-zone"
-        onclick="document.getElementById('sf').click()"
-        ondragover="event.preventDefault();this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')"
-        ondrop="handleDrop(event)">
-        <i class="ti ti-music-up"></i>
-        <span class="dz-title">Arrasta o teu áudio aqui</span>
-        <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:150px;">
+        <div class="drop-zone" id="drop-zone"
+          onclick="document.getElementById('sf').click()"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleDrop(event)">
+          <i class="ti ti-music-up"></i>
+          <span class="dz-title">Arrasta o áudio aqui</span>
+          <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
+        </div>
+        <button onclick="newTrackUpload()" id="new-track-btn" style="display:none;padding:5px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-family:'Rajdhani';font-size:10px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--c5)';this.style.color='var(--c5)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted2)'">
+          <i class="ti ti-plus"></i> NOVA MÚSICA
+        </button>
       </div>
       <input type="file" id="sf" accept="audio/*" style="display:none">
       <div class="waveform-wrap" id="waveform-wrap" style="display:none">
@@ -388,6 +395,9 @@
         <input type="range" id="vol-slider" min="0" max="100" value="80" oninput="setVolume(this.value)">
         <span id="vol-val">80%</span>
       </div>
+      <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()" style="display:none;display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:5px;border:1px solid rgba(255,227,53,0.4);background:rgba(255,227,53,0.08);color:var(--c3);font-family:'Rajdhani';font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.15s;" title="Ajusta o output para -6 dBFS de pico máximo">
+        <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
+      </button>
       <button class="export-btn" id="export-btn" onclick="exportMastered()" style="display:none">
         <i class="ti ti-download"></i> EXPORTAR
       </button>
@@ -508,7 +518,7 @@
       </div>
       <div class="paywall-body" style="padding:18px 22px;">
         <div style="font-size:11px;color:var(--muted2);margin-bottom:16px;line-height:1.7;padding:10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);">
-          <strong style="color:var(--c6);">📋 Como deve vir a mix &amp; especificações do projecto:</strong><br>
+          <strong style="color:var(--c6);">📋 Especificações de como deve vir a mix para masterização:</strong><br>
           <span id="human-specs">A carregar especificações...</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:12px;">
