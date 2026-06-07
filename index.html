@@ -15,8 +15,10 @@
   <div class="hdr">
     <div class="logo">
       <span class="logo-main">PIRADEX</span>
-      <span class="logo-sub">MASTERING SUITE</span>
-      <span class="logo-engine">ENGINE v1.0</span>
+      <div class="logo-row2">
+        <span class="logo-sub">MASTERING SUITE</span>
+        <span class="logo-engine">ENGINE v1.0</span>
+      </div>
     </div>
     <div class="hdr-right">
       <button class="bypass" id="bypass-btn" onclick="toggleBypass()">BYPASS</button>
@@ -42,6 +44,7 @@
 
   <div class="preset-info">
     <span class="pi-name" id="pi-name">KIZOMBA</span>
+    <span class="pi-ref-label">Referências:</span>
     <span class="pi-desc" id="pi-desc">C4 Pedro · Johnny Ramos · Nelson Freitas — graves quentes, body nos mids baixos</span>
   </div>
 
@@ -78,21 +81,21 @@
       <div class="panel">
         <div class="plabel">I / O</div>
         <div class="io-wrap">
-          <div class="io-item">
+          <div class="io-item io-draggable" title="Arrasta para ajustar input gain" onmousedown="startIODrag(event,'input')" ontouchstart="startIODrag(event,'input')">
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
-              <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c6)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">-3.4</text>
+              <circle id="in-arc" cx="25" cy="25" r="19" fill="none" stroke="var(--c6)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
+              <text id="in-val" x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">0.0</text>
             </svg>
-            <div class="io-label">INPUT</div>
+            <div class="io-label">INPUT ↕</div>
           </div>
-          <div class="io-item">
+          <div class="io-item io-draggable" title="Arrasta para ajustar output gain" onmousedown="startIODrag(event,'output')" ontouchstart="startIODrag(event,'output')">
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
-              <circle id="out-arc" cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="out-val">+5.8</text>
+              <circle id="out-arc" cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
+              <text id="out-val" x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">0.0</text>
             </svg>
-            <div class="io-label">OUTPUT</div>
+            <div class="io-label">OUTPUT ↕</div>
           </div>
         </div>
       </div>
@@ -252,10 +255,11 @@
         <div class="lufs-big-val" id="lufs-big-val">-9.0</div>
         <div class="lufs-big-label">LUFS INTEGRATED</div>
         <div class="lufs-platform-row">
-          <div class="lufs-platform">Spotify<br><span>-14</span></div>
-          <div class="lufs-platform">YouTube<br><span>-14</span></div>
-          <div class="lufs-platform active-platform">Club<br><span>-9</span></div>
-          <div class="lufs-platform">Radio<br><span>-23</span></div>
+          <div class="lufs-platform" onclick="selectLoudPlatform(-14,this)"><span class="plat-name">Spotify</span><br><span>-14</span></div>
+          <div class="lufs-platform" onclick="selectLoudPlatform(-14,this)"><span class="plat-name">YouTube</span><br><span>-14</span></div>
+          <div class="lufs-platform active-platform" onclick="selectLoudPlatform(-9,this)"><span class="plat-name">Club</span><br><span>-9</span></div>
+          <div class="lufs-platform" onclick="selectLoudPlatform(-8,this)"><span class="plat-name">House</span><br><span>-8</span></div>
+          <div class="lufs-platform" onclick="selectLoudPlatform(-23,this)"><span class="plat-name">Radio</span><br><span>-23</span></div>
         </div>
       </div>
     </div>
@@ -335,7 +339,7 @@
       <div id="ref-info" style="display:none;">
         <div class="ref-stats" id="ref-stats"></div>
         <canvas id="ref-canvas" height="60" style="width:100%;border-radius:6px;background:var(--bg3);border:1px solid var(--border);margin-top:10px;"></canvas>
-        <div class="ref-compare" id="ref-compare"></div>
+        <div class="ref-compare" id="ref-compare" style="display:none"></div>
         <button class="paywall-cta" onclick="applyRefToPreset()" style="margin-top:12px;font-size:12px;padding:10px;animation:none;background:linear-gradient(90deg,var(--c6),var(--c1));">APLICAR CONFIGURAÇÃO DA REFERÊNCIA</button>
       </div>
     </div>
@@ -369,8 +373,8 @@
     </div>
     <div class="player-controls">
       <div class="ab-toggle">
-        <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> BEFORE</button>
-        <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> AFTER</button>
+        <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
+        <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
       </div>
       <div class="transport">
         <button class="ctrl-btn" onclick="seekRelative(-10)"><i class="ti ti-player-skip-back"></i></button>
@@ -463,8 +467,8 @@
           </div>
         </div>
         <button class="paywall-cta" onclick="goPay()">SUBSCREVER AGORA</button>
-        <button onclick="openLicenseModal()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-top:8px;">🔑 JÁ TENHO LICENÇA</button>
-        <div class="paywall-skip">Ou <a onclick="skipPaywall()">continua sem exportar</a> — os presets e preview ficam disponíveis.</div>
+        <button onclick="openLicenseFromPaywall()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-top:8px;">🔑 JÁ TENHO LICENÇA — INSERIR CÓDIGO</button>
+        <div class="paywall-skip">Ou <a onclick="continueAsDemo()">continuar em modo DEMO</a> — preview disponível, exportação limitada.</div>
         <div class="paywall-secure"><i class="ti ti-lock"></i> Pagamento seguro · beatfreakstudio.com</div>
       </div>
     </div>
