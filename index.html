@@ -55,7 +55,8 @@
 
   <!-- TABS -->
   <div class="tabs">
-    <div class="tab active" onclick="openTab('master',this)">MASTER</div>
+    <div class="tab tab-primary active" onclick="openTab('master',this)">MASTER</div>
+    <div class="tab tab-divider">|</div>
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
     <div class="tab" onclick="openTab('comp',this)">COMP</div>
     <div class="tab" onclick="openTab('dyn',this)">DYN</div>
@@ -65,7 +66,8 @@
     <div class="tab" onclick="openTab('loud',this)">LOUD</div>
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
     <div class="tab" onclick="openTab('midside',this)">M/S</div>
-    <div class="tab" onclick="openTab('ref',this)">REF</div>
+    <div class="tab tab-divider">|</div>
+    <div class="tab tab-primary" onclick="openTab('ref',this)">REF</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -513,7 +515,7 @@
   <div class="paywall-modal" id="human-mastering-modal" style="display:none">
     <div class="paywall-box" style="max-width:560px;border-color:rgba(184,85,247,0.4);box-shadow:0 0 60px rgba(184,85,247,0.2);">
       <div class="paywall-header" style="background:linear-gradient(90deg,#b855f7,#ff3ab5);">
-        <div class="paywall-title">🎛️ MASTERING ANALÓGICO — PIRADEX STUDIO by BEATFREAK MUSIC</div>
+        <div class="paywall-title">MASTERIZAÇÃO ANALÓGICA — BEATFREAK MUSIC</div>
         <button class="pm-close" onclick="closeHumanMasteringModal()" style="background:rgba(0,0,0,0.2);">✕</button>
       </div>
       <div class="paywall-body" style="padding:18px 22px;">

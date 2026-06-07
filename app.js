@@ -287,6 +287,10 @@ function applyDSP() {
   if(!audioCtx) return;
   if(piradexOn){ applyPiradexDSP(); return; }
 
+  // Reset stereo to unity before any processing — prevents residual
+  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.02);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,  audioCtx.currentTime, 0.02);
+
   const {BASS:bass,CLEAN:clean,LOUD:loud,PUNCH:punch,FOCUS:focus,WIDE:wide}=kvals;
 
   // ── EQ: 50 = 0dB (no effect), each point = small dB change
@@ -640,10 +644,13 @@ function analyseAndDisplayRef(name){
 function applyRefToPreset(){
   if(!refStats){setStatus('Carrega uma referência primeiro');return;}
   if(playMode!=='before'){
-    setStatus('Volta ao modo ORIGINAL para aplicar a referência');
+    setStatus('⚠️ Volta ao modo ORIGINAL para aplicar a referência');
     return;
   }
-  // Reset all EQ first — replace everything
+  initAudio(); // ensure audioCtx exists
+  // Reset ALL DSP first
+  resetAllDSP();
+  resetModuleBypasses();
   if(audioCtx){
     eqSub.gain.value=0; eqBass.gain.value=0; eqLowNode.gain.value=0;
     eqMid.gain.value=0; eqHigh.gain.value=0; eqAir.gain.value=0;
@@ -662,9 +669,23 @@ function applyRefToPreset(){
   if(refStats.dynRange>18) kvals.PUNCH=Math.min(85,kvals.PUNCH+15);
   else if(refStats.dynRange<8) kvals.PUNCH=Math.max(20,kvals.PUNCH-10);
 
-  refreshKnobs(); syncEQSliders(); applyDSP();
-  setMode('after'); // switch to PROCESSADO automatically
-  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+'  — agora em PROCESSADO · ajusta os knobs por cima');
+  refreshKnobs();
+  // Apply EQ from refStats analysis
+  if(audioCtx){
+    // Apply reference-based EQ directly
+    eqSub.gain.value    = refStats.lowR>0.4  ?  2.0 : refStats.lowR<0.1 ? -2.0 : 0.5;
+    eqBass.gain.value   = refStats.lowR>0.35 ?  1.5 : 0.0;
+    eqLowNode.gain.value= refStats.lowR>0.3  ?  1.0 : 0.0;
+    eqMid.gain.value    = refStats.midR>0.1  ?  1.2 : 0.0;
+    eqHigh.gain.value   = refStats.highR>0.05?  1.0 : 0.0;
+    eqAir.gain.value    = refStats.highR>0.03?  0.8 : 0.0;
+    // Gain for loudness matching
+    const gainDb = Math.max(-6, Math.min(6, -9 - refStats.lufs));
+    masterGain.gain.setTargetAtTime(Math.pow(10,gainDb/20), audioCtx.currentTime, 0.1);
+  }
+  syncEQSliders();
+  setMode('after'); // switch to PROCESSADO
+  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+'  — em PROCESSADO · ajusta por cima');
 }
 
 // ===== FILE LOAD =====
@@ -1149,25 +1170,33 @@ async function togglePiradex(){
 
 function applyPiradexDSP(){
   if(!audioCtx) return;
-  // Reset EQ to zero first — isolated chain
-  eqSub.gain.value     = 2.5;  // sub warmth
-  eqBass.gain.value    = 1.8;  // bass body
-  eqLowNode.gain.value =-1.0;  // clean low mids
-  eqMid.gain.value     = 1.2;  // presence
-  eqHigh.gain.value    = 0.8;  // clarity
-  eqAir.gain.value     = 1.5;  // air/brilliance
-  // Compressor — glue, not crush
-  compNode.threshold.value=-20; compNode.ratio.value=3.5;
-  compNode.attack.value=0.020;  compNode.release.value=0.25; compNode.knee.value=10;
-  // Limiter brickwall
+  // PIRADEX: clean, transparent EQ — no stereo widening
+  // Zero everything first
+  [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
+  // Apply gentle EQ only
+  eqSub.gain.value     =  1.5;  // sub warmth
+  eqBass.gain.value    =  1.0;  // bass body
+  eqLowNode.gain.value = -0.5;  // clean low mids
+  eqMid.gain.value     =  0.8;  // presence
+  eqHigh.gain.value    =  0.5;  // clarity
+  eqAir.gain.value     =  0.8;  // air
+  // Gentle compressor — glue only, not crush
+  compNode.threshold.value=-18; compNode.ratio.value=2.5;
+  compNode.attack.value=0.030;  compNode.release.value=0.30; compNode.knee.value=12;
+  // Limiter
   limiterNode.threshold.value=-1; limiterNode.ratio.value=20;
   limiterNode.attack.value=0.001; limiterNode.release.value=0.05;
-  // Master gain — calibrated for -9 LUFS output
-  masterGain.gain.setTargetAtTime(1.8, audioCtx.currentTime, 0.1);
-  // Shape: TAPE subtle parallel
-  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(0.75, audioCtx.currentTime, 0.05);
-  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.25, audioCtx.currentTime, 0.05);
-  if(shapeWS) shapeWS.curve=makeShapeCurve('tape', 0.20);
+  // Master gain for -9 LUFS — unity-based
+  masterGain.gain.setTargetAtTime(1.4, audioCtx.currentTime, 0.1);
+  // Shape: TAPE very subtle — dry dominant
+  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(0.88, audioCtx.currentTime, 0.05);
+  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.12, audioCtx.currentTime, 0.05);
+  if(shapeWS) shapeWS.curve=makeShapeCurve('tape', 0.08);
+  // NO stereo changes — msSideGain stays at 1.0
+  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  // Reset width offsets
+  widthAirOffset=0; widthHighOffset=0;
   syncEQSliders();
   updateLUFSDisplay();
   setStatus('MASTERING BY PIRADEX ATIVO — -9 LUFS · alterna ORIGINAL/PROCESSADO para comparar');

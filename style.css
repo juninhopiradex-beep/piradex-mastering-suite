@@ -306,3 +306,25 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
   animation:bypassPulse 1.5s ease infinite;
 }
 @keyframes bypassPulse{0%,100%{opacity:1}50%{opacity:0.6}}
+
+/* MASTER & REF tabs prominent */
+.tab-primary {
+  color: var(--text) !important;
+  font-size: 10px !important;
+  letter-spacing: 2px !important;
+  font-weight: 700 !important;
+  border: 1px solid var(--border2) !important;
+  background: var(--bg3) !important;
+}
+.tab-primary.active {
+  color: var(--c1) !important;
+  border-color: var(--c1) !important;
+  background: rgba(255,58,181,0.1) !important;
+}
+.tab-divider {
+  color: var(--border2) !important;
+  cursor: default !important;
+  padding: 4px 2px !important;
+  pointer-events: none;
+}
+.tab-divider:hover { color: var(--border2) !important; }
