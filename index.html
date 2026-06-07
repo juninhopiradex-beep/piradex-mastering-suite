@@ -11,39 +11,41 @@
 <body>
 <div class="wrap">
 
+  <!-- HEADER -->
   <div class="hdr">
     <div class="logo">
       <span class="logo-main">PIRADEX</span>
       <span class="logo-sub">MASTERING SUITE</span>
+      <span class="logo-engine">ENGINE v1.0</span>
     </div>
-    <div class="hdr-divider"></div>
-    <div class="hdr-engine">ENGINE v1.0</div>
     <div class="hdr-right">
-      <span class="hdr-label">PRESET</span>
-      <span id="hdr-preset" class="hdr-preset-name">Kizomba</span>
       <button class="bypass" id="bypass-btn" onclick="toggleBypass()">BYPASS</button>
-      <span id="license-badge" onclick="openLicenseModal()" style="font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);cursor:pointer;letter-spacing:2px;font-family:Orbitron,monospace;font-weight:700;">DEMO</span>
+      <span id="license-badge" onclick="openLicenseModal()" class="lic-badge">DEMO</span>
     </div>
   </div>
 
+  <!-- PRESETS -->
   <div class="presets-bar">
-    <span class="presets-label">Presets</span>
-    <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
-    <div class="preset-chip" onclick="setPreset('kuduro',this)">Kuduro</div>
-    <div class="preset-chip" onclick="setPreset('zouk',this)">Zouk</div>
-    <div class="preset-chip" onclick="setPreset('gzouk',this)">Gzouk</div>
-    <div class="preset-chip" onclick="setPreset('semba',this)">Semba</div>
-    <div class="preset-chip" onclick="setPreset('afrohouse',this)">Afro-House</div>
-    <div class="preset-chip" onclick="setPreset('rnb',this)">R&amp;B</div>
-    <div class="preset-chip" onclick="setPreset('afrobeats',this)">Afrobeats</div>
-    <div class="preset-chip" onclick="setPreset('house',this)">House</div>
+    <span class="presets-label">PRESETS</span>
+    <div class="presets-chips">
+      <div class="preset-chip active" onclick="setPreset('kizomba',this)">Kizomba</div>
+      <div class="preset-chip" onclick="setPreset('kuduro',this)">Kuduro</div>
+      <div class="preset-chip" onclick="setPreset('zouk',this)">Zouk</div>
+      <div class="preset-chip" onclick="setPreset('gzouk',this)">Gzouk</div>
+      <div class="preset-chip" onclick="setPreset('semba',this)">Semba</div>
+      <div class="preset-chip" onclick="setPreset('afrohouse',this)">Afro-House</div>
+      <div class="preset-chip" onclick="setPreset('rnb',this)">R&amp;B</div>
+      <div class="preset-chip" onclick="setPreset('afrobeats',this)">Afrobeats</div>
+      <div class="preset-chip" onclick="setPreset('house',this)">House</div>
+    </div>
   </div>
 
   <div class="preset-info">
     <span class="pi-name" id="pi-name">KIZOMBA</span>
-    <span class="pi-desc" id="pi-desc">Graves quentes, mids suaves, loudness moderado — sensualidade e groove</span>
+    <span class="pi-desc" id="pi-desc">C4 Pedro · Johnny Ramos · Nelson Freitas — graves quentes, body nos mids baixos</span>
   </div>
 
+  <!-- TABS -->
   <div class="tabs">
     <div class="tab active" onclick="openTab('master',this)">MASTER</div>
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
@@ -54,17 +56,19 @@
     <div class="tab" onclick="openTab('excite',this)">EXCITE</div>
     <div class="tab" onclick="openTab('loud',this)">LOUD</div>
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
+    <div class="tab" onclick="openTab('midside',this)">M/S</div>
+    <div class="tab" onclick="openTab('ref',this)">REF</div>
   </div>
 
-  <!-- MASTER -->
-  <div class="tab-panel" id="tab-master" style="display:block">
+  <!-- MASTER TAB -->
+  <div class="tab-panel active" id="tab-master">
     <div class="main">
       <div class="panel">
-        <div class="plabel">ANÁLISE · IA</div>
+        <div class="plabel">AI SUGGESTIONS</div>
         <div class="sugs">
-          <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Warm low-end boost @ 80Hz</span><span class="sval c2" id="s1v">+2.1 dB</span></div>
-          <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Mid presence controlled</span><span class="sval c3" id="s2v">-1.4 dB</span></div>
-          <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo width enhanced</span><span class="sval c5" id="s3v">+12%</span></div>
+          <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Bass body @ 150Hz</span><span class="sval c2" id="s1v">+0.7 dB</span></div>
+          <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Low-mid warmth</span><span class="sval c3" id="s2v">+0.8 dB</span></div>
+          <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo groove</span><span class="sval c5" id="s3v">+42%</span></div>
         </div>
       </div>
       <div class="panel panel-spectrum">
@@ -78,15 +82,15 @@
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
               <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c6)" stroke-width="4" stroke-dasharray="95 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="io-in">-3.4</text>
+              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)">-3.4</text>
             </svg>
             <div class="io-label">INPUT</div>
           </div>
           <div class="io-item">
             <svg width="50" height="50" viewBox="0 0 50 50">
               <circle cx="25" cy="25" r="19" fill="none" stroke="#ffffff12" stroke-width="4"/>
-              <circle cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round"/>
-              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="io-out">+5.8</text>
+              <circle id="out-arc" cx="25" cy="25" r="19" fill="none" stroke="var(--c1)" stroke-width="4" stroke-dasharray="108 120" stroke-dashoffset="30" stroke-linecap="round"/>
+              <text x="25" y="29" text-anchor="middle" font-family="Orbitron" font-size="10" fill="var(--text)" id="out-val">+5.8</text>
             </svg>
             <div class="io-label">OUTPUT</div>
           </div>
@@ -98,30 +102,54 @@
           <div class="vu-track"><div class="vu-fill vu-l" id="vu-l"></div></div>
           <div class="vu-track"><div class="vu-fill vu-r" id="vu-r"></div></div>
         </div>
-        <div class="lufs-n" id="lufs-n">—</div>
+        <div class="lufs-n" id="lufs-n">-9.0</div>
         <div class="lufs-s">LUFS</div>
       </div>
     </div>
     <div class="macros"><div class="knobs-row" id="knobs-row"></div></div>
   </div>
 
-  <!-- EQ -->
+  <!-- EQ TAB -->
   <div class="tab-panel" id="tab-eq">
     <div class="module-panel">
       <div class="module-title">EQUALIZER — 6 Band Parametric</div>
       <div class="eq-bands">
-        <div class="eq-band"><div class="eq-band-label">SUB</div><div class="eq-band-freq">60 Hz</div><input type="range" class="eq-slider" id="eq-sub" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('sub',this.value)"><div class="eq-band-val" id="eq-sub-v">0 dB</div></div>
-        <div class="eq-band"><div class="eq-band-label">BASS</div><div class="eq-band-freq">150 Hz</div><input type="range" class="eq-slider" id="eq-bass" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('bass',this.value)"><div class="eq-band-val" id="eq-bass-v">0 dB</div></div>
-        <div class="eq-band"><div class="eq-band-label">LOW MID</div><div class="eq-band-freq">500 Hz</div><input type="range" class="eq-slider" id="eq-low" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('low',this.value)"><div class="eq-band-val" id="eq-low-v">0 dB</div></div>
-        <div class="eq-band"><div class="eq-band-label">MID</div><div class="eq-band-freq">1.2 kHz</div><input type="range" class="eq-slider" id="eq-mid" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('mid',this.value)"><div class="eq-band-val" id="eq-mid-v">0 dB</div></div>
-        <div class="eq-band"><div class="eq-band-label">HIGH</div><div class="eq-band-freq">4 kHz</div><input type="range" class="eq-slider" id="eq-high" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('high',this.value)"><div class="eq-band-val" id="eq-high-v">0 dB</div></div>
-        <div class="eq-band"><div class="eq-band-label">AIR</div><div class="eq-band-freq">12 kHz</div><input type="range" class="eq-slider" id="eq-air" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('air',this.value)"><div class="eq-band-val" id="eq-air-v">0 dB</div></div>
+        <div class="eq-band">
+          <div class="eq-band-label">SUB</div><div class="eq-band-freq">60 Hz</div>
+          <input type="range" class="eq-slider" id="eq-sub" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('sub',this.value)">
+          <div class="eq-band-val" id="eq-sub-v">0 dB</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">BASS</div><div class="eq-band-freq">150 Hz</div>
+          <input type="range" class="eq-slider" id="eq-bass" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('bass',this.value)">
+          <div class="eq-band-val" id="eq-bass-v">0 dB</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">LOW MID</div><div class="eq-band-freq">500 Hz</div>
+          <input type="range" class="eq-slider" id="eq-low" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('low',this.value)">
+          <div class="eq-band-val" id="eq-low-v">0 dB</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">MID</div><div class="eq-band-freq">1.2 kHz</div>
+          <input type="range" class="eq-slider" id="eq-mid" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('mid',this.value)">
+          <div class="eq-band-val" id="eq-mid-v">0 dB</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">HIGH</div><div class="eq-band-freq">4 kHz</div>
+          <input type="range" class="eq-slider" id="eq-high" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('high',this.value)">
+          <div class="eq-band-val" id="eq-high-v">0 dB</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">AIR</div><div class="eq-band-freq">12 kHz</div>
+          <input type="range" class="eq-slider" id="eq-air" min="-12" max="12" value="0" step="0.5" oninput="updateEQBand('air',this.value)">
+          <div class="eq-band-val" id="eq-air-v">0 dB</div>
+        </div>
       </div>
-      <canvas id="eq-canvas" height="80"></canvas>
+      <canvas id="eq-canvas" height="90" style="width:100%;margin-top:12px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);"></canvas>
     </div>
   </div>
 
-  <!-- COMP -->
+  <!-- COMP TAB -->
   <div class="tab-panel" id="tab-comp">
     <div class="module-panel">
       <div class="module-title">COMPRESSOR — VCA Style</div>
@@ -137,42 +165,49 @@
     </div>
   </div>
 
-  <!-- DYN -->
+  <!-- DYN TAB -->
   <div class="tab-panel" id="tab-dyn">
     <div class="module-panel">
       <div class="module-title">DYNAMICS — Transient Shaper</div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>ATTACK SHAPE</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-attack" oninput="updateDyn()"><span id="dyn-attack-v">0</span></div>
         <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-100" max="100" value="0" step="1" id="dyn-sustain" oninput="updateDyn()"><span id="dyn-sustain-v">0</span></div>
-        <div class="mod-ctrl"><label>CLIP CEILING</label><input type="range" min="-6" max="-0.1" value="-0.3" step="0.1" id="dyn-clip" oninput="updateDyn()"><span id="dyn-clip-v">-0.3 dBTP</span></div>
+        <div class="mod-ctrl"><label>CLIP CEILING</label><input type="range" min="-6" max="0" value="-0.3" step="0.1" id="dyn-clip" oninput="updateDyn()"><span id="dyn-clip-v">-0.3 dBTP</span></div>
         <div class="mod-ctrl"><label>LOOKAHEAD</label><input type="range" min="0" max="20" value="5" step="1" id="dyn-look" oninput="updateDyn()"><span id="dyn-look-v">5 ms</span></div>
       </div>
-      <div class="module-info">O Transient Shaper ajusta o envelope de ataque e sustain sem afectar o volume geral. Valores positivos de Attack aumentam a punch; valores negativos suavizam os transientes.</div>
+      <div class="module-info">O Transient Shaper ajusta o envelope de ataque e sustain sem afectar o volume geral. Attack positivo aumenta a punch; negativo suaviza os transientes.</div>
     </div>
   </div>
 
-  <!-- SHAPE -->
+  <!-- SHAPE TAB -->
   <div class="tab-panel" id="tab-shape">
     <div class="module-panel">
-      <div class="module-title">HARMONIC SHAPER — Saturation &amp; Warmth</div>
+      <div class="module-title">HARMONIC SHAPER — Saturation &amp; Parallel Mix</div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>DRIVE</label><input type="range" min="0" max="100" value="0" step="1" id="shape-drive" oninput="updateShape()"><span id="shape-drive-v">0%</span></div>
+        <div class="mod-ctrl"><label>PARALLEL MIX</label><input type="range" min="0" max="100" value="30" step="1" id="shape-mix" oninput="updateShape()"><span id="shape-mix-v">30%</span></div>
         <div class="mod-ctrl"><label>WARMTH (2nd)</label><input type="range" min="0" max="100" value="20" step="1" id="shape-2nd" oninput="updateShape()"><span id="shape-2nd-v">20%</span></div>
         <div class="mod-ctrl"><label>CRUNCH (3rd)</label><input type="range" min="0" max="100" value="10" step="1" id="shape-3rd" oninput="updateShape()"><span id="shape-3rd-v">10%</span></div>
-        <div class="mod-ctrl"><label>MIX</label><input type="range" min="0" max="100" value="50" step="1" id="shape-mix" oninput="updateShape()"><span id="shape-mix-v">50%</span></div>
+        <div class="mod-ctrl"><label>OUTPUT TRIM</label><input type="range" min="-12" max="6" value="0" step="0.5" id="shape-trim" oninput="updateShape()"><span id="shape-trim-v">0 dB</span></div>
       </div>
       <div class="shape-mode-row">
         <span class="shape-mode-label">MODO:</span>
         <button class="shape-mode-btn active" onclick="setShapeMode('tape',this)">TAPE</button>
         <button class="shape-mode-btn" onclick="setShapeMode('tube',this)">TUBE</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('transistor',this)">TRANSISTOR</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('solidstate',this)">SOLID STATE</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('analogico',this)">ANALÓGICO</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('valvulado',this)">VALVULADO</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('transparente',this)">TRANSPARENTE</button>
         <button class="shape-mode-btn" onclick="setShapeMode('clip',this)">CLIP</button>
-        <button class="shape-mode-btn" onclick="setShapeMode('vinyl',this)">VINYL</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('paralimit',this)">PARALIMIT</button>
+        <button class="shape-mode-btn" onclick="setShapeMode('deess',this)">DE-ESS</button>
       </div>
-      <div class="module-info" id="shape-info">TAPE: saturação suave analógica com compressão natural dos picos e warmth de harmónicos pares.</div>
+      <div class="module-info" id="shape-info">TAPE: saturação suave analógica com compressão natural dos picos e warmth de harmónicos pares. Mix paralela preserva a dinâmica original.</div>
     </div>
   </div>
 
-  <!-- WIDTH -->
+  <!-- WIDTH TAB -->
   <div class="tab-panel" id="tab-width">
     <div class="module-panel">
       <div class="module-title">STEREO WIDTH — Mid/Side Processing</div>
@@ -180,17 +215,17 @@
         <div class="mod-ctrl"><label>WIDTH</label><input type="range" min="0" max="200" value="100" step="1" id="width-main" oninput="updateWidth()"><span id="width-main-v">100%</span></div>
         <div class="mod-ctrl"><label>MID GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="width-mid" oninput="updateWidth()"><span id="width-mid-v">0 dB</span></div>
         <div class="mod-ctrl"><label>SIDE GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="width-side" oninput="updateWidth()"><span id="width-side-v">0 dB</span></div>
-        <div class="mod-ctrl"><label>BASS MONO (Hz)</label><input type="range" min="40" max="300" value="120" step="10" id="width-bass-mono" oninput="updateWidth()"><span id="width-bass-mono-v">120 Hz</span></div>
+        <div class="mod-ctrl"><label>BASS MONO (&lt;Hz)</label><input type="range" min="40" max="300" value="120" step="10" id="width-bass-mono" oninput="updateWidth()"><span id="width-bass-mono-v">120 Hz</span></div>
       </div>
       <div class="width-meter">
         <div class="wm-label">CORRELATION</div>
-        <div class="wm-bar"><div class="wm-fill" id="wm-fill" style="width:75%;background:var(--c4)"></div></div>
+        <div class="wm-bar"><div class="wm-fill" id="wm-fill" style="width:50%;background:var(--c4)"></div></div>
         <div class="wm-labels"><span>-1 WIDE</span><span>MONO 0</span><span>+1 NARROW</span></div>
       </div>
     </div>
   </div>
 
-  <!-- EXCITE -->
+  <!-- EXCITE TAB -->
   <div class="tab-panel" id="tab-excite">
     <div class="module-panel">
       <div class="module-title">EXCITER — Psychoacoustic Enhancement</div>
@@ -198,20 +233,20 @@
         <div class="mod-ctrl"><label>FREQUENCY</label><input type="range" min="1000" max="16000" value="8000" step="500" id="exc-freq" oninput="updateExcite()"><span id="exc-freq-v">8 kHz</span></div>
         <div class="mod-ctrl"><label>AMOUNT</label><input type="range" min="0" max="100" value="0" step="1" id="exc-amount" oninput="updateExcite()"><span id="exc-amount-v">0%</span></div>
         <div class="mod-ctrl"><label>HARMONICS</label><input type="range" min="0" max="100" value="30" step="1" id="exc-harm" oninput="updateExcite()"><span id="exc-harm-v">30%</span></div>
-        <div class="mod-ctrl"><label>MIX</label><input type="range" min="0" max="100" value="50" step="1" id="exc-mix" oninput="updateExcite()"><span id="exc-mix-v">50%</span></div>
+        <div class="mod-ctrl"><label>PARALLEL MIX</label><input type="range" min="0" max="100" value="50" step="1" id="exc-mix" oninput="updateExcite()"><span id="exc-mix-v">50%</span></div>
       </div>
-      <div class="module-info">O Exciter adiciona harmónicos de alta frequência ao sinal, criando sensação de brilho e presença sem aumentar o volume real. Ideal para voz e instrumentos que precisam de "ar".</div>
+      <div class="module-info">O Exciter adiciona harmónicos de alta frequência via mixagem paralela — o sinal original é preservado e o exciter é misturado em cima. Aumenta brilho e presença sem aumentar volume real.</div>
     </div>
   </div>
 
-  <!-- LOUD -->
+  <!-- LOUD TAB -->
   <div class="tab-panel" id="tab-loud">
     <div class="module-panel">
       <div class="module-title">LOUDNESS — LUFS Normalisation</div>
       <div class="module-controls">
         <div class="mod-ctrl"><label>TARGET LUFS</label><input type="range" min="-23" max="-6" value="-9" step="0.5" id="loud-target" oninput="updateLoud()"><span id="loud-target-v">-9.0 LUFS</span></div>
-        <div class="mod-ctrl"><label>TRUE PEAK CEIL</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
-        <div class="mod-ctrl"><label>INT. WINDOW</label><input type="range" min="1" max="30" value="3" step="1" id="loud-window" oninput="updateLoud()"><span id="loud-window-v">3 s</span></div>
+        <div class="mod-ctrl"><label>TRUE PEAK CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
+        <div class="mod-ctrl"><label>INTEGRATED WINDOW</label><input type="range" min="1" max="30" value="3" step="1" id="loud-window" oninput="updateLoud()"><span id="loud-window-v">3 s</span></div>
       </div>
       <div class="lufs-big-display">
         <div class="lufs-big-val" id="lufs-big-val">-9.0</div>
@@ -226,7 +261,7 @@
     </div>
   </div>
 
-  <!-- LIMIT -->
+  <!-- LIMIT TAB -->
   <div class="tab-panel" id="tab-limit">
     <div class="module-panel">
       <div class="module-title">LIMITER — Brickwall True Peak</div>
@@ -234,22 +269,74 @@
         <div class="mod-ctrl"><label>CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="lim-ceil" oninput="updateLimit()"><span id="lim-ceil-v">-1.0 dBTP</span></div>
         <div class="mod-ctrl"><label>RELEASE</label><input type="range" min="1" max="200" value="50" step="1" id="lim-rel" oninput="updateLimit()"><span id="lim-rel-v">50 ms</span></div>
         <div class="mod-ctrl"><label>LOOKAHEAD</label><input type="range" min="0" max="10" value="2" step="0.5" id="lim-look" oninput="updateLimit()"><span id="lim-look-v">2 ms</span></div>
-        <div class="mod-ctrl">
-          <label>ISP DETECTION</label>
-          <select id="lim-isp" onchange="updateLimit()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';font-size:12px;">
+        <div class="mod-ctrl"><label>ISP DETECTION</label>
+          <select id="lim-isp" onchange="updateLimit()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
             <option value="off">OFF</option>
             <option value="4x" selected>4x Oversampling</option>
             <option value="8x">8x Oversampling</option>
-          </select>
-          <span></span>
+          </select><span></span>
         </div>
       </div>
       <div class="lim-meter-wrap">
         <div class="lim-bar-wrap">
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-l" style="height:0%"></div></div>
-          <div class="lim-bar"><div class="lim-fill" id="lim-fill-r" style="height:0%"></div></div>
+          <div class="lim-bar"><div class="lim-fill" id="lim-fill-l" style="height:5%"></div></div>
+          <div class="lim-bar"><div class="lim-fill" id="lim-fill-r" style="height:5%"></div></div>
         </div>
         <div class="lim-labels"><span>0</span><span>-6</span><span>-12</span><span>-24</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MID/SIDE TAB -->
+  <div class="tab-panel" id="tab-midside">
+    <div class="module-panel">
+      <div class="module-title">MID/SIDE — Independent Channel Processing</div>
+      <div class="ms-grid">
+        <div class="ms-col">
+          <div class="ms-col-title" style="color:var(--c5)">MID CHANNEL (Centre)</div>
+          <div class="module-controls">
+            <div class="mod-ctrl"><label>EQ LOW</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-mid-low" oninput="updateMidSide()"><span id="ms-mid-low-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>EQ MID</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-mid-mid" oninput="updateMidSide()"><span id="ms-mid-mid-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>EQ HIGH</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-mid-high" oninput="updateMidSide()"><span id="ms-mid-high-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>COMP THRESH</label><input type="range" min="-40" max="0" value="0" step="1" id="ms-mid-comp" oninput="updateMidSide()"><span id="ms-mid-comp-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-mid-gain" oninput="updateMidSide()"><span id="ms-mid-gain-v">0 dB</span></div>
+          </div>
+        </div>
+        <div class="ms-divider"></div>
+        <div class="ms-col">
+          <div class="ms-col-title" style="color:var(--c1)">SIDE CHANNEL (Stereo)</div>
+          <div class="module-controls">
+            <div class="mod-ctrl"><label>EQ LOW</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-side-low" oninput="updateMidSide()"><span id="ms-side-low-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>EQ MID</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-side-mid" oninput="updateMidSide()"><span id="ms-side-mid-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>EQ HIGH</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-side-high" oninput="updateMidSide()"><span id="ms-side-high-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>COMP THRESH</label><input type="range" min="-40" max="0" value="0" step="1" id="ms-side-comp" oninput="updateMidSide()"><span id="ms-side-comp-v">0 dB</span></div>
+            <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" value="0" step="0.5" id="ms-side-gain" oninput="updateMidSide()"><span id="ms-side-gain-v">0 dB</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">Processamento Mid/Side separa o sinal em canal central (Mid) e canal lateral (Side), permitindo EQ e compressão independentes em cada canal.</div>
+    </div>
+  </div>
+
+  <!-- REFERENCE TAB -->
+  <div class="tab-panel" id="tab-ref">
+    <div class="module-panel">
+      <div class="module-title">REFERENCE TRACK — Mastering Guide</div>
+      <div class="ref-drop" id="ref-drop"
+        onclick="document.getElementById('ref-file').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleRefDrop(event)">
+        <i class="ti ti-music-search" style="font-size:26px;color:var(--c6);"></i>
+        <span class="dz-title">Arrasta a tua referência aqui</span>
+        <span class="dz-sub">Música de referência para guiar a masterização</span>
+      </div>
+      <input type="file" id="ref-file" accept="audio/*" style="display:none">
+      <div id="ref-info" style="display:none;">
+        <div class="ref-stats" id="ref-stats"></div>
+        <canvas id="ref-canvas" height="60" style="width:100%;border-radius:6px;background:var(--bg3);border:1px solid var(--border);margin-top:10px;"></canvas>
+        <div class="ref-compare" id="ref-compare"></div>
+        <button class="paywall-cta" onclick="applyRefToPreset()" style="margin-top:12px;font-size:12px;padding:10px;animation:none;background:linear-gradient(90deg,var(--c6),var(--c1));">APLICAR CONFIGURAÇÃO DA REFERÊNCIA</button>
       </div>
     </div>
   </div>
@@ -266,7 +353,7 @@
         <span class="dz-title">Arrasta o teu áudio aqui</span>
         <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
       </div>
-      <input type="file" id="sf" accept="audio/*">
+      <input type="file" id="sf" accept="audio/*" style="display:none">
       <div class="waveform-wrap" id="waveform-wrap" style="display:none">
         <div class="waveform-labels">
           <span id="track-name" class="track-name">—</span>
@@ -277,10 +364,7 @@
           <div class="waveform-progress" id="waveform-progress"></div>
           <div class="waveform-cursor" id="waveform-cursor"></div>
         </div>
-        <div class="time-row">
-          <span id="time-cur">0:00</span>
-          <span id="time-total">0:00</span>
-        </div>
+        <div class="time-row"><span id="time-cur">0:00</span><span id="time-total">0:00</span></div>
       </div>
     </div>
     <div class="player-controls">
@@ -309,10 +393,12 @@
     </div>
   </div>
 
+  <!-- PIRADEX BUTTON -->
   <div class="pira-section">
     <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
   </div>
 
+  <!-- STATUS -->
   <div class="sbar">
     <span class="stxt" id="stxt">AGUARDANDO ÁUDIO...</span>
     <span class="slufs" id="slufs">— LUFS</span>
@@ -334,8 +420,57 @@
     </div>
   </div>
 
-</div>
-<!-- LOGIN SCREEN -->
+  <!-- LICENSE MODAL -->
+  <div class="paywall-modal" id="license-modal" style="display:none">
+    <div class="paywall-box license-box" style="border-color:rgba(45,255,138,0.4);box-shadow:0 0 60px rgba(45,255,138,0.15);">
+      <div class="paywall-header" style="background:linear-gradient(90deg,#2dff8a,#2dd4ff);">
+        <div class="paywall-title">🔑 ACTIVAR LICENÇA FULL</div>
+        <button class="pm-close" onclick="closeLicenseModal()" style="background:rgba(0,0,0,0.15)">✕</button>
+      </div>
+      <div class="paywall-body">
+        <div class="paywall-desc">Introduz o teu código de licença para desbloquear a <strong>versão completa</strong> com exportações ilimitadas.</div>
+        <label class="login-label" style="text-align:center;display:block;margin-bottom:8px;">CÓDIGO DE LICENÇA</label>
+        <input class="login-input" id="license-input" type="text" placeholder="PRDX-XXXX-XXXX-XXXX" maxlength="19"
+          style="text-align:center;font-family:Orbitron,monospace;letter-spacing:3px;font-size:15px;"
+          oninput="formatLicenseInput(this)" onkeydown="if(event.key==='Enter')activateLicense()">
+        <div class="login-error" id="license-error" style="text-align:center;"></div>
+        <button class="paywall-cta" onclick="activateLicense()" style="margin-top:14px;background:linear-gradient(90deg,#2dff8a,#2dd4ff);animation:none;">ACTIVAR LICENÇA</button>
+        <div class="paywall-skip" style="margin-top:10px;">Não tens licença? <a href="https://www.beatfreakstudio.com" target="_blank" style="color:var(--c5);">Compra em beatfreakstudio.com</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYWALL MODAL -->
+  <div class="paywall-modal" id="paywall-modal" style="display:none">
+    <div class="paywall-box">
+      <div class="paywall-header">
+        <div class="paywall-title">🎧 CONTINUA A MASTERIZAR</div>
+      </div>
+      <div class="paywall-body">
+        <div class="paywall-desc">A tua <strong>primeira masterização foi exportada</strong> com sucesso!<br>Para continuar escolhe o teu plano.</div>
+        <div class="paywall-plans">
+          <div class="plan" id="plan-basic" onclick="selectPlan(this)">
+            <span class="plan-name">BASIC</span><span class="plan-price">€9</span><span class="plan-period">por mês</span>
+            <div class="plan-features">5 exportações/mês<br>Todos os presets<br>WAV 16-bit</div>
+          </div>
+          <div class="plan popular selected" id="plan-pro" onclick="selectPlan(this)">
+            <span class="plan-badge">POPULAR</span><span class="plan-name">PRO</span><span class="plan-price">€19</span><span class="plan-period">por mês</span>
+            <div class="plan-features">Exportações ilimitadas<br>Todos os presets<br>WAV 24-bit + PIRADEX AI</div>
+          </div>
+          <div class="plan" id="plan-studio" onclick="selectPlan(this)">
+            <span class="plan-name">STUDIO</span><span class="plan-price">€49</span><span class="plan-period">por mês</span>
+            <div class="plan-features">Tudo do PRO<br>Licença comercial<br>Suporte prioritário</div>
+          </div>
+        </div>
+        <button class="paywall-cta" onclick="goPay()">SUBSCREVER AGORA</button>
+        <button onclick="openLicenseModal()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-top:8px;">🔑 JÁ TENHO LICENÇA</button>
+        <div class="paywall-skip">Ou <a onclick="skipPaywall()">continua sem exportar</a> — os presets e preview ficam disponíveis.</div>
+        <div class="paywall-secure"><i class="ti ti-lock"></i> Pagamento seguro · beatfreakstudio.com</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN SCREEN -->
   <div class="login-screen" id="login-screen">
     <div class="login-box">
       <div class="login-header">
@@ -347,80 +482,14 @@
         <input class="login-input" id="login-user" type="text" placeholder="email@beatfreakstudio.com" autocomplete="username">
         <label class="login-label">Senha de acesso</label>
         <input class="login-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
-        <button class="login-btn" onclick="doLogin()">ENTRAR NO PIRADEX</button>
+        <button class="login-btn" onclick="doLogin()">ENTRAR NA MASTERING SUITE</button>
         <div class="login-error" id="login-error"></div>
       </div>
-      <div class="login-footer">
-        Não tens acesso? <a href="https://www.beatfreakstudio.com" target="_blank">beatfreakstudio.com</a>
-      </div>
+      <div class="login-footer">Não tens acesso? <a href="https://www.beatfreakstudio.com" target="_blank">beatfreakstudio.com</a></div>
     </div>
   </div>
 
-  <!-- LICENSE MODAL -->
-  <div class="paywall-modal" id="license-modal" style="display:none">
-    <div class="paywall-box license-box" style="border-color:rgba(45,255,138,0.4);box-shadow:0 0 60px rgba(45,255,138,0.15);">
-      <div class="paywall-header" style="background:linear-gradient(90deg,#2dff8a,#2dd4ff);">
-        <div class="paywall-title">🔑 ACTIVAR LICENÇA FULL</div>
-        <button class="pm-close" onclick="closeLicenseModal()" style="background:rgba(0,0,0,0.15)">✕</button>
-      </div>
-      <div class="paywall-body">
-        <div class="paywall-desc">
-          Introduz o teu código de licença para desbloquear a <strong>versão completa</strong> com exportações ilimitadas.
-        </div>
-        <label class="login-label" style="text-align:center;display:block;margin-bottom:8px;">CÓDIGO DE LICENÇA</label>
-        <input class="login-input" id="license-input" type="text"
-          placeholder="PRDX-XXXX-XXXX-XXXX"
-          maxlength="19"
-          style="text-align:center;font-family:Orbitron,monospace;letter-spacing:3px;font-size:15px;"
-          oninput="formatLicenseInput(this)"
-          onkeydown="if(event.key==='Enter')activateLicense()">
-        <div class="login-error" id="license-error" style="text-align:center;"></div>
-        <button class="paywall-cta" onclick="activateLicense()" style="margin-top:14px;background:linear-gradient(90deg,#2dff8a,#2dd4ff);animation:none;">ACTIVAR LICENÇA</button>
-        <div class="paywall-skip" style="margin-top:10px;">Não tens licença? <a href="https://www.beatfreakstudio.com" target="_blank" style="color:var(--c5);">Compra em beatfreakstudio.com</a></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PAYWALL MODAL -->
-  <div class="paywall-modal" id="paywall-modal">
-    <div class="paywall-box">
-      <div class="paywall-header">
-        <div class="paywall-title">🎧 CONTINUA A MASTERIZAR</div>
-      </div>
-      <div class="paywall-body">
-        <div class="paywall-desc">
-          A tua <strong>primeira masterização foi exportada</strong> com sucesso!<br>
-          Para continuar a usar o Piradex Mastering Suite escolhe o teu plano.
-        </div>
-        <div class="paywall-plans">
-          <div class="plan" id="plan-basic" onclick="selectPlan(this)">
-            <span class="plan-name">BASIC</span>
-            <span class="plan-price">€9</span>
-            <span class="plan-period">por mês</span>
-            <div class="plan-features">5 exportações/mês<br>Todos os presets<br>WAV 16-bit</div>
-          </div>
-          <div class="plan popular selected" id="plan-pro" onclick="selectPlan(this)">
-            <span class="plan-badge">POPULAR</span>
-            <span class="plan-name">PRO</span>
-            <span class="plan-price">€19</span>
-            <span class="plan-period">por mês</span>
-            <div class="plan-features">Exportações ilimitadas<br>Todos os presets<br>WAV 24-bit + PIRADEX AI</div>
-          </div>
-          <div class="plan" id="plan-studio" onclick="selectPlan(this)">
-            <span class="plan-name">STUDIO</span>
-            <span class="plan-price">€49</span>
-            <span class="plan-period">por mês</span>
-            <div class="plan-features">Tudo do PRO<br>Licença comercial<br>Suporte prioritário</div>
-          </div>
-        </div>
-        <button class="paywall-cta" onclick="goPay()">SUBSCREVER AGORA</button>
-        <button onclick="openLicenseModal()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-bottom:8px;">🔑 JÁ TENHO LICENÇA</button>
-        <div class="paywall-skip">Ou <a onclick="skipPaywall()">continua sem exportar</a> — os presets e preview ficam sempre disponíveis.</div>
-        <div class="paywall-secure"><i class="ti ti-lock"></i> Pagamento seguro · beatfreakstudio.com</div>
-      </div>
-    </div>
-  </div>
-
+</div>
 <script src="app.js"></script>
 </body>
 </html>
