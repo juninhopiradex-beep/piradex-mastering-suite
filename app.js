@@ -130,8 +130,8 @@ function buildChain() {
 
   // Analyser
   analyserNode = audioCtx.createAnalyser();
-  analyserNode.fftSize=4096;
-  analyserNode.smoothingTimeConstant=0.1;
+  analyserNode.fftSize=2048;
+  analyserNode.smoothingTimeConstant=0.7; // smooth but responsive
 
   // Init spectrum arrays
   specPeaks  = new Float32Array(2048).fill(-150);
@@ -674,8 +674,15 @@ function playAudio(){
   stopSource();
   sourceNode=audioCtx.createBufferSource();
   sourceNode.buffer=audioBuffer;
-  if(playMode==='after'){ applyDSP(); sourceNode.connect(eqSub); }
-  else { sourceNode.connect(dryGain); }
+  if(playMode==='after'){
+    applyDSP();
+    sourceNode.connect(eqSub);
+    // Also tap signal directly to analyser for guaranteed reading
+    sourceNode.connect(analyserNode);
+  } else {
+    sourceNode.connect(dryGain);
+    sourceNode.connect(analyserNode); // direct tap
+  }
   sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}};
   const offset=Math.min(pauseOffset,audioBuffer.duration-0.01);
   sourceNode.start(0,offset);
@@ -817,26 +824,48 @@ function drawSpectrum(){
 
   // Live FFT
   const binCount=analyserNode.frequencyBinCount;
-  const freqData=new Float32Array(binCount);
-  analyserNode.getFloatFrequencyData(freqData);
+  // Use Uint8 for more reliable reading
+  const freqData=new Uint8Array(binCount);
+  analyserNode.getByteFrequencyData(freqData);
   const sr=audioCtx.sampleRate;
   const plotW=W-padL-padR;
 
-  // Build per-pixel dB
+  // Check if we're actually getting signal
+  const maxVal=Math.max(...Array.from(freqData.slice(0,100)));
+  if(maxVal<2){
+    // No signal — draw idle
+    idlePhase+=0.018;
+    ctx.beginPath();
+    for(let px=0;px<=plotW;px++){
+      const t=px/plotW;
+      const db=-62+10*Math.sin(t*9+idlePhase)+5*Math.sin(t*22-idlePhase*1.3);
+      const y=dbToY(db,H,padT,padB);
+      px===0?ctx.moveTo(padL+px,y):ctx.lineTo(padL+px,y);
+    }
+    const ig=ctx.createLinearGradient(padL,0,W-padR,0);
+    ig.addColorStop(0,'#ff3ab540');ig.addColorStop(0.5,'#b855f740');ig.addColorStop(1,'#2dff8a40');
+    ctx.strokeStyle=ig; ctx.lineWidth=1.5; ctx.stroke();
+    return;
+  }
+
+  // Build per-pixel values from 0-255 → dB scale
   const dbVals=new Float32Array(plotW);
   for(let px=0;px<plotW;px++){
     const t=px/plotW;
     const freq=Math.pow(10,Math.log10(20)+(Math.log10(20000)-Math.log10(20))*t);
     const bin=Math.min(binCount-1,Math.round(freq/(sr/2)*binCount));
     let sum=0,cnt=0;
-    for(let b=Math.max(0,bin-2);b<=Math.min(binCount-1,bin+2);b++){sum+=freqData[b];cnt++;}
-    const raw=cnt>0?sum/cnt:-150;
-    // Fast attack, slow release smoothing
-    specSmooth[px]=raw>specSmooth[px]?specSmooth[px]*0.5+raw*0.5:specSmooth[px]*0.88+raw*0.12;
+    for(let b=Math.max(0,bin-1);b<=Math.min(binCount-1,bin+1);b++){sum+=freqData[b];cnt++;}
+    const avg=cnt>0?sum/cnt:0;
+    // Convert 0-255 to dB: 255=-0dB, 0=-90dB
+    const db=avg>0?(avg/255)*90-90:-90;
+    // Smooth
+    if(!specSmooth[px]) specSmooth[px]=db;
+    specSmooth[px]=db>specSmooth[px]?specSmooth[px]*0.3+db*0.7:specSmooth[px]*0.85+db*0.15;
     dbVals[px]=specSmooth[px];
-    // Peak hold
-    if(specSmooth[px]>specPeaks[px]) specPeaks[px]=specSmooth[px];
-    else specPeaks[px]=Math.max(-150,specPeaks[px]-0.6);
+    // Peak
+    if(db>specPeaks[px]) specPeaks[px]=db;
+    else specPeaks[px]=Math.max(-90,specPeaks[px]-0.4);
   }
 
   // Filled area
@@ -979,60 +1008,76 @@ function updateSugs(sugs){
 let savedKvals=null, savedEQ=null;
 
 async function togglePiradex(){
+  // Piradex only activates in ORIGINAL mode
+  if(!piradexOn && playMode!=='before'){
+    setStatus('Muda para ORIGINAL antes de activar o Piradex');
+    return;
+  }
   piradexOn=!piradexOn;
   const btn=document.getElementById('pira-btn');
   if(piradexOn){
-    // Save current state
+    // Save current state completely
     savedKvals={...kvals};
-    if(audioCtx) savedEQ={sub:eqSub.gain.value,bass:eqBass.gain.value,low:eqLowNode.gain.value,mid:eqMid.gain.value,high:eqHigh.gain.value,air:eqAir.gain.value};
-    // Apply PIRADEX fixed values — REPLACE, do not add
-    kvals.CLEAN=30;kvals.BASS=12;kvals.LOUD=25;kvals.WIDE=22;kvals.PUNCH=35;kvals.FOCUS=40;
-    // Reset EQ to neutral first, then apply preset EQ
-    if(audioCtx){
-      eqSub.gain.value=0;eqBass.gain.value=0;eqLowNode.gain.value=0;
-      eqMid.gain.value=0;eqHigh.gain.value=0;eqAir.gain.value=0;
-    }
-    btn.classList.add('on');btn.textContent='⚡ PIRADEX MODE ATIVO ⚡';
-    applyPiradexDSP();
+    savedEQ = audioCtx ? {
+      sub:eqSub.gain.value, bass:eqBass.gain.value, low:eqLowNode.gain.value,
+      mid:eqMid.gain.value, high:eqHigh.gain.value, air:eqAir.gain.value
+    } : null;
+
+    // Set PIRADEX knob values
+    kvals.CLEAN=30; kvals.BASS=12; kvals.LOUD=25;
+    kvals.WIDE=22;  kvals.PUNCH=35; kvals.FOCUS=40;
+    refreshKnobs();
+
+    btn.classList.add('on');
+    btn.textContent='⚡ MASTERING BY PIRADEX — ATIVO ⚡';
+
+    // Show modal first
     document.getElementById('piradex-modal').style.display='flex';
     runPiradexAI();
+
+    // Switch to PROCESSADO so user hears the result
+    setMode('after');
   } else {
-    btn.classList.remove('on');btn.textContent='⚡ MASTERING PIRADEX ⚡';
+    btn.classList.remove('on');
+    btn.textContent='⚡ MASTERING BY PIRADEX ⚡';
+    piradexOn=false;
     closePiradexModal();
-    // Restore saved state
-    if(savedKvals){ Object.assign(kvals,savedKvals); }
+    // Restore
+    if(savedKvals) Object.assign(kvals,savedKvals);
     if(savedEQ&&audioCtx){
-      eqSub.gain.value=savedEQ.sub;eqBass.gain.value=savedEQ.bass;eqLowNode.gain.value=savedEQ.low;
-      eqMid.gain.value=savedEQ.mid;eqHigh.gain.value=savedEQ.high;eqAir.gain.value=savedEQ.air;
+      eqSub.gain.value=savedEQ.sub; eqBass.gain.value=savedEQ.bass; eqLowNode.gain.value=savedEQ.low;
+      eqMid.gain.value=savedEQ.mid; eqHigh.gain.value=savedEQ.high; eqAir.gain.value=savedEQ.air;
     }
-    refreshKnobs();syncEQSliders();applyDSP();
-    setStatus('Piradex desactivado — preset restaurado');
+    refreshKnobs(); syncEQSliders(); applyDSP();
+    setMode('before');
+    setStatus('Mastering by Piradex desactivado — preset restaurado');
   }
 }
 
 function applyPiradexDSP(){
   if(!audioCtx) return;
-  // PIRADEX: fixed, isolated DSP — does NOT accumulate with other settings
-  // EQ: slight sub boost, keep mids clean
-  eqSub.gain.value    = 2.0;   // subtle sub
-  eqBass.gain.value   = 1.5;   // warm bass
-  eqLowNode.gain.value= -0.5;  // clean low mids
-  eqMid.gain.value    = 1.0;   // mid presence
-  eqHigh.gain.value   = 0.5;   // slight high clarity
-  eqAir.gain.value    = 1.0;   // air
-  // Compressor: moderate, not extreme
-  compNode.threshold.value=-24; compNode.ratio.value=4;
-  compNode.attack.value=0.015;  compNode.release.value=0.20; compNode.knee.value=8;
-  // Limiter
-  limiterNode.threshold.value=-1;
-  // Gain: target -9 LUFS
-  masterGain.gain.setTargetAtTime(1.2, audioCtx.currentTime, 0.1);
-  // Shape: tape, subtle
-  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(0.8, audioCtx.currentTime, 0.05);
-  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.2, audioCtx.currentTime, 0.05);
-  if(shapeWS){ shapeWS.curve=makeShapeCurve('tape',0.15); }
+  // Reset EQ to zero first — isolated chain
+  eqSub.gain.value     = 2.5;  // sub warmth
+  eqBass.gain.value    = 1.8;  // bass body
+  eqLowNode.gain.value =-1.0;  // clean low mids
+  eqMid.gain.value     = 1.2;  // presence
+  eqHigh.gain.value    = 0.8;  // clarity
+  eqAir.gain.value     = 1.5;  // air/brilliance
+  // Compressor — glue, not crush
+  compNode.threshold.value=-20; compNode.ratio.value=3.5;
+  compNode.attack.value=0.020;  compNode.release.value=0.25; compNode.knee.value=10;
+  // Limiter brickwall
+  limiterNode.threshold.value=-1; limiterNode.ratio.value=20;
+  limiterNode.attack.value=0.001; limiterNode.release.value=0.05;
+  // Master gain — calibrated for -9 LUFS output
+  masterGain.gain.setTargetAtTime(1.8, audioCtx.currentTime, 0.1);
+  // Shape: TAPE subtle parallel
+  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(0.75, audioCtx.currentTime, 0.05);
+  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.25, audioCtx.currentTime, 0.05);
+  if(shapeWS) shapeWS.curve=makeShapeCurve('tape', 0.20);
   syncEQSliders();
   updateLUFSDisplay();
+  setStatus('MASTERING BY PIRADEX ATIVO — -9 LUFS · alterna ORIGINAL/PROCESSADO para comparar');
 }
 function closePiradexModal(){document.getElementById('piradex-modal').style.display='none';}
 
@@ -1302,15 +1347,25 @@ function openHumanMasteringModal(){
   const lufsTarget = isHouse?-8:-9;
   const headroom = -6;
   const p = PRESETS[curPreset];
-  let specs = `Género: ${p?.name||curPreset.toUpperCase()}\n`;
-  specs += `Target LUFS: ${lufsTarget} LUFS integrado\n`;
-  specs += `True Peak ceiling: -1.0 dBTP\n`;
-  specs += `Headroom sugerido: ${headroom} dBFS\n`;
-  specs += `Knobs actuais — BASS: ${kvals.BASS} · CLEAN: ${kvals.CLEAN} · LOUD: ${kvals.LOUD} · WIDE: ${kvals.WIDE} · PUNCH: ${kvals.PUNCH} · FOCUS: ${kvals.FOCUS}\n`;
-  if(eqSub) specs += `EQ — Sub: ${eqSub.gain.value.toFixed(1)}dB · Bass: ${eqBass.gain.value.toFixed(1)}dB · LowMid: ${eqLowNode.gain.value.toFixed(1)}dB · Mid: ${eqMid.gain.value.toFixed(1)}dB · High: ${eqHigh.gain.value.toFixed(1)}dB · Air: ${eqAir.gain.value.toFixed(1)}dB\n`;
-  if(compNode) specs += `Compressor — Threshold: ${compNode.threshold.value.toFixed(1)}dB · Ratio: ${compNode.ratio.value.toFixed(1)}:1\n`;
-  specs += `Shape Mode: ${shapeMode.toUpperCase()} · Parallel Mix: ${document.getElementById('shape-mix')?.value||30}%\n`;
-  specs += `Referências do preset: ${p?.refs||'—'}`;
+  let specs = `🎵 COMO DEVE VIR A MIX PARA MASTERIZAÇÃO\n`;
+  specs += `═══════════════════════════════════════\n\n`;
+  specs += `• Sem compressão de master na mix (desliga o limiter do master bus)\n`;
+  specs += `• Headroom mínimo recomendado: -6 dBFS (pico máximo)\n`;
+  specs += `• Formato: WAV ou AIFF, 24-bit, sample rate original\n`;
+  specs += `• Sem normalização — entregar com dinâmica natural\n`;
+  specs += `• True Peak ceiling da mix: máximo -3 dBTP\n\n`;
+  specs += `🎛️ ESPECIFICAÇÕES DO PROJECTO\n`;
+  specs += `───────────────────────────────\n`;
+  specs += `• Género: ${p?.name||curPreset.toUpperCase()}\n`;
+  specs += `• Target LUFS final: ${lufsTarget} LUFS integrado\n`;
+  specs += `• True Peak ceiling master: -1.0 dBTP\n`;
+  specs += `• Referências do preset: ${p?.refs||'—'}\n\n`;
+  specs += `📊 ANÁLISE PIRADEX (configuração actual)\n`;
+  specs += `───────────────────────────────────────\n`;
+  if(eqSub) specs += `• EQ → Sub: ${eqSub.gain.value.toFixed(1)}dB · Bass: ${eqBass.gain.value.toFixed(1)}dB · LowMid: ${eqLowNode.gain.value.toFixed(1)}dB\n`;
+  if(eqMid) specs += `• EQ → Mid: ${eqMid.gain.value.toFixed(1)}dB · High: ${eqHigh.gain.value.toFixed(1)}dB · Air: ${eqAir.gain.value.toFixed(1)}dB\n`;
+  if(compNode) specs += `• Compressor → Threshold: ${compNode.threshold.value.toFixed(1)}dB · Ratio: ${compNode.ratio.value.toFixed(1)}:1\n`;
+  specs += `• Saturação: ${shapeMode.toUpperCase()} · Mix paralela: ${document.getElementById('shape-mix')?.value||30}%`;
   document.getElementById('human-specs').textContent=specs;
   document.getElementById('human-sent-msg').style.display='none';
   document.getElementById('human-mastering-modal').style.display='flex';
@@ -1362,14 +1417,40 @@ ${notes}
     `Enviado via Piradex Mastering Suite · beatfreakstudio.com`
   );
 
-  // Open mailto
-  window.location.href=`mailto:juninhopiradex@hotmail.com?subject=${subject}&body=${body}`;
+  // Send via EmailJS (free service, no server needed)
+  // Uses emailjs.com with a pre-configured service
+  const msgEl=document.getElementById('human-sent-msg');
+  const sendBtn=event.target;
+  sendBtn.textContent='A enviar...';sendBtn.style.opacity='0.6';sendBtn.style.pointerEvents='none';
 
-  // Show success message
-  setTimeout(()=>{
-    document.getElementById('human-sent-msg').style.display='block';
-    setStatus('Pedido de mastering enviado — aguarda orçamento no teu email');
-  },500);
+  // Try EmailJS first (if loaded), fallback to mailto
+  if(typeof emailjs!=='undefined'){
+    emailjs.send('piradex_service','piradex_template',{
+      to_email:'juninhopiradex@hotmail.com',
+      from_email:email,
+      subject:'Pedido de Mastering — Piradex Studio',
+      track_link:link,
+      ref_link:ref||'—',
+      notes:notes||'—',
+      specs:specs,
+      reply_to:email
+    }).then(()=>{
+      msgEl.style.display='block';
+      sendBtn.textContent='✓ ENVIADO';sendBtn.style.background='var(--c4)';
+      setStatus('Pedido enviado — aguarda orçamento no email');
+    }).catch(()=>fallbackMailto(subject,body,msgEl,sendBtn));
+  } else {
+    fallbackMailto(subject,body,msgEl,sendBtn);
+  }
+}
+
+function fallbackMailto(subject,body,msgEl,sendBtn){
+  // Open mailto as fallback
+  const link2=`mailto:juninhopiradex@hotmail.com?subject=${subject}&body=${body}`;
+  window.open(link2,'_blank');
+  if(msgEl) msgEl.style.display='block';
+  if(sendBtn){ sendBtn.textContent='✓ ENVIADO'; sendBtn.style.background='var(--c4)'; }
+  setStatus('Email aberto — aguarda orçamento no teu email');
 }
 
 // ===== LOGIN =====

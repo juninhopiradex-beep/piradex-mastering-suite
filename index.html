@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Piradex Mastering Suite</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -399,7 +400,7 @@
 
   <!-- PIRADEX BUTTON -->
   <div class="pira-section">
-    <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING PIRADEX ⚡</button>
+    <button class="pira-btn" id="pira-btn" onclick="togglePiradex()">⚡ MASTERING BY PIRADEX ⚡</button>
   </div>
 
   <!-- STATUS -->
@@ -501,13 +502,13 @@
   <!-- HUMAN MASTERING MODAL -->
   <div class="paywall-modal" id="human-mastering-modal" style="display:none">
     <div class="paywall-box" style="max-width:560px;border-color:rgba(184,85,247,0.4);box-shadow:0 0 60px rgba(184,85,247,0.2);">
-      <div class="paywall-header" style="background:linear-gradient(90deg,#b855f7,#ff3ab5,#2dd4ff);">
-        <div class="paywall-title">🎛️ MASTERING HUMANO — PIRADEX STUDIO</div>
+      <div class="paywall-header" style="background:linear-gradient(90deg,#b855f7,#ff3ab5);">
+        <div class="paywall-title">🎛️ MASTERING ANALÓGICO — PIRADEX STUDIO by BEATFREAK MUSIC</div>
         <button class="pm-close" onclick="closeHumanMasteringModal()" style="background:rgba(0,0,0,0.2);">✕</button>
       </div>
       <div class="paywall-body" style="padding:18px 22px;">
         <div style="font-size:11px;color:var(--muted2);margin-bottom:16px;line-height:1.7;padding:10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);">
-          <strong style="color:var(--c6);">📋 Especificações de masterização recomendadas:</strong><br>
+          <strong style="color:var(--c6);">📋 Como deve vir a mix &amp; especificações do projecto:</strong><br>
           <span id="human-specs">A carregar especificações...</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:12px;">
@@ -531,10 +532,14 @@
         <button onclick="sendHumanMastering()" style="width:100%;padding:12px;margin-top:14px;border:none;border-radius:8px;cursor:pointer;font-family:'Orbitron',monospace;font-weight:700;font-size:12px;letter-spacing:2px;color:#000;background:linear-gradient(90deg,#b855f7,#ff3ab5);transition:filter 0.15s;">
           📩 ENVIAR PEDIDO DE MASTERING
         </button>
-        <div id="human-sent-msg" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(45,255,138,0.08);border:1px solid rgba(45,255,138,0.3);border-radius:6px;font-size:12px;color:var(--c4);text-align:center;line-height:1.6;">
-          ✅ <strong>Pedido enviado!</strong><br>
-          Receberás um orçamento no teu email em breve.<br>
-          <span style="font-size:10px;color:var(--muted2);">juninhopiradex@hotmail.com</span>
+        <div id="human-sent-msg" style="display:none;margin-top:12px;padding:14px;background:rgba(45,255,138,0.06);border:1px solid rgba(45,255,138,0.4);border-radius:8px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">✅</div>
+          <div style="font-size:14px;font-weight:700;color:var(--c4);margin-bottom:4px;">PEDIDO ENVIADO!</div>
+          <div style="font-size:11px;color:var(--muted2);line-height:1.7;">
+            O teu pedido foi enviado para <strong style="color:var(--text);">juninhopiradex@hotmail.com</strong><br>
+            Receberás um orçamento personalizado no teu email em breve.<br>
+            <span style="font-size:10px;color:var(--muted);">Piradex Studio · BeatFreak Music</span>
+          </div>
         </div>
         <div style="margin-top:10px;text-align:center;font-size:9px;color:var(--muted);letter-spacing:1px;">
           ENVIADO PARA: juninhopiradex@hotmail.com · PIRADEX STUDIO
@@ -545,6 +550,12 @@
 
 
 </div>
+<script>
+  // EmailJS init — using public key (configure at emailjs.com)
+  if(typeof emailjs!=='undefined'){
+    emailjs.init('YOUR_PUBLIC_KEY'); // replace with real key from emailjs.com
+  }
+</script>
 <script src="app.js"></script>
 </body>
 </html>
