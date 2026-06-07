@@ -105,7 +105,7 @@ function buildChain() {
     if(Q) f.Q.value=Q; return f;
   };
 
-  // EQ
+  // EQ nodes — all start at 0 gain (no effect)
   eqSub    = mk('lowshelf',  60,   0);
   eqBass   = mk('peaking',   150,  0, 0.8);
   eqLowNode= mk('peaking',   500,  0, 1.0);
@@ -113,73 +113,66 @@ function buildChain() {
   eqHigh   = mk('peaking',   4000, 0, 1.0);
   eqAir    = mk('highshelf', 12000,0);
 
-  // Compressor
+  // Compressor — starts BYPASSED (threshold 0, ratio 1 = no compression)
   compNode = audioCtx.createDynamicsCompressor();
-  compNode.threshold.value=-24; compNode.ratio.value=4;
-  compNode.attack.value=0.01; compNode.release.value=0.15; compNode.knee.value=6;
+  compNode.threshold.value = 0;    // 0dB = no compression
+  compNode.ratio.value     = 1;    // 1:1 = bypass
+  compNode.attack.value    = 0.01;
+  compNode.release.value   = 0.15;
+  compNode.knee.value      = 0;
 
-  // Limiter
+  // Limiter — starts disabled (threshold 0 = no limiting)
   limiterNode = audioCtx.createDynamicsCompressor();
-  limiterNode.threshold.value=-1; limiterNode.ratio.value=20;
-  limiterNode.attack.value=0.001; limiterNode.release.value=0.05; limiterNode.knee.value=0;
+  limiterNode.threshold.value = 0;
+  limiterNode.ratio.value     = 1;
+  limiterNode.attack.value    = 0.001;
+  limiterNode.release.value   = 0.05;
+  limiterNode.knee.value      = 0;
 
-  // Shape parallel nodes
+  // Shape — starts as pure dry (no saturation)
   shapeWS      = audioCtx.createWaveShaper();
   shapeWS.oversample = '4x';
-  shapeDryGain = audioCtx.createGain(); shapeDryGain.gain.value=1.0;
-  shapeWetGain = audioCtx.createGain(); shapeWetGain.gain.value=0.0;
+  shapeDryGain = audioCtx.createGain(); shapeDryGain.gain.value = 1.0; // 100% dry
+  shapeWetGain = audioCtx.createGain(); shapeWetGain.gain.value = 0.0; // 0% wet
 
-  // Width (stereo) via splitter/merger
-  widthSplitter= audioCtx.createChannelSplitter(2);
-  widthMerger  = audioCtx.createChannelMerger(2);
+  // MasterGain = 1.0 ALWAYS at rest (unity gain)
+  masterGain = audioCtx.createGain(); masterGain.gain.value = 1.0;
 
-  // Mid/Side EQ nodes
-  msEqMidLow   = mk('lowshelf',  200,  0);
-  msEqMidHigh  = mk('highshelf', 4000, 0);
-  msEqSideLow  = mk('lowshelf',  200,  0);
-  msEqSideHigh = mk('highshelf', 4000, 0);
-  msMidGain    = audioCtx.createGain(); msMidGain.gain.value=1.0;
-  msSideGain   = audioCtx.createGain(); msSideGain.gain.value=1.0;
+  // DryGain = 1.0 (unity — not 0.85 which was causing level difference)
+  dryGain = audioCtx.createGain(); dryGain.gain.value = 1.0;
 
-  // Master & dry gains
-  masterGain = audioCtx.createGain(); masterGain.gain.value=1.0;
-  dryGain    = audioCtx.createGain(); dryGain.gain.value=0.85;
+  // Side/Mid gains = 1.0 unity
+  msMidGain  = audioCtx.createGain(); msMidGain.gain.value  = 1.0;
+  msSideGain = audioCtx.createGain(); msSideGain.gain.value = 1.0;
 
   // Analyser
   analyserNode = audioCtx.createAnalyser();
-  analyserNode.fftSize=2048;
-  analyserNode.smoothingTimeConstant=0.7; // smooth but responsive
+  analyserNode.fftSize = 2048;
+  analyserNode.smoothingTimeConstant = 0.7;
 
   // Init spectrum arrays
   specPeaks  = new Float32Array(2048).fill(-150);
   specSmooth = new Float32Array(2048).fill(-150);
 
-  // WET CHAIN:
-  // source → EQ → [Shape parallel] → Comp → Limiter → MasterGain → Analyser → Out
+  // Shape mixer node
+  const shapeMixer = audioCtx.createGain(); shapeMixer.gain.value = 1.0;
+
+  // WET CHAIN (PROCESSADO):
+  // source → EQ → shapeMixer(dry+wet shape) → comp → limiter → masterGain → analyser → out
   eqSub.connect(eqBass); eqBass.connect(eqLowNode); eqLowNode.connect(eqMid);
   eqMid.connect(eqHigh); eqHigh.connect(eqAir);
-
-  // Shape parallel: eqAir → (dry+wet) → shapeMixer → compNode
-  const shapeMixer = audioCtx.createGain(); shapeMixer.gain.value=1.0;
   eqAir.connect(shapeDryGain); shapeDryGain.connect(shapeMixer);
-  eqAir.connect(shapeWS); shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
+  eqAir.connect(shapeWS);     shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
   shapeMixer.connect(compNode);
-
-  // M/S encoder/decoder for proper mid-side processing
-  const msSplitter = audioCtx.createChannelSplitter(2);
-  const msMerger2  = audioCtx.createChannelMerger(2);
-  // Mid = L+R, Side = L-R (encoded via gain nodes)
-  const msLgain = audioCtx.createGain(); msLgain.gain.value= 0.5;
-  const msRgain = audioCtx.createGain(); msRgain.gain.value= 0.5;
-  const msLinv  = audioCtx.createGain(); msLinv.gain.value = 0.5;
-  const msRinv  = audioCtx.createGain(); msRinv.gain.value =-0.5;
-
-  msMidGain  = audioCtx.createGain(); msMidGain.gain.value=1.0;
-  msSideGain = audioCtx.createGain(); msSideGain.gain.value=1.0;
-
-  compNode.connect(limiterNode); limiterNode.connect(masterGain);
+  compNode.connect(limiterNode);
+  limiterNode.connect(masterGain);
   masterGain.connect(analyserNode);
+
+  // DRY CHAIN (ORIGINAL):
+  // source → dryGain → analyser → out
   dryGain.connect(analyserNode);
+
+  // Analyser → destination
   analyserNode.connect(audioCtx.destination);
 
   applyShapeCurve();
@@ -291,44 +284,63 @@ function updateShape(){
 // ===== DSP =====
 function applyDSP() {
   if(!audioCtx) return;
-  if(piradexOn){ applyPiradexDSP(); return; } // Piradex isolated chain
+  if(piradexOn){ applyPiradexDSP(); return; }
+
   const {BASS:bass,CLEAN:clean,LOUD:loud,PUNCH:punch,FOCUS:focus,WIDE:wide}=kvals;
+
+  // ── EQ: 50 = 0dB (no effect), each point = small dB change
+  eqSub.gain.value    = (bass  - 50) * 0.18;  // ±9dB range
+  eqBass.gain.value   = (bass  - 50) * 0.12;  // ±6dB
+  eqLowNode.gain.value= (bass  - 50) * 0.06;  // ±3dB
+  eqMid.gain.value    = (focus - 50) * 0.12;  // ±6dB
+  eqHigh.gain.value   = (clean - 50) * 0.08;  // ±4dB
+  eqAir.gain.value    = (clean - 50) * 0.08;  // ±4dB
+
+  // ── Compressor: at PUNCH=50 → near-bypass (threshold very high, ratio 1:1)
+  // PUNCH 0  = no compression (bypass)
+  // PUNCH 50 = gentle glue (-20dB threshold, 2:1)
+  // PUNCH 100= heavy compression (-40dB, 8:1)
+  if(punch <= 10) {
+    // Effectively bypass comp
+    compNode.threshold.value = 0;
+    compNode.ratio.value     = 1;
+  } else {
+    compNode.threshold.value = -40 * (punch/100);  // 0 to -40dB
+    compNode.ratio.value     = 1 + (punch/100) * 7; // 1:1 to 8:1
+    compNode.attack.value    = Math.max(0.001, 0.05 - (punch*0.0004));
+    compNode.release.value   = Math.max(0.05,  0.4  - (punch*0.003));
+    compNode.knee.value      = 6;
+  }
+
+  // ── Limiter: only active when LOUD > 60
+  if(loud <= 50) {
+    limiterNode.threshold.value = 0;
+    limiterNode.ratio.value     = 1;
+  } else {
+    limiterNode.threshold.value = -1;
+    limiterNode.ratio.value     = 20;
+  }
+
+  // ── Master gain: 50 = 1.0 (unity), 0 = 0.35, 100 = 2.0
+  // This preserves relative level between ORIGINAL and PROCESSADO at knob=50
+  const gainFactor = loud <= 50
+    ? 0.35 + (loud/50) * 0.65   // 0→50: 0.35→1.0
+    : 1.0  + ((loud-50)/50) * 1.0; // 50→100: 1.0→2.0
+  masterGain.gain.setTargetAtTime(gainFactor, audioCtx.currentTime, 0.08);
+
+  // ── Width via EQ only (no gain manipulation)
+  const wDelta = (wide - 50) / 50; // -1 to +1
+  // Absolute set based on wide knob — avoids accumulation
+  const airFromWidth  = wDelta * 2.5;
+  const highFromWidth = wDelta * 1.5;
+  eqAir.gain.value   += airFromWidth;
+  eqHigh.gain.value  += highFromWidth;
 
   if(bypassOn){
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
     compNode.threshold.value=0; compNode.ratio.value=1;
-    masterGain.gain.setTargetAtTime(0.85,audioCtx.currentTime,0.05); return;
-  }
-
-  // EQ from knobs
-  // 50 = unity (no effect), 0 = full cut, 100 = full boost
-  eqSub.gain.value    = (bass -50)*0.20;
-  eqBass.gain.value   = (bass -50)*0.15;
-  eqLowNode.gain.value= (bass -50)*0.06;
-  eqMid.gain.value    = (focus-50)*0.14;
-  eqHigh.gain.value   = (clean-50)*0.10;
-  eqAir.gain.value    = (clean-50)*0.10;
-
-  // Compressor from PUNCH knob
-  compNode.threshold.value = -50+(punch*0.36);
-  compNode.ratio.value     = Math.max(1.1, 1.5+(punch*0.15));
-  compNode.attack.value    = Math.max(0.001, 0.03-(punch*0.0002));
-  compNode.release.value   = Math.max(0.05,  0.3-(punch*0.002));
-
-  // Width via side gain
-  if(msSideGain){
-    const wFactor=wide/50; // 50=unity, 0=mono, 100=double wide
-    msSideGain.gain.setTargetAtTime(Math.max(0,wFactor), audioCtx.currentTime, 0.1);
-  }
-
-  const isHouse=curPreset==='house';
-  if(piradexOn){
-    compNode.threshold.value=-20; compNode.ratio.value=16; compNode.attack.value=0.001;
-    eqSub.gain.value+=8; eqBass.gain.value+=5; eqAir.gain.value+=4;
-    masterGain.gain.setTargetAtTime(isHouse?2.8:2.4, audioCtx.currentTime, 0.05);
-  } else {
-    const base=isHouse?0.50:0.35;
-    masterGain.gain.setTargetAtTime(base+(loud/100)*1.4, audioCtx.currentTime, 0.05);
+    limiterNode.threshold.value=0; limiterNode.ratio.value=1;
+    masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
   }
 
   syncEQSliders();
@@ -708,17 +720,21 @@ function playAudio(){
   if(!audioCtx||!audioBuffer) return;
   if(audioCtx.state==='suspended') audioCtx.resume();
   stopSource();
-  sourceNode=audioCtx.createBufferSource();
-  sourceNode.buffer=audioBuffer;
+
+  sourceNode = audioCtx.createBufferSource();
+  sourceNode.buffer = audioBuffer;
+
   if(playMode==='after'){
+    // PROCESSADO: source → EQ chain → ... → analyser → out
     applyDSP();
     sourceNode.connect(eqSub);
-    // Also tap signal directly to analyser for guaranteed reading
-    sourceNode.connect(analyserNode);
   } else {
+    // ORIGINAL: source → dryGain(1.0) → analyser → out
+    // Completely bypasses all processing — bit-perfect
     sourceNode.connect(dryGain);
-    sourceNode.connect(analyserNode); // direct tap
   }
+  // Both paths already connect to analyserNode via buildChain
+
   sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}};
   const offset=Math.min(pauseOffset,audioBuffer.duration-0.01);
   sourceNode.start(0,offset);
@@ -787,17 +803,23 @@ function updateModeUI(mode){
   document.getElementById('btn-before').classList.toggle('active',mode==='before');
   document.getElementById('btn-after').classList.toggle('active', mode==='after');
   const dot=document.getElementById('mode-dot'),txt=document.getElementById('mode-txt');
+  const hb=document.getElementById('headroom-btn');
   if(mode==='before'){
     dot.className='mode-dot before';
-    txt.textContent='ORIGINAL — sinal sem processamento';
+    txt.textContent='ORIGINAL — sinal sem qualquer processamento';
     document.querySelectorAll('.tab').forEach(t=>{
       if(t.textContent.trim()!=='MASTER') t.style.opacity='0.4';
       else t.style.opacity='1';
     });
+    // Hide headroom in ORIGINAL
+    if(hb&&audioBuffer) hb.style.display='none';
   } else {
     dot.className='mode-dot after';
-    txt.textContent='PROCESSADO — '+(PRESETS[curPreset]?.name||curPreset.toUpperCase())+' · '+(curPreset==='house'?'-8':'-9')+' LUFS';
+    const isHouse=curPreset==='house';
+    txt.textContent='PROCESSADO — '+(PRESETS[curPreset]?.name||curPreset.toUpperCase())+' · alvo '+(isHouse?'-8':'-9')+' LUFS';
     document.querySelectorAll('.tab').forEach(t=>t.style.opacity='1');
+    // Show headroom only in PROCESSADO
+    if(hb&&audioBuffer) hb.style.display='flex';
   }
 }
 
@@ -1272,33 +1294,37 @@ function stopIODrag(){
 
 function applyIOGain(){
   if(!audioCtx) return;
-  // Linear: -inf (mute) to +12dB. inputGainDb range: -60 to +12
-  // At -60dB: practically silent (0.001 factor)
   const inFactor  = inputGainDb  <= -60 ? 0 : Math.pow(10, inputGainDb/20);
   const outFactor = outputGainDb <= -60 ? 0 : Math.pow(10, outputGainDb/20);
-  if(dryGain)    dryGain.gain.setTargetAtTime(0.85*inFactor, audioCtx.currentTime, 0.05);
-  if(masterGain){
-    const baseGain = piradexOn ? 1.8 : (0.35+(kvals.LOUD/100)*1.4);
-    masterGain.gain.setTargetAtTime(baseGain*outFactor, audioCtx.currentTime, 0.05);
-  }
+  // Input: controls dryGain (ORIGINAL) and pre-EQ level (PROCESSADO)
+  dryGain.gain.setTargetAtTime(inFactor, audioCtx.currentTime, 0.05);
+  // Output: controls masterGain absolute level
+  const baseGain = piradexOn ? 1.8 : (() => {
+    const loud=kvals.LOUD;
+    return loud<=50 ? 0.35+(loud/50)*0.65 : 1.0+((loud-50)/50)*1.0;
+  })();
+  masterGain.gain.setTargetAtTime(baseGain * outFactor, audioCtx.currentTime, 0.05);
 }
 
 function applyHeadroom(){
-  // Normalize audio to -6 dBFS peak headroom
+  // Headroom: only in PROCESSADO, reduces output to reach -6 dBFS peak
   if(!audioBuffer){ setStatus('Carrega uma faixa primeiro'); return; }
-  initAudio();
-  const data = audioBuffer.getChannelData(0);
+  if(playMode!=='after'){ setStatus('Muda para PROCESSADO para usar o Headroom'); return; }
+  // Measure peak across all channels
   let peak = 0;
-  for(let i=0;i<data.length;i++) peak=Math.max(peak,Math.abs(data[i]));
+  for(let c=0;c<audioBuffer.numberOfChannels;c++){
+    const data=audioBuffer.getChannelData(c);
+    for(let i=0;i<data.length;i++) peak=Math.max(peak,Math.abs(data[i]));
+  }
   if(peak<=0){ setStatus('Áudio silencioso'); return; }
-  // -6 dBFS = 0.501
-  const targetPeak = 0.501;
-  const gainNeeded = targetPeak/peak;
-  const gainDb = 20*Math.log10(gainNeeded);
-  outputGainDb = Math.max(-24, Math.min(12, gainDb));
+  const targetPeak = 0.501; // -6 dBFS
+  const gainNeeded = targetPeak / peak;
+  const gainDb = 20 * Math.log10(gainNeeded);
+  // Apply via outputGainDb (on top of masterGain)
+  outputGainDb = Math.max(-24, Math.min(6, gainDb));
   applyIOGain();
   updateIODisplay();
-  setStatus('HEADROOM: pico ajustado para -6 dBFS · Output '+(gainDb>=0?'+':'')+gainDb.toFixed(1)+'dB');
+  setStatus('HEADROOM -6dBFS: '+(gainDb>=0?'+':'')+gainDb.toFixed(1)+'dB aplicado · pico actual: '+(20*Math.log10(peak)).toFixed(1)+'dBFS');
 }
 
 function updateIODisplay(){

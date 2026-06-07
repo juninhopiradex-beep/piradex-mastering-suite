@@ -28,7 +28,7 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .presets-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 14px;display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;}
 .presets-bar::-webkit-scrollbar{display:none;}
 .presets-label{font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;font-weight:600;white-space:nowrap;flex-shrink:0;}
-.presets-chips{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-start;flex:1;}
+.presets-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;flex:1;overflow:hidden;}
 .preset-chip{font-size:10px;padding:4px 14px;border-radius:20px;border:1px solid var(--border2);color:var(--muted2);background:var(--bg3);cursor:pointer;white-space:nowrap;letter-spacing:1px;font-weight:500;transition:all 0.15s;font-family:'Rajdhani';}
 .preset-chip:hover{color:var(--text);background:var(--bg4);}
 .preset-chip.active{border-color:var(--c1);color:var(--c1);background:rgba(255,58,181,0.1);}
