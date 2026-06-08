@@ -328,3 +328,27 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
   pointer-events: none;
 }
 .tab-divider:hover { color: var(--border2) !important; }
+
+/* BETA TIMER BAR */
+.beta-timer-bar {
+  background: linear-gradient(90deg, rgba(255,227,53,0.08), rgba(255,107,53,0.08));
+  border-bottom: 1px solid rgba(255,227,53,0.2);
+  padding: 6px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#beta-timer-val {
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #ffe135;
+}
+
+/* FEEDBACK STARS */
+.star-btn:hover, .star-btn.active {
+  border-color: var(--c3) !important;
+  background: rgba(255,227,53,0.12) !important;
+  color: #ffe135 !important;
+  transform: scale(1.08);
+}

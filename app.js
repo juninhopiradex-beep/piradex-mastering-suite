@@ -2,47 +2,47 @@
 
 const PRESETS = {
   kizomba:  {name:'KIZOMBA',  refs:'C4 Pedro · Johnny Ramos · Nelson Freitas', desc:'Graves quentes, body nos mids baixos',
-    knobs:{CLEAN:28,BASS:71,LOUD:41,WIDE:42,PUNCH:39,FOCUS:37},eq:{sub:0.6,bass:0.7,low:0.8,mid:-0.2,high:-0.3,air:0.4},
+    knobs:{CLEAN:50,BASS:60,LOUD:65,WIDE:50,PUNCH:50,FOCUS:55},eq:{sub:0.6,bass:0.7,low:0.8,mid:-0.2,high:-0.3,air:0.4},
     sugs:[['Bass body @ 150Hz','+0.7 dB','c2'],['Low-mid warmth','+0.8 dB','c3'],['Stereo groove','+42%','c5']]},
   kuduro:   {name:'KUDURO',   refs:'Titica · Kapota', desc:'Sub kick agressivo, energia máxima de dança',
-    knobs:{CLEAN:16,BASS:80,LOUD:40,WIDE:28,PUNCH:37,FOCUS:37},eq:{sub:3.9,bass:-0.5,low:-0.8,mid:-0.2,high:-0.3,air:-0.4},
+    knobs:{CLEAN:45,BASS:72,LOUD:72,WIDE:45,PUNCH:65,FOCUS:55},eq:{sub:3.9,bass:-0.5,low:-0.8,mid:-0.2,high:-0.3,air:-0.4},
     sugs:[['Sub kick @ 60Hz','+3.9 dB','c2'],['Low-mid cut','-0.8 dB','c3'],['Tight mono','-0.4 dB','c5']]},
   zouk:     {name:'ZOUK',     refs:'Kassav', desc:'Sub profundo, amplitude romántica, muito dinâmico',
-    knobs:{CLEAN:28,BASS:83,LOUD:66,WIDE:72,PUNCH:67,FOCUS:37},eq:{sub:3.8,bass:0.0,low:-0.8,mid:-0.2,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:68,LOUD:60,WIDE:68,PUNCH:52,FOCUS:45},eq:{sub:3.8,bass:0.0,low:-0.8,mid:-0.2,high:0.0,air:0.0},
     sugs:[['Deep sub @ 60Hz','+3.8 dB','c2'],['Low-mid clean','-0.8 dB','c3'],['Wide stereo','+72%','c5']]},
   gzouk:    {name:'GZOUK',    refs:'Kaysha', desc:'Corpo nos mids baixos, groove urbano',
-    knobs:{CLEAN:28,BASS:58,LOUD:53,WIDE:58,PUNCH:53,FOCUS:50},eq:{sub:-0.6,bass:-0.2,low:2.2,mid:0.4,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:60,LOUD:65,WIDE:58,PUNCH:52,FOCUS:55},eq:{sub:-0.6,bass:-0.2,low:2.2,mid:0.4,high:0.0,air:0.0},
     sugs:[['Low-mid body @ 500Hz','+2.2 dB','c2'],['Mid presence','+0.4 dB','c3'],['Urban width','+58%','c5']]},
   semba:    {name:'SEMBA',    refs:'Cabelos Brancos', desc:'Bass quente dominante, alma angolana',
-    knobs:{CLEAN:22,BASS:77,LOUD:61,WIDE:44,PUNCH:62,FOCUS:33},eq:{sub:-3.1,bass:4.7,low:0.2,mid:-0.4,high:-0.3,air:0.0},
+    knobs:{CLEAN:50,BASS:65,LOUD:62,WIDE:50,PUNCH:55,FOCUS:50},eq:{sub:-3.1,bass:4.7,low:0.2,mid:-0.4,high:-0.3,air:0.0},
     sugs:[['Bass warmth @ 150Hz','+4.7 dB','c2'],['Sub cut','-3.1 dB','c3'],['Natural groove','+44%','c5']]},
   afrohouse:{name:'AFRO-HOUSE',refs:'Lau Silva · Nitefreak · TAKA', desc:'Sub extremo, kick profundo, dancefloor',
-    knobs:{CLEAN:22,BASS:85,LOUD:52,WIDE:62,PUNCH:45,FOCUS:33},eq:{sub:4.8,bass:-0.5,low:-0.8,mid:-0.4,high:-0.3,air:0.0},
+    knobs:{CLEAN:50,BASS:72,LOUD:68,WIDE:60,PUNCH:58,FOCUS:50},eq:{sub:4.8,bass:-0.5,low:-0.8,mid:-0.4,high:-0.3,air:0.0},
     sugs:[['Sub weight @ 50Hz','+4.8 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club width','+62%','c5']]},
   rnb:      {name:'R&B',      refs:'Mario · Ne-Yo · Usher · Chris Brown', desc:'Voz no topo, dinâmico, polido',
-    knobs:{CLEAN:55,BASS:55,LOUD:55,WIDE:55,PUNCH:45,FOCUS:60},eq:{sub:-0.5,bass:0.3,low:0.5,mid:1.2,high:1.0,air:0.8},
+    knobs:{CLEAN:58,BASS:52,LOUD:60,WIDE:55,PUNCH:45,FOCUS:65},eq:{sub:-0.5,bass:0.3,low:0.5,mid:1.2,high:1.0,air:0.8},
     sugs:[['Low-mid body @ 500Hz','+2.0 dB','c2'],['Sub control','-1.2 dB','c3'],['Vocal presence','+0.4 dB','c5']]},
   afrobeats:{name:'AFROBEATS',refs:'Davido · Rema · Lojay', desc:'Sub pesado, groove colorido',
-    knobs:{CLEAN:28,BASS:77,LOUD:47,WIDE:56,PUNCH:46,FOCUS:41},eq:{sub:2.1,bass:0.5,low:0.0,mid:0.0,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:65,LOUD:65,WIDE:55,PUNCH:55,FOCUS:55},eq:{sub:2.1,bass:0.5,low:0.0,mid:0.0,high:0.0,air:0.0},
     sugs:[['Sub groove @ 60Hz','+2.1 dB','c2'],['Bass presence','+0.5 dB','c3'],['Afro width','+56%','c5']]},
   amapiano: {name:'AMAPIANO', refs:'Asake · Olamide', desc:'Log drum pesado, piano suave, corpo nos low-mids — som sul-africano',
-    knobs:{CLEAN:46,BASS:49,LOUD:56,WIDE:60,PUNCH:61,FOCUS:53},
+    knobs:{CLEAN:50,BASS:52,LOUD:65,WIDE:60,PUNCH:60,FOCUS:55},
     eq:{sub:-2.5,bass:1.0,low:1.3,mid:0.0,high:-0.4,air:-0.2},
     sugs:[['Bass body @ 150Hz','+1.0 dB','c2'],['Low-mid presence','+1.3 dB','c3'],['Log drum punch','+61%','c5']]},
   dancehall: {name:'DANCEHALL', refs:'Blaiz Fayah · Tribal Kush', desc:'Riddim energético, voz presente, espectro completo — estilo jamaicano/afro',
-    knobs:{CLEAN:58,BASS:40,LOUD:54,WIDE:58,PUNCH:63,FOCUS:71},
+    knobs:{CLEAN:60,BASS:45,LOUD:65,WIDE:55,PUNCH:62,FOCUS:70},
     eq:{sub:-3.0,bass:-0.1,low:1.1,mid:1.3,high:0.7,air:0.7},
     sugs:[['Vocal presence @ 1.5kHz','+1.3 dB','c2'],['High definition','+0.7 dB','c3'],['Riddim punch','+63%','c5']]},
   reggaeton: {name:'REGGAETON', refs:'Daddy Yankee · Snow', desc:'Sub dominante, dembow pesado, kick profundo — som latino urbano',
-    knobs:{CLEAN:46,BASS:66,LOUD:57,WIDE:52,PUNCH:60,FOCUS:49},
+    knobs:{CLEAN:50,BASS:65,LOUD:65,WIDE:52,PUNCH:58,FOCUS:50},
     eq:{sub:3.0,bass:-0.8,low:-0.9,mid:-0.3,high:-0.3,air:-0.2},
     sugs:[['Sub dembow @ 60Hz','+3.0 dB','c2'],['Bass tightness','-0.8 dB','c3'],['Latino punch','+60%','c5']]},
   kompa: {name:'KOMPA', refs:"Joe Dwe't File", desc:'Graves profundos, muito dinâmico, romantismo haitiano',
-    knobs:{CLEAN:44,BASS:60,LOUD:68,WIDE:58,PUNCH:52,FOCUS:47},
+    knobs:{CLEAN:50,BASS:58,LOUD:62,WIDE:55,PUNCH:50,FOCUS:50},
     eq:{sub:1.1,bass:-0.2,low:0.1,mid:-0.5,high:-0.6,air:-0.2},
     sugs:[['Warm sub @ 70Hz','+1.1 dB','c2'],['Mid warmth','-0.5 dB','c3'],['Romantic width','+58%','c5']]},
   house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor',
-    knobs:{CLEAN:45,BASS:75,LOUD:72,WIDE:52,PUNCH:55,FOCUS:45},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
+    knobs:{CLEAN:52,BASS:72,LOUD:70,WIDE:52,PUNCH:58,FOCUS:50},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
     sugs:[['Sub punch @ 50Hz','+4.0 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club energy','+72%','c5']]}
 };
 
@@ -789,9 +789,13 @@ function seekTo(t){
 }
 function seekRelative(d){if(!audioBuffer)return;seekTo((isPlaying?audioCtx.currentTime-startTime:pauseOffset)+d);}
 function setVolume(v){
-  if(masterGain) masterGain.gain.setTargetAtTime(v/100*1.5,audioCtx.currentTime,0.05);
-  if(dryGain)    dryGain.gain.setTargetAtTime(v/100,audioCtx.currentTime,0.05);
-  document.getElementById('vol-val').textContent=v+'%';
+  // v=100 → factor=1.0 (unity, same as original)
+  // v=0   → factor=0.0 (silence)
+  // v=150 → factor=1.5 (monitoring boost only)
+  const factor = v / 100;
+  if(masterGain && audioCtx) masterGain.gain.setTargetAtTime(factor, audioCtx.currentTime, 0.05);
+  if(dryGain    && audioCtx) dryGain.gain.setTargetAtTime(factor,    audioCtx.currentTime, 0.05);
+  document.getElementById('vol-val').textContent = v + '%';
 }
 function updatePlayBtn(){document.getElementById('play-icon').className=isPlaying?'ti ti-player-pause':'ti ti-player-play';}
 function startProgress(){
@@ -1426,7 +1430,7 @@ function continueAsDemo(){
   document.getElementById('paywall-modal').style.display='none';
   isFullVersion=false;
   updateLicenseBadge();
-  setStatus('Modo DEMO — preview disponível · exportação limitada a 1 faixa');
+  setStatus('MODO DEMO · '+exportCount+'/'+FREE_EXPORTS+' exportações usadas · subscreve para continuar');
 }
 
 
@@ -1590,6 +1594,67 @@ function resetModuleBypasses(){
       if(btn){btn.classList.remove('bypass-active');btn.textContent='BYPASS';}
     }
   });
+}
+
+
+// ===== FEEDBACK MODAL =====
+let selectedRating = 0;
+
+function openFeedbackModal(){
+  selectedRating = 0;
+  document.getElementById('feedback-modal').style.display='flex';
+  document.getElementById('feedback-text').value='';
+  document.getElementById('feedback-thanks').style.display='none';
+  document.getElementById('feedback-form').style.display='block';
+  // Reset stars
+  document.querySelectorAll('.star-btn').forEach(s=>s.classList.remove('active'));
+}
+
+function closeFeedbackModal(){
+  document.getElementById('feedback-modal').style.display='none';
+}
+
+function selectRating(val){
+  selectedRating = val;
+  document.querySelectorAll('.star-btn').forEach((s,i)=>{
+    s.classList.toggle('active', i<val);
+    s.textContent = i<val ? '★' : '☆';
+  });
+  document.getElementById('rating-val').textContent = val + '/10';
+}
+
+function submitFeedback(){
+  const text = document.getElementById('feedback-text').value.trim();
+  if(selectedRating===0){ setStatus('Selecciona uma nota de 0-10 antes de enviar'); return; }
+
+  // Save feedback locally
+  const feedback = {
+    user: currentUser||'anon',
+    rating: selectedRating,
+    text: text,
+    preset: curPreset,
+    date: new Date().toISOString()
+  };
+  const feedbacks = JSON.parse(localStorage.getItem('piradex_feedbacks')||'[]');
+  feedbacks.push(feedback);
+  localStorage.setItem('piradex_feedbacks', JSON.stringify(feedbacks));
+
+  // Show thank you
+  document.getElementById('feedback-form').style.display='none';
+  document.getElementById('feedback-thanks').style.display='flex';
+
+  // Build thank you message based on rating
+  let msg = '';
+  if(selectedRating >= 9)      msg = 'Incrível! Obrigado pelo teu apoio! 🚀';
+  else if(selectedRating >= 7) msg = 'Muito obrigado! O teu feedback vai melhorar a Suite de Mastering! 🎛️';
+  else if(selectedRating >= 5) msg = 'Obrigado! Vamos trabalhar para melhorar! 💪';
+  else                          msg = 'Obrigado pela honestidade! O teu feedback é muito valioso! 🙏';
+
+  document.getElementById('thanks-msg').textContent = msg;
+  document.getElementById('thanks-rating').textContent = selectedRating + '/10';
+
+  setStatus('Feedback enviado · Nota: '+selectedRating+'/10 · Obrigado!');
+  setTimeout(()=>closeFeedbackModal(), 4000);
 }
 
 // ===== KNOBS =====
@@ -1772,28 +1837,134 @@ function fallbackMailto(subject,body,msgEl,sendBtn){
 }
 
 // ===== LOGIN =====
-const USERS={'admin':'piradex2024','beatfreak':'studio2024','demo':'demo123','producer1':'beats2024','producer2':'music2024'};
+const USERS={
+  'admin':     {pass:'piradex2024',  type:'full',  exports:null, hours:null},
+  'beatfreak': {pass:'studio2024',   type:'full',  exports:null, hours:null},
+  'demo':      {pass:'demo123',      type:'demo',  exports:3,    hours:null},
+  'producer1': {pass:'beats2024',    type:'full',  exports:null, hours:null},
+  'producer2': {pass:'music2024',    type:'full',  exports:null, hours:null},
+  'piradex':   {pass:'number1',      type:'beta',  exports:10,   hours:2}
+};
+// Legacy password check support
+function getUserPass(u){ return USERS[u]?.pass||null; }
 let isLoggedIn=false,exportCount=0;
-const FREE_EXPORTS=1,PAY_URL='https://www.beatfreakstudio.com/subscribe';
+const FREE_EXPORTS=3,PAY_URL='https://www.beatfreakstudio.com/subscribe';
 function checkAutoLogin(){
   if(sessionStorage.getItem('piradex_session')==='authenticated'){isLoggedIn=true;document.getElementById('login-screen').style.display='none';}
   exportCount=parseInt(sessionStorage.getItem('piradex_exports')||'0');
   checkLicense();
 }
+let currentUser = null;
+let betaExportsUsed = 0;
+let betaSessionStart = null;
+let betaTimerInterval = null;
+
 function doLogin(){
   const user=document.getElementById('login-user').value.trim().toLowerCase();
   const pass=document.getElementById('login-pass').value;
   const err=document.getElementById('login-error');
   if(!user||!pass){err.textContent='Preenche todos os campos.';return;}
-  if(USERS[user]&&USERS[user]===pass){
-    isLoggedIn=true;sessionStorage.setItem('piradex_session','authenticated');
-    document.getElementById('login-screen').style.display='none';err.textContent='';
+
+  const userData = USERS[user];
+  if(userData && userData.pass===pass){
+    isLoggedIn=true;
+    currentUser=user;
+    sessionStorage.setItem('piradex_session','authenticated');
+    sessionStorage.setItem('piradex_user', user);
+    document.getElementById('login-screen').style.display='none';
+    err.textContent='';
+
+    // Beta user setup
+    if(userData.type==='beta'){
+      // Restore or start session
+      const savedStart = sessionStorage.getItem('beta_session_start');
+      const savedExports = parseInt(sessionStorage.getItem('beta_exports_used')||'0');
+      betaExportsUsed = savedExports;
+
+      if(savedStart){
+        betaSessionStart = parseInt(savedStart);
+        const elapsed = (Date.now()-betaSessionStart)/1000/3600;
+        if(elapsed >= userData.hours){
+          // Session expired
+          isLoggedIn=false;
+          err.textContent='⏱️ Sessão beta expirada. Contacta beatfreakstudio.com';
+          document.getElementById('login-screen').style.display='flex';
+          return;
+        }
+      } else {
+        betaSessionStart = Date.now();
+        sessionStorage.setItem('beta_session_start', betaSessionStart);
+      }
+      startBetaTimer(userData.hours);
+      setStatus('🧪 BETA TESTER · Bem-vindo Piradex! · '+betaExportsUsed+'/'+userData.exports+' masterizações usadas');
+    }
   } else {
     err.textContent='❌ Credenciais inválidas.';
     document.getElementById('login-pass').value='';
     const box=document.querySelector('.login-box');
     if(box){box.style.animation='shake 0.4s ease';setTimeout(()=>box.style.animation='',400);}
   }
+}
+
+function startBetaTimer(hours){
+  if(betaTimerInterval) clearInterval(betaTimerInterval);
+  betaTimerInterval = setInterval(()=>{
+    if(!betaSessionStart) return;
+    const elapsed = (Date.now()-betaSessionStart)/1000;
+    const totalSecs = hours*3600;
+    const remaining = totalSecs - elapsed;
+    if(remaining <= 0){
+      clearInterval(betaTimerInterval);
+      isLoggedIn = false;
+      sessionStorage.removeItem('piradex_session');
+      sessionStorage.removeItem('beta_session_start');
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('login-error').textContent='⏱️ Sessão beta de 2 horas terminada. Obrigado por testar!';
+      setStatus('Sessão beta terminada');
+      return;
+    }
+    const mins = Math.floor(remaining/60);
+    const secs = Math.floor(remaining%60);
+    const userData = USERS[currentUser];
+    const exportsLeft = (userData?.exports||10) - betaExportsUsed;
+    // Update timer in status bar
+    document.getElementById('beta-timer').style.display='flex';
+    document.getElementById('beta-timer-val').textContent =
+      '⏱ '+String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0')+':'+String(secs).padStart(2,'0')+
+      '  ·  🎧 '+exportsLeft+' masterizações restantes';
+  }, 1000);
+}
+
+function checkAutoLogin(){
+  const sess = sessionStorage.getItem('piradex_session');
+  const user = sessionStorage.getItem('piradex_user');
+  if(sess==='authenticated' && user){
+    const userData = USERS[user];
+    if(!userData){ return; }
+    // Check beta expiry
+    if(userData.type==='beta'){
+      const savedStart = sessionStorage.getItem('beta_session_start');
+      if(savedStart){
+        const elapsed = (Date.now()-parseInt(savedStart))/1000/3600;
+        if(elapsed >= userData.hours){
+          sessionStorage.removeItem('piradex_session');
+          return; // show login
+        }
+        betaSessionStart = parseInt(savedStart);
+        betaExportsUsed = parseInt(sessionStorage.getItem('beta_exports_used')||'0');
+        currentUser = user;
+        isLoggedIn = true;
+        document.getElementById('login-screen').style.display='none';
+        startBetaTimer(userData.hours);
+      }
+    } else {
+      currentUser = user;
+      isLoggedIn = true;
+      document.getElementById('login-screen').style.display='none';
+    }
+  }
+  exportCount=parseInt(sessionStorage.getItem('piradex_exports')||'0');
+  checkLicense();
 }
 
 // ===== LICENSES =====
@@ -1839,15 +2010,56 @@ function formatLicenseInput(el){
   el.value=v;if(v.length===19)activateLicense();
 }
 function selectPlan(el){document.querySelectorAll('.plan').forEach(p=>p.classList.remove('selected'));el.classList.add('selected');}
-function showPaywall(){document.getElementById('paywall-modal').style.display='flex';}
-function skipPaywall(){document.getElementById('paywall-modal').style.display='none';}
+function showPaywall(){
+  const lbl=document.getElementById('export-count-label');
+  if(lbl) lbl.textContent = FREE_EXPORTS+' exportações gratuitas';
+  document.getElementById('paywall-modal').style.display='flex';
+}
+function skipPaywall(){
+  document.getElementById('paywall-modal').style.display='none';
+  setStatus('MODO DEMO · '+exportCount+'/'+FREE_EXPORTS+' exportações usadas · subscreve para continuar');
+}
 function goPay(){const s=document.querySelector('.plan.selected .plan-name');window.open(PAY_URL+'?plan='+(s?s.textContent:'pro').toLowerCase(),'_blank');}
 
 async function exportMastered(){
   if(!isLoggedIn){document.getElementById('login-screen').style.display='flex';return;}
-  if(isFullVersion){await _originalExport();return;}
-  if(exportCount<FREE_EXPORTS){await _originalExport();exportCount++;sessionStorage.setItem('piradex_exports',exportCount);setTimeout(()=>showPaywall(),1500);}
-  else{showPaywall();}
+
+  // Beta user export logic
+  if(currentUser && USERS[currentUser]?.type==='beta'){
+    const maxExports = USERS[currentUser].exports;
+    if(betaExportsUsed >= maxExports){
+      setStatus('❌ Limite de '+maxExports+' masterizações beta atingido · Contacta beatfreakstudio.com');
+      showBetaLimitModal();
+      return;
+    }
+    await _originalExport();
+    betaExportsUsed++;
+    sessionStorage.setItem('beta_exports_used', betaExportsUsed);
+    const remaining = maxExports - betaExportsUsed;
+    setStatus('🧪 BETA · Masterização '+betaExportsUsed+'/'+maxExports+' · Faltam '+remaining+' masterizações');
+    // Show feedback modal after export
+    setTimeout(()=>openFeedbackModal(), 1800);
+    return;
+  }
+
+  if(isFullVersion){await _originalExport();setTimeout(()=>openFeedbackModal(),1800);return;}
+  if(exportCount<FREE_EXPORTS){
+    await _originalExport();
+    exportCount++;
+    sessionStorage.setItem('piradex_exports',exportCount);
+    const remaining=FREE_EXPORTS-exportCount;
+    if(remaining>0){
+      setStatus('Exportação '+exportCount+'/'+FREE_EXPORTS+' · ainda tens '+remaining+' exportação'+(remaining>1?'ões':'')+' gratuita'+(remaining>1?'s':''));
+    } else {
+      setTimeout(()=>showPaywall(),1500);
+    }
+  } else {
+    showPaywall();
+  }
+}
+
+function showBetaLimitModal(){
+  document.getElementById('beta-limit-modal').style.display='flex';
 }
 
 // ===== INIT =====
