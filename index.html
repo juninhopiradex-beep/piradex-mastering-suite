@@ -8,6 +8,74 @@
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style id="piradex-v4-styles">
+    /* ── Undo buttons ── */
+    .undo-bar{display:flex;gap:6px;align-items:center;padding:4px 0;}
+    .undo-btn{background:#111118;border:1px solid #2a2a3a;color:#888;border-radius:4px;padding:4px 10px;
+      font-family:'Rajdhani',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;transition:all .15s;}
+    .undo-btn:hover{border-color:#2dd4ff;color:#2dd4ff;}
+
+    /* ── Phase correlation meter ── */
+    .phase-meter-wrap{background:#0d0d18;border:1px solid #1e1e2e;border-radius:6px;padding:8px 12px;margin:6px 0;}
+    .phase-meter-track{height:8px;background:#1a1a28;border-radius:4px;overflow:hidden;position:relative;margin:4px 0;}
+    #phase-corr-fill{height:100%;width:50%;background:#2dff8a;transition:width .15s,background .3s;border-radius:4px;}
+    .phase-labels{display:flex;justify-content:space-between;font-size:8px;color:#555;font-family:'Rajdhani',monospace;}
+    #phase-warn{display:none;color:#ff4500;font-size:9px;font-weight:700;margin-top:3px;letter-spacing:.5px;}
+
+    /* ── GR meter live ── */
+    .gr-live-wrap{background:#0d0d18;border:1px solid #1e1e2e;border-radius:5px;padding:6px 10px;margin:4px 0;display:flex;align-items:center;gap:8px;}
+    .gr-live-track{flex:1;height:6px;background:#1a1a28;border-radius:3px;overflow:hidden;}
+    #gr-fill-live{height:100%;width:0;background:#b855f7;transition:width .08s;border-radius:3px;}
+    #gr-val-live{font-size:10px;color:#b855f7;font-family:'Rajdhani',monospace;min-width:36px;text-align:right;}
+
+    /* ── Spectral balance ── */
+    .spec-balance-wrap{margin:6px 0;background:#0d0d18;border:1px solid #1e1e2e;border-radius:6px;padding:8px 10px;}
+    #spec-balance-canvas{width:100%;height:52px;display:block;border-radius:4px;}
+    .spec-bal-title{font-size:9px;color:#555;letter-spacing:1.5px;margin-bottom:4px;font-family:'Rajdhani',monospace;}
+    .spec-bal-legend{font-size:8px;color:#444;margin-top:3px;text-align:center;}
+
+    /* ── PLR meter ── */
+    .plr-wrap{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1a1a28;margin-top:6px;}
+    .plr-label{font-size:9px;color:#666;letter-spacing:1px;font-family:'Rajdhani',monospace;min-width:70px;}
+    .plr-track{flex:1;height:6px;background:#1a1a28;border-radius:3px;overflow:hidden;}
+    #plr-bar{height:100%;width:30%;background:#ffe135;border-radius:3px;transition:width .3s;}
+    #plr-val{font-size:11px;font-weight:700;color:#ffe135;font-family:'Rajdhani',monospace;min-width:48px;text-align:right;}
+    .plr-ref{font-size:8px;color:#444;margin-left:4px;}
+
+    /* ── Transient shaper tab ── */
+    .trans-wrap{padding:8px 0;}
+    .trans-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .trans-label{font-size:10px;color:#888;font-family:'Rajdhani',monospace;letter-spacing:1px;min-width:64px;}
+    .trans-val{font-size:10px;color:#ff6b35;font-family:'Rajdhani',monospace;min-width:36px;text-align:right;}
+
+    /* ── Multiband compressor ── */
+    .mb-wrap{padding:8px 0;}
+    .mb-toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .mb-toggle-label{font-size:10px;color:#888;font-family:'Rajdhani',monospace;letter-spacing:1px;}
+    .mb-band-row{display:grid;grid-template-columns:60px 1fr 60px 1fr 40px;align-items:center;gap:6px;margin-bottom:6px;}
+    .mb-band-name{font-size:9px;font-weight:700;letter-spacing:1px;font-family:'Rajdhani',monospace;}
+    .mb-val{font-size:9px;color:#888;font-family:'Rajdhani',monospace;text-align:right;}
+
+    /* ── Export format selector ── */
+    #export-wrap{align-items:center;gap:6px;}
+    #export-fmt{background:#0f0f1a;color:#2dd4ff;border:1px solid rgba(45,212,255,.35);
+      border-radius:5px;padding:5px 8px;font-family:'Rajdhani',monospace;font-size:10px;
+      font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;}
+    .export-dither-label{font-size:9px;color:#666;display:flex;align-items:center;gap:4px;
+      font-family:'Rajdhani',monospace;letter-spacing:.5px;cursor:pointer;}
+
+    /* ── Undo keyboard hint ── */
+    .undo-hint{font-size:8px;color:#333;letter-spacing:.5px;}
+    /* SUNO chip */
+    .suno-chip{background:linear-gradient(135deg,#0d1b2a,#112240)!important;border:1.5px solid #2dd4ff!important;color:#2dd4ff!important;font-weight:700!important;position:relative;overflow:hidden;}
+    .suno-chip::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(45,212,255,.14),transparent);animation:suno-shimmer 2.8s ease-in-out infinite;}
+    @keyframes suno-shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+    .suno-chip.active{background:linear-gradient(135deg,#0a2a3a,#0d3352)!important;box-shadow:0 0 18px rgba(45,212,255,.35)!important;color:#fff!important;}
+    /* Headroom lock */
+    .preset-chip.headroom-locked{opacity:.35!important;cursor:not-allowed!important;pointer-events:none;}
+    .preset-chip.headroom-locked::after{content:' 🔒';font-size:8px;opacity:.7;}
+  </style>
 </head>
 <body>
 <div class="wrap">
@@ -44,6 +112,7 @@
       <div class="preset-chip" onclick="setPreset('reggaeton',this)">Reggaeton</div>
       <div class="preset-chip" onclick="setPreset('kompa',this)">Kompa</div>
       <div class="preset-chip" onclick="setPreset('house',this)">House</div>
+        <div class="preset-chip suno-chip" id="preset-chip-suno" onclick="setPreset('suno',this)" title="Preset AI SUNO">&#9889; AI SUNO</div>
     </div>
   </div>
 
@@ -400,9 +469,19 @@
       <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()" style="display:none;display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:5px;border:1px solid rgba(255,227,53,0.4);background:rgba(255,227,53,0.08);color:var(--c3);font-family:'Rajdhani';font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.15s;" title="Ajusta o output para -6 dBFS de pico máximo">
         <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
       </button>
-      <button class="export-btn" id="export-btn" onclick="exportMastered()" style="display:none">
-        <i class="ti ti-download"></i> EXPORTAR
-      </button>
+      <div id="export-wrap" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
+        <select id="export-fmt" title="Formato de exportacao">
+          <option value="wav" selected>WAV 16-bit</option>
+          <option value="mp3">MP3 320kbps &#9888;</option>
+        </select>
+        <label class="export-dither-label" title="TPDF dither reduz quantization noise no WAV 16-bit">
+          <input type="checkbox" id="export-dither" checked style="accent-color:#2dd4ff;">
+          DITHER
+        </label>
+        <button class="export-btn" id="export-btn" onclick="exportMastered()">
+          <i class="ti ti-download"></i> EXPORTAR
+        </button>
+      </div>
     </div>
     <div class="mode-bar">
       <div class="mode-dot" id="mode-dot"></div>
