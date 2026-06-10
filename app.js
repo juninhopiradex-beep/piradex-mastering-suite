@@ -351,7 +351,12 @@ function applyDSP() {
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
     compNode.threshold.value=0; compNode.ratio.value=1;
     limiterNode.threshold.value=0; limiterNode.ratio.value=1;
+    if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
+    if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0,audioCtx.currentTime,0.02);
     masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+    syncEQSliders();
+    updateLUFSDisplay();
+    return; // stop here — nothing should overwrite bypass
   }
 
   // Apply width offsets on top of EQ (absolute, not additive)
@@ -359,6 +364,29 @@ function applyDSP() {
     eqAir.gain.value  += widthAirOffset;
     eqHigh.gain.value += widthHighOffset;
   }
+
+  // ── Re-enforce any active module bypasses ──────────────────────────────────
+  // applyDSP overwrites node values, so we re-apply bypass state at the end
+  if(moduleBypassState.eq){
+    [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
+  }
+  if(moduleBypassState.comp){
+    compNode.threshold.value=0; compNode.ratio.value=1;
+  }
+  if(moduleBypassState.limit){
+    limiterNode.threshold.value=0; limiterNode.ratio.value=1;
+  }
+  if(moduleBypassState.shape){
+    if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
+    if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0,audioCtx.currentTime,0.02);
+  }
+  if(moduleBypassState.loud){
+    masterGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+  }
+  if(moduleBypassState.excite){
+    eqAir.gain.value=0;
+  }
+
   syncEQSliders();
   updateLUFSDisplay();
   _applyAdaptiveComp();
@@ -1904,8 +1932,15 @@ function toggleModuleBypass(module){
   moduleBypassState[module] = !moduleBypassState[module];
   const btn = document.getElementById('bypass-'+module);
   const active = moduleBypassState[module];
-  if(btn){ btn.classList.toggle('bypass-active', active); btn.textContent = active ? 'BYPASSED' : 'BYPASS'; }
+  if(btn){
+    btn.classList.toggle('bypass-active', active);
+    btn.textContent = active ? 'BYPASSED' : 'BYPASS';
+    btn.style.borderColor = active ? '#ff3ab5' : '';
+    btn.style.color       = active ? '#ff3ab5' : '';
+    btn.style.background  = active ? 'rgba(255,58,181,0.12)' : '';
+  }
   applyModuleBypass(module, active);
+  applyDSP(); // re-enforce all active bypasses
 }
 
 function applyModuleBypass(module, bypassed){
@@ -2128,7 +2163,16 @@ function onDrag(e){
   if(playMode==='after'&&audioCtx)applyDSP();
 }
 function stopDrag(){dragName='';document.removeEventListener('mousemove',onDrag);document.removeEventListener('mouseup',stopDrag);}
-function toggleBypass(){bypassOn=!bypassOn;document.getElementById('bypass-btn').classList.toggle('on',bypassOn);applyDSP();setStatus(bypassOn?'Bypass ativo':'Bypass desligado');}
+function toggleBypass(){
+  bypassOn=!bypassOn;
+  const btn=document.getElementById('bypass-btn');
+  if(btn){
+    btn.classList.toggle('on', bypassOn);
+    btn.style.color = bypassOn ? '#ff3ab5' : '';
+  }
+  applyDSP();
+  setStatus(bypassOn ? '⚡ BYPASS ATIVO — sinal sem processamento' : 'Bypass desligado — processamento activo');
+}
 function setStatus(msg){document.getElementById('stxt').textContent=msg.toUpperCase();}
 
 

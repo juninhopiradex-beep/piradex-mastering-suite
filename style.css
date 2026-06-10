@@ -48,8 +48,8 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .tab-panel.active{display:block;}
 
 /* MAIN GRID */
-.main{display:grid;grid-template-columns:1fr 1.2fr 0.5fr 0.15fr;gap:8px;padding:8px 12px;height:215px;min-height:215px;max-height:215px;overflow:hidden;}
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden;contain:strict;}
+.main{display:grid;grid-template-columns:1fr 1.2fr 0.5fr 0.15fr;gap:8px;padding:8px 12px;}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:visible;}
 .panel-spectrum{padding:6px;}
 .plabel{font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
 .sugs{display:flex;flex-direction:column;gap:4px;}
@@ -63,7 +63,7 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .io-label{font-size:8px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
 
 /* VU METERS — pulsante */
-.out-panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 5px;display:flex;flex-direction:column;align-items:center;gap:4px;overflow:hidden;contain:strict;}
+.out-panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 5px;display:flex;flex-direction:column;align-items:center;gap:4px;}
 .out-label{font-size:7px;letter-spacing:1px;color:var(--muted);}
 .vu-wrap{display:flex;gap:3px;flex:1;width:100%;}
 .vu-track{flex:1;background:#0a0a10;border-radius:3px;position:relative;overflow:hidden;min-height:80px;border:1px solid var(--border);}
@@ -301,11 +301,11 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 }
 .module-bypass-btn:hover { border-color:var(--c3);color:var(--c3); }
 .module-bypass-btn.bypass-active {
-  border-color:var(--c7);color:var(--c7);
-  background:rgba(255,58,58,0.1);
+  border-color:#ff3ab5;color:#ff3ab5;
+  background:rgba(255,58,181,0.12);
   animation:bypassPulse 1.5s ease infinite;
 }
-@keyframes bypassPulse{0%,100%{opacity:1}50%{opacity:0.6}}
+@keyframes bypassPulse{0%,100%{opacity:1}50%{opacity:0.65}}
 
 /* MASTER & REF tabs prominent */
 .tab-primary {

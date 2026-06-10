@@ -540,6 +540,18 @@
   </div>
 
   <!-- PLAYER -->
+  <!-- Phase meter — fixed row, never grows, never breaks layout -->
+  <div style="display:flex;align-items:center;gap:10px;padding:4px 14px;background:var(--bg1);border-top:1px solid var(--border);border-bottom:1px solid var(--border);height:28px;flex-shrink:0;">
+    <span style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;font-family:'Rajdhani';white-space:nowrap;min-width:70px;">FASE STEREO</span>
+    <div style="flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;position:relative;">
+      <div id="phase-corr-fill" style="height:100%;width:50%;background:#2dff8a;border-radius:3px;transition:width .15s,background .3s;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:var(--muted2);width:120px;flex-shrink:0;">
+      <span>-1 inv</span><span>0 neutro</span><span>+1 mono</span>
+    </div>
+    <span style="font-size:9px;font-family:'Rajdhani';font-weight:700;min-width:32px;text-align:right;" id="phase-corr-val">0.00</span>
+    <div id="phase-warn" style="display:none;color:#ff4500;font-size:8px;font-weight:700;letter-spacing:.5px;white-space:nowrap;">&#9888; FASE NEG!</div>
+  </div>
   <div class="player-section">
     <div class="player-top">
       <div style="display:flex;flex-direction:column;gap:6px;min-width:150px;">
@@ -574,20 +586,6 @@
       <div class="ab-toggle">
         <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
         <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
-      </div>
-      <!-- Phase correlation meter -->
-      <div style="padding:5px 14px;background:var(--bg1);border-bottom:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-          <span style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;font-family:'Rajdhani';">FASE STEREO</span>
-          <span style="font-size:9px;color:var(--muted);font-family:'Rajdhani';">Correlacao: <span id="phase-corr-val" style="color:#2dff8a;font-weight:700;">0.00</span></span>
-        </div>
-        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:3px;">
-          <div id="phase-corr-fill" style="height:100%;width:50%;background:#2dff8a;border-radius:3px;transition:width .15s,background .3s;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--muted2);">
-          <span>-1 inv</span><span>0 neutro</span><span>+1 mono</span>
-        </div>
-        <div id="phase-warn" style="display:none;color:#ff4500;font-size:9px;font-weight:700;margin-top:2px;letter-spacing:.5px;">&#9888; FASE NEGATIVA — incompativel com mono!</div>
       </div>
       </div>
       <div class="transport">
