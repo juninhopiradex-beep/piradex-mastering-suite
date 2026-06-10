@@ -829,6 +829,19 @@ function fmtTime(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padSt
 // ===== BEFORE/AFTER — seamless switch =====
 function setMode(mode){
   if(!audioBuffer) { playMode=mode; updateModeUI(mode); return; }
+  // Headroom button visibility
+  const hb=document.getElementById('headroom-btn');
+  if(hb){
+    if(mode==='after'){
+      hb.style.borderColor='rgba(255,227,53,0.5)';hb.style.background='rgba(255,227,53,0.08)';
+      hb.style.color='var(--c3)';hb.style.cursor='pointer';hb.style.pointerEvents='auto';
+      hb.style.animation='headroom-pulse 1.2s ease-in-out 3';
+    } else {
+      hb.style.borderColor='rgba(255,227,53,0.15)';hb.style.background='rgba(255,227,53,0.03)';
+      hb.style.color='rgba(255,227,53,0.25)';hb.style.cursor='default';
+      hb.style.pointerEvents='none';hb.style.animation='none';
+    }
+  }
   const was=isPlaying;
   const pos=was?(audioCtx.currentTime-startTime):pauseOffset;
   stopSource();
@@ -1152,6 +1165,29 @@ function setPreset(key,el){
   setStatus('Preset '+p.name+' aplicado · Alvo '+lufsTarget+' LUFS');
 }
 
+function _updateSugDataCards(){
+  // Update the analysis data cards under suggestions
+  if(!audioBuffer) return;
+  const plr=_calcPLR(audioBuffer);
+  if(plr){
+    const pl=document.getElementById('sug-plr');
+    const pk=document.getElementById('sug-peak');
+    if(pl){ pl.textContent=plr.plr.toFixed(1)+' dB'; pl.style.color=plr.plr>12?'#2dff8a':plr.plr>6?'#ffe135':'#ff4500'; }
+    if(pk){ pk.textContent=plr.peakDb.toFixed(1)+' dB'; pk.style.color=plr.peakDb>-3?'#ff4500':plr.peakDb>-6?'#ffe135':'#2dff8a'; }
+  }
+  const lufsEl=document.getElementById('sug-lufs');
+  const lufsN=document.getElementById('lufs-n');
+  if(lufsEl&&lufsN) lufsEl.textContent=lufsN.textContent;
+  // Phase
+  const phaseEl=document.getElementById('sug-phase');
+  const phaseVal=document.getElementById('phase-corr-val');
+  if(phaseEl&&phaseVal){
+    const v=parseFloat(phaseVal.textContent)||0;
+    phaseEl.textContent=v.toFixed(2);
+    phaseEl.style.color=v>0.3?'#2dff8a':v>-0.1?'#ffe135':'#ff4500';
+  }
+}
+
 function updateSugs(sugs){
   sugs.forEach((s,i)=>{
     const t=document.getElementById(`s${i+1}t`),v=document.getElementById(`s${i+1}v`);
@@ -1426,6 +1462,11 @@ function _drawSpectralBalance(){
     ctx.fillStyle=col+'88'; ctx.fillRect(x,H-12-(pct/100)*(H-12),bw,(pct/100)*(H-12));
     ctx.fillStyle=col; ctx.font='bold 8px Rajdhani,sans-serif'; ctx.textAlign='center';
     ctx.fillText(lbl+' '+pct.toFixed(0)+'%',x+bw/2,H-2);
+    // Update suggestion cards
+    const ids=[['sug-low-bar','sug-low-pct'],['sug-mid-bar','sug-mid-pct'],['sug-high-bar','sug-high-pct']];
+    const bars=document.getElementById(ids[i][0]),lblEl=document.getElementById(ids[i][1]);
+    if(bars) bars.style.width=pct.toFixed(0)+'%';
+    if(lblEl) lblEl.textContent=pct.toFixed(0)+'%';
   });
   // Target overlay from current preset
   const target=SPECTRAL_TARGETS[curPreset];

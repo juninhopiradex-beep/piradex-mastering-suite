@@ -18,9 +18,9 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .logo-sub{font-size:11px;letter-spacing:4px;color:var(--text);font-weight:600;font-family:'Orbitron',monospace;}
 .logo-engine{font-size:8px;letter-spacing:2px;color:var(--muted);}
 .hdr-right{display:flex;align-items:center;gap:8px;}
-.bypass{font-size:9px;padding:4px 12px;border-radius:3px;border:1px solid #ff3ab544;color:var(--c1);background:transparent;cursor:pointer;font-family:'Rajdhani';letter-spacing:2px;font-weight:600;transition:all 0.15s;}
-.bypass:hover{background:#ff3ab522;}
-.bypass.on{background:#ff3ab533;border-color:var(--c1);}
+.bypass{font-size:9px;padding:4px 12px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);background:transparent;cursor:pointer;font-family:'Rajdhani';letter-spacing:2px;font-weight:600;transition:all 0.15s;}
+.bypass:hover{border-color:#ff3ab5aa;color:#ff3ab5;}
+.bypass.on{background:#ff3ab533;border-color:#ff3ab5;color:#ff3ab5;box-shadow:0 0 10px #ff3ab533;}
 .lic-badge{font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);cursor:pointer;letter-spacing:2px;font-family:'Orbitron',monospace;font-weight:700;transition:all 0.15s;}
 .lic-badge:hover{border-color:var(--c4);}
 

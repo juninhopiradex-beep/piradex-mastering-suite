@@ -90,6 +90,8 @@
       </div>
     </div>
     <div class="hdr-right">
+      <button id="undo-btn" onclick="undoAction()" title="Ctrl+Z" style="opacity:.35;pointer-events:none;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;font-family:'Rajdhani';letter-spacing:1.5px;font-weight:600;transition:all .15s;">&#8630; UNDO</button>
+      <button id="redo-btn" onclick="redoAction()" title="Ctrl+Y" style="opacity:.35;pointer-events:none;font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;font-family:'Rajdhani';letter-spacing:1.5px;font-weight:600;transition:all .15s;">REDO &#8631;</button>
       <button class="bypass" id="bypass-btn" onclick="toggleBypass()">BYPASS</button>
       <span id="license-badge" onclick="openLicenseModal()" class="lic-badge">DEMO</span>
     </div>
@@ -135,8 +137,10 @@
     <div class="tab" onclick="openTab('loud',this)">LOUD</div>
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
     <div class="tab" onclick="openTab('midside',this)">M/S</div>
+      <div class="tab" onclick="openTab('trans',this)">TRANS</div>
+      <div class="tab" onclick="openTab('mband',this)">MBAND</div>
     <div class="tab tab-divider">|</div>
-    <div class="tab tab-primary" onclick="openTab('ref',this)">REF</div>
+    <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -148,6 +152,38 @@
           <div class="sug"><div class="sdot" style="background:var(--c2)"></div><span id="s1t">Bass body @ 150Hz</span><span class="sval c2" id="s1v">+0.7 dB</span></div>
           <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Low-mid warmth</span><span class="sval c3" id="s2v">+0.8 dB</span></div>
           <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo groove</span><span class="sval c5" id="s3v">+42%</span></div>
+        </div>
+        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;">
+          <div style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">ANÁLISE DA FAIXA</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">LUFS</div>
+              <div style="font-size:13px;font-weight:700;color:var(--c1);font-family:'Rajdhani';" id="sug-lufs">-9.0</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">PEAK</div>
+              <div style="font-size:13px;font-weight:700;color:var(--c4);font-family:'Rajdhani';" id="sug-peak">-2.0 dB</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">PLR DIN.</div>
+              <div style="font-size:13px;font-weight:700;color:#ffe135;font-family:'Rajdhani';" id="sug-plr">13.1 dB</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">FASE</div>
+              <div style="font-size:13px;font-weight:700;color:#2dff8a;font-family:'Rajdhani';" id="sug-phase">+0.82</div>
+            </div>
+            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);grid-column:span 2;">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;margin-bottom:3px;">BALANCE LOW / MID / HIGH</div>
+              <div style="display:flex;gap:3px;align-items:center;">
+                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-low-bar" style="height:100%;width:52%;background:#b855f7;border-radius:2px;"></div></div>
+                <span style="font-size:8px;color:#b855f7;min-width:24px;" id="sug-low-pct">52%</span>
+                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-mid-bar" style="height:100%;width:30%;background:#2dd4ff;border-radius:2px;"></div></div>
+                <span style="font-size:8px;color:#2dd4ff;min-width:24px;" id="sug-mid-pct">30%</span>
+                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-high-bar" style="height:100%;width:18%;background:#2dff8a;border-radius:2px;"></div></div>
+                <span style="font-size:8px;color:#2dff8a;min-width:24px;" id="sug-high-pct">18%</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="panel panel-spectrum">
@@ -327,6 +363,30 @@
         <div class="mod-ctrl"><label>TRUE PEAK CEILING</label><input type="range" min="-6" max="-0.1" value="-1" step="0.1" id="loud-peak" oninput="updateLoud()"><span id="loud-peak-v">-1.0 dBTP</span></div>
         <div class="mod-ctrl"><label>INTEGRATED WINDOW</label><input type="range" min="1" max="30" value="3" step="1" id="loud-window" oninput="updateLoud()"><span id="loud-window-v">3 s</span></div>
       </div>
+      <!-- Spectral balance overlay -->
+      <div style="padding:5px 14px;background:var(--bg0,#07070e);border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;font-family:'Rajdhani';">BALANCE ESPECTRAL</span>
+          <span style="font-size:8px;color:var(--muted2);">&#9135;&#9135; = target preset</span>
+        </div>
+        <canvas id="spec-balance-canvas" style="width:100%;height:48px;display:block;border-radius:4px;"></canvas>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);">
+          <span style="font-size:9px;color:var(--muted2);letter-spacing:1px;min-width:60px;font-family:'Rajdhani';">PLR DIN.</span>
+          <div style="flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+            <div id="plr-bar" style="height:100%;width:30%;background:#ffe135;border-radius:3px;transition:width .3s;"></div>
+          </div>
+          <span id="plr-val" style="font-size:11px;font-weight:700;color:#ffe135;min-width:44px;text-align:right;font-family:'Rajdhani';">-- dB</span>
+          <span style="font-size:8px;color:var(--muted2);">(&gt;12 din.)</span>
+        </div>
+      </div>
+      <!-- GR live meter -->
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 14px;background:var(--bg1);border-bottom:1px solid var(--border);">
+        <span style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;min-width:52px;font-family:'Rajdhani';">GR LIVE</span>
+        <div style="flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+          <div id="gr-fill-live" style="height:100%;width:0%;background:#b855f7;border-radius:3px;transition:width .08s;"></div>
+        </div>
+        <span id="gr-val-live" style="font-size:10px;color:#b855f7;min-width:40px;text-align:right;font-family:'Rajdhani';">0.0 dB</span>
+      </div>
       <div class="lufs-big-display">
         <div class="lufs-big-val" id="lufs-big-val">-9.0</div>
         <div class="lufs-big-label">LUFS INTEGRATED</div>
@@ -419,6 +479,66 @@
     </div>
   </div>
 
+  <!-- tab TRANS -->
+  <div class="tab-panel" id="tab-trans">
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">TRANSIENT SHAPER — Attack &amp; Sustain</div></div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6;">Controla transientes (punch) e sustain independentemente do compressor. Attack alto = mais punch nos kicks.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <span style="font-size:11px;color:var(--muted);min-width:70px;letter-spacing:1px;">ATTACK</span>
+        <input type="range" id="trans-attack" min="0" max="100" value="50" oninput="updateTransient()" style="flex:1;">
+        <span style="font-size:11px;color:var(--c4);min-width:40px;text-align:right;font-family:'Rajdhani';" id="trans-attack-v">+0%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--muted);min-width:70px;letter-spacing:1px;">SUSTAIN</span>
+        <input type="range" id="trans-sustain" min="0" max="100" value="50" oninput="updateTransient()" style="flex:1;">
+        <span style="font-size:11px;color:var(--c4);min-width:40px;text-align:right;font-family:'Rajdhani';" id="trans-sustain-v">+0%</span>
+      </div>
+      <div style="padding:10px 12px;background:var(--bg2);border-radius:6px;border:1px solid rgba(45,212,255,.15);">
+        <div style="font-size:10px;color:var(--c1);font-weight:700;margin-bottom:6px;letter-spacing:1px;">REFERENCIA POR GENERO</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;color:var(--muted);">
+          <span>Kuduro / Afrobeats</span><span style="color:var(--c4);">Attack +20-30%</span>
+          <span>Kizomba / Zouk</span><span style="color:var(--c4);">Attack +5%</span>
+          <span>Afro-House / House</span><span style="color:var(--c4);">Attack +15%, Sustain -10%</span>
+          <span>AI SUNO</span><span style="color:var(--c4);">Attack +10%, Sustain 0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- tab MBAND -->
+  <div class="tab-panel" id="tab-mband">
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">MULTIBAND COMPRESSOR — 3 Bandas Independentes</div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <input type="checkbox" id="mb-toggle" onchange="updateMultiband()" style="width:16px;height:16px;accent-color:var(--c2);">
+        <span style="font-size:11px;color:var(--muted);letter-spacing:1px;">ACTIVAR COMPRESSAO MULTIBANDA</span>
+      </div>
+      <p style="font-size:10px;color:var(--muted2);margin-bottom:12px;">Cada banda comprime de forma independente — um kick no LOW nao afecta o MID nem o HIGH.</p>
+      <div style="display:grid;grid-template-columns:52px 1fr 52px 1fr 52px;gap:6px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg2);border-radius:6px;border:1px solid rgba(184,85,247,.2);">
+        <span style="font-size:11px;font-weight:700;color:#b855f7;">LOW<br><span style="font-size:8px;color:var(--muted2);font-weight:400;">0–250Hz</span></span>
+        <input type="range" id="mb-low-thr" min="-40" max="0" value="-24" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#b855f7;text-align:right;font-family:'Rajdhani';" id="mb-low-thr-v">-24 dB</span>
+        <input type="range" id="mb-low-ratio" min="1" max="10" value="3" step="0.5" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#b855f7;text-align:right;font-family:'Rajdhani';" id="mb-low-ratio-v">3:1</span>
+      </div>
+      <div style="display:grid;grid-template-columns:52px 1fr 52px 1fr 52px;gap:6px;align-items:center;margin-bottom:8px;padding:8px;background:var(--bg2);border-radius:6px;border:1px solid rgba(45,212,255,.2);">
+        <span style="font-size:11px;font-weight:700;color:#2dd4ff;">MID<br><span style="font-size:8px;color:var(--muted2);font-weight:400;">250Hz–6k</span></span>
+        <input type="range" id="mb-mid-thr" min="-40" max="0" value="-20" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#2dd4ff;text-align:right;font-family:'Rajdhani';" id="mb-mid-thr-v">-20 dB</span>
+        <input type="range" id="mb-mid-ratio" min="1" max="10" value="2.5" step="0.5" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#2dd4ff;text-align:right;font-family:'Rajdhani';" id="mb-mid-ratio-v">2.5:1</span>
+      </div>
+      <div style="display:grid;grid-template-columns:52px 1fr 52px 1fr 52px;gap:6px;align-items:center;padding:8px;background:var(--bg2);border-radius:6px;border:1px solid rgba(45,255,138,.2);">
+        <span style="font-size:11px;font-weight:700;color:#2dff8a;">HIGH<br><span style="font-size:8px;color:var(--muted2);font-weight:400;">6kHz+</span></span>
+        <input type="range" id="mb-high-thr" min="-40" max="0" value="-18" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#2dff8a;text-align:right;font-family:'Rajdhani';" id="mb-high-thr-v">-18 dB</span>
+        <input type="range" id="mb-high-ratio" min="1" max="10" value="2" step="0.5" oninput="updateMultiband()">
+        <span style="font-size:11px;color:#2dff8a;text-align:right;font-family:'Rajdhani';" id="mb-high-ratio-v">2:1</span>
+      </div>
+    </div>
+  </div>
+
   <!-- PLAYER -->
   <div class="player-section">
     <div class="player-top">
@@ -455,6 +575,21 @@
         <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
         <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
       </div>
+      <!-- Phase correlation meter -->
+      <div style="padding:5px 14px;background:var(--bg1);border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+          <span style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;font-family:'Rajdhani';">FASE STEREO</span>
+          <span style="font-size:9px;color:var(--muted);font-family:'Rajdhani';">Correlacao: <span id="phase-corr-val" style="color:#2dff8a;font-weight:700;">0.00</span></span>
+        </div>
+        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:3px;">
+          <div id="phase-corr-fill" style="height:100%;width:50%;background:#2dff8a;border-radius:3px;transition:width .15s,background .3s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--muted2);">
+          <span>-1 inv</span><span>0 neutro</span><span>+1 mono</span>
+        </div>
+        <div id="phase-warn" style="display:none;color:#ff4500;font-size:9px;font-weight:700;margin-top:2px;letter-spacing:.5px;">&#9888; FASE NEGATIVA — incompativel com mono!</div>
+      </div>
+      </div>
       <div class="transport">
         <button class="ctrl-btn" onclick="seekRelative(-10)"><i class="ti ti-player-skip-back"></i></button>
         <button class="ctrl-btn play-btn" onclick="togglePlay()"><i class="ti ti-player-play" id="play-icon"></i></button>
@@ -466,7 +601,7 @@
         <input type="range" id="vol-slider" min="0" max="150" value="100" oninput="setVolume(this.value)">
         <span id="vol-val">100%</span>
       </div>
-      <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()" style="display:none;display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:5px;border:1px solid rgba(255,227,53,0.4);background:rgba(255,227,53,0.08);color:var(--c3);font-family:'Rajdhani';font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.15s;" title="Ajusta o output para -6 dBFS de pico máximo">
+      <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()" style="display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:5px;border:1px solid rgba(255,227,53,0.15);background:rgba(255,227,53,0.03);color:rgba(255,227,53,0.25);font-family:'Rajdhani';font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:default;transition:all 0.3s;pointer-events:none;" id="headroom-btn" title="Muda para PROCESSADO para activar">
         <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
       </button>
       <div id="export-wrap" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
