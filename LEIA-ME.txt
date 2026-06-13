@@ -1,0 +1,35 @@
+═══════════════════════════════════════════════════════════
+  MASTERING SUITE by Piradex — v1.0.1
+  BeatFreak Studio · beatfreakstudio.com/mastersuite
+═══════════════════════════════════════════════════════════
+
+COMO USAR:
+1. Abre o ficheiro "index.html" no teu browser (Chrome recomendado)
+2. Importa uma música (WAV ou MP3)
+3. Aplica HEADROOM -6dB
+4. Escolhe um preset ou perfil geográfico
+5. Exporta em WAV ou MP3
+
+FICHEIROS:
+- index.html  → interface principal (abrir este)
+- app.js      → motor de processamento (3356 linhas)
+- style.css   → estilos visuais
+
+30 FUNCIONALIDADES INCLUÍDAS:
+EQ interactivo, Histograma LUFS, Health Check, Before/After,
+Os Meus Presets, Automação, Batch Processing, Referência
+Espectral, Perfis Geográficos (Angola, Cabo Verde, Europa,
+Brasil, Senegal, Moçambique), Relatório PDF, Mastering Suno
+Song, Multiband Comp, Transient Shaper, Headroom -6dBFS,
+MP3+Dither, LUFS BS.1770-4, Undo/Redo, Fase Stereo, Balance
+Espectral, Atalhos de Teclado, Compressor VCA, True Peak
+Limiter, PLR, GR Meter, Bypass Global, Bypass Modular,
+Exportar WAV, Modo Piradex AI, 14 Presets de Género,
+Reference Track.
+
+ATALHOS DE TECLADO:
+J = Play/Pause · K = Stop · E = Tab EQ · C = Tab Comp
+H = Diagnóstico · ← → = Seek 5s · Ctrl+Z/Y = Undo/Redo
+
+© 2026 Juninho Piradex · BeatFreak Studio
+═══════════════════════════════════════════════════════════

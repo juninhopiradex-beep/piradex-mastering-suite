@@ -86,7 +86,7 @@
       <span class="logo-main">PIRADEX</span>
       <div class="logo-row2">
         <span class="logo-sub">MASTERING SUITE</span>
-        <span class="logo-engine">ENGINE v1.0</span>
+        <span class="logo-engine">ENGINE v1.0.1</span>
       </div>
     </div>
     <div class="hdr-right">
@@ -260,7 +260,8 @@
           <div class="eq-band-val" id="eq-air-v">0 dB</div>
         </div>
       </div>
-      <canvas id="eq-canvas" height="90" style="width:100%;margin-top:12px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);"></canvas>
+      <canvas id="eq-interactive-canvas" height="110" style="width:100%;margin-top:8px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);cursor:crosshair;display:block;" title="Arrasta os nós coloridos para ajustar o EQ"></canvas>
+      <div style="font-size:8px;color:var(--muted2);text-align:right;margin-top:2px;letter-spacing:.5px;opacity:.6;">arrasta os pontos coloridos</div>
     </div>
   </div>
 
@@ -387,6 +388,15 @@
         </div>
         <span id="gr-val-live" style="font-size:10px;color:#b855f7;min-width:40px;text-align:right;font-family:'Rajdhani';">0.0 dB</span>
       </div>
+      <div style="padding:8px 10px;border-bottom:1px solid var(--border);">
+        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:5px;">LUFS AO LONGO DO TEMPO</div>
+        <canvas id="lufs-histogram-canvas" style="width:100%;height:44px;display:block;border-radius:4px;"></canvas>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:5px;">
+          <div style="text-align:center;background:var(--bg2);border-radius:4px;padding:4px 0;"><div style="font-size:8px;color:var(--muted2);">mínimo</div><div style="font-size:12px;font-weight:700;color:#ff4500;font-family:'Rajdhani';" id="lufs-hist-min">—</div></div>
+          <div style="text-align:center;background:var(--bg2);border-radius:4px;padding:4px 0;"><div style="font-size:8px;color:var(--muted2);">médio</div><div style="font-size:12px;font-weight:700;color:var(--c1);font-family:'Rajdhani';" id="lufs-hist-avg">—</div></div>
+          <div style="text-align:center;background:var(--bg2);border-radius:4px;padding:4px 0;"><div style="font-size:8px;color:var(--muted2);">máximo</div><div style="font-size:12px;font-weight:700;color:#2dff8a;font-family:'Rajdhani';" id="lufs-hist-max">—</div></div>
+        </div>
+      </div>
       <div class="lufs-big-display">
         <div class="lufs-big-val" id="lufs-big-val">-9.0</div>
         <div class="lufs-big-label">LUFS INTEGRATED</div>
@@ -460,6 +470,14 @@
   <div class="tab-panel" id="tab-ref">
     <div class="module-panel">
       <div class="module-title">REFERENCE TRACK — Mastering Guide</div>
+      <div style="margin:8px 0 12px;">
+        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;">SOBREPOSIÇÃO ESPECTRAL — faixa vs referência</div>
+        <canvas id="ref-overlay-canvas" style="width:100%;height:60px;display:block;border-radius:4px;border:0.5px solid var(--border);background:var(--bg3);"></canvas>
+        <div style="display:flex;gap:12px;margin-top:3px;font-size:8px;color:var(--muted2);">
+          <span><span style="display:inline-block;width:10px;height:2px;background:#534AB7;vertical-align:middle;margin-right:3px;"></span>faixa</span>
+          <span><span style="display:inline-block;width:10px;height:2px;background:#993C1D;vertical-align:middle;margin-right:3px;border-top:1px dashed #993C1D;"></span>referência</span>
+        </div>
+      </div>
       <div class="ref-drop" id="ref-drop"
         onclick="document.getElementById('ref-file').click()"
         ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -539,6 +557,76 @@
     </div>
   </div>
 
+  <!-- tab GEO — Geographic market profiles -->
+  <div class="tab-panel" id="tab-geo">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">PERFIS GEOGRÁFICOS — Mercados de destino</div>
+        <span style="font-size:9px;color:var(--c2);border:1px solid var(--c2);border-radius:3px;padding:2px 7px;letter-spacing:.5px;">ÚNICO NO MUNDO</span>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6;">EQ, LUFS e knobs optimizados por mercado geográfico de destino. Rádio angolana, festa cabo-verdiana, streaming europeu, funk brasileiro e muito mais.</p>
+      <div id="geo-profiles-wrap"></div>
+    </div>
+  </div>
+
+  <!-- tab MY PRESETS — User saved presets -->
+  <div class="tab-panel" id="tab-mypresets">
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">OS MEUS PRESETS — Configurações guardadas</div></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input id="save-preset-name" type="text" placeholder="Nome do preset..." style="flex:1;padding:5px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:11px;font-family:'Rajdhani';">
+        <button onclick="saveCurrentAsPreset()" style="padding:5px 12px;border-radius:4px;border:1px solid rgba(45,212,255,.4);background:rgba(45,212,255,.06);color:var(--c1);font-size:10px;font-family:'Rajdhani';letter-spacing:1px;cursor:pointer;">GUARDAR</button>
+      </div>
+      <div id="user-presets-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <button onclick="exportUserPresets()" style="flex:1;padding:5px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;font-family:'Rajdhani';letter-spacing:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-download" aria-hidden="true"></i> exportar JSON</button>
+        <label style="flex:1;padding:5px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;font-family:'Rajdhani';letter-spacing:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+          <i class="ti ti-upload" aria-hidden="true"></i> importar JSON
+          <input type="file" accept=".json" onchange="importUserPresets(this.files[0])" style="display:none;">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- tab AUTO — Parameter automation -->
+  <div class="tab-panel" id="tab-auto">
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">AUTOMAÇÃO — Parâmetros ao longo do tempo</div></div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">Clica no canvas para adicionar pontos. Arrasta para mover. Intro mais suave, refrão mais alto — automaticamente.</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:10px;color:var(--muted2);letter-spacing:1px;">PARÂMETRO</span>
+        <select id="auto-param-sel" style="padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:10px;font-family:'Rajdhani';">
+          <option value="LOUD">LOUD</option>
+          <option value="BASS">BASS</option>
+          <option value="WIDE">WIDE</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);cursor:pointer;">
+          <input type="checkbox" id="auto-active" onchange="_autoActive=this.checked" style="accent-color:var(--c1);"> ACTIVO
+        </label>
+        <button onclick="clearAutomation()" style="margin-left:auto;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;font-family:'Rajdhani';cursor:pointer;">LIMPAR</button>
+      </div>
+      <canvas id="automation-canvas" style="width:100%;height:80px;display:block;border-radius:4px;cursor:crosshair;border:1px solid var(--border);"></canvas>
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--muted2);margin-top:2px;"><span>0:00</span><span>1:08</span><span>2:16</span><span>3:24</span><span>fim</span></div>
+    </div>
+  </div>
+
+  <!-- tab BATCH — Batch processing -->
+  <div class="tab-panel" id="tab-batch">
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">BATCH — Processar álbum completo</div></div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">Masteriza múltiplas faixas de uma vez com os mesmos settings. Cada ficheiro é exportado automaticamente.</p>
+      <label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border-radius:5px;border:1px dashed var(--border);color:var(--muted);font-size:11px;cursor:pointer;margin-bottom:8px;">
+        <i class="ti ti-plus" aria-hidden="true"></i> adicionar ficheiros ao lote
+        <input type="file" multiple accept="audio/*" onchange="addToBatch(this.files)" style="display:none;">
+      </label>
+      <div id="batch-list"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <span style="font-size:10px;color:var(--muted2);" id="batch-count">0/0 concluídas</span>
+        <button id="batch-run-btn" onclick="runBatch()" style="padding:6px 16px;border-radius:5px;border:1px solid rgba(45,255,138,.4);background:rgba(45,255,138,.06);color:#2dff8a;font-size:10px;font-family:'Rajdhani';letter-spacing:1.5px;font-weight:700;cursor:pointer;">PROCESSAR TUDO</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PLAYER -->
   <!-- Phase meter — fixed row, never grows, never breaks layout -->
   <div style="display:flex;align-items:center;gap:10px;padding:4px 14px;background:var(--bg1);border-top:1px solid var(--border);border-bottom:1px solid var(--border);height:28px;flex-shrink:0;">
@@ -565,7 +653,7 @@
           <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
         </div>
         <button onclick="newTrackUpload()" id="new-track-btn" style="display:none;padding:5px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-family:'Rajdhani';font-size:10px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--c5)';this.style.color='var(--c5)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted2)'">
-          <i class="ti ti-plus"></i> NOVA MÚSICA
+          <i class="ti ti-music-up"></i> IMPORTAR
         </button>
       </div>
       <input type="file" id="sf" accept="audio/*" style="display:none">
@@ -583,30 +671,52 @@
       </div>
     </div>
     <div class="player-controls">
-      <div class="ab-toggle">
-        <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
-        <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
+
+      <!-- LINHA 1: ORIGINAL · PROCESSADO · transport · volume -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+        <div class="ab-toggle">
+          <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
+          <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
+        </div>
+        <div class="transport">
+          <button class="ctrl-btn" onclick="seekRelative(-10)"><i class="ti ti-player-skip-back"></i></button>
+          <button class="ctrl-btn play-btn" onclick="togglePlay()"><i class="ti ti-player-play" id="play-icon"></i></button>
+          <button class="ctrl-btn" onclick="seekRelative(10)"><i class="ti ti-player-skip-forward"></i></button>
+          <button class="ctrl-btn" onclick="stopAudio()"><i class="ti ti-player-stop"></i></button>
+        </div>
+        <div class="vol-wrap">
+          <i class="ti ti-volume" style="color:var(--muted2);font-size:14px;"></i>
+          <input type="range" id="vol-slider" min="0" max="150" value="100" oninput="setVolume(this.value)">
+          <span id="vol-val">100%</span>
+        </div>
       </div>
+
+      <!-- LINHA 2: HEADROOM · WAV selector · Health + Report -->
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()"
+          style="display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:5px;
+                 border:1px solid rgba(255,227,53,0.15);background:rgba(255,227,53,0.03);
+                 color:rgba(255,227,53,0.25);font-family:'Rajdhani';font-size:10px;font-weight:700;
+                 letter-spacing:1.5px;cursor:default;transition:all 0.3s;pointer-events:none;white-space:nowrap;"
+          title="Muda para PROCESSADO para activar">
+          <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
+        </button>
+        <div id="export-fmt-wrap" style="display:none;">
+          <select id="export-fmt" title="Formato de exportacao">
+            <option value="wav" selected>WAV 16-bit</option>
+            <option value="mp3">MP3 320kbps &#9888;</option>
+          </select>
+        </div>
+        <button onclick="runHealthCheck()" title="Diagnóstico automático (H)" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:5px;border:1px solid rgba(255,227,53,.3);background:rgba(255,227,53,.04);color:rgba(255,227,53,.6);font-family:'Rajdhani';font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;">
+          <i class="ti ti-stethoscope" aria-hidden="true"></i> DIAGNÓSTICO
+        </button>
+        <button onclick="generatePDFReport()" title="Gerar relatório PDF" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:5px;border:1px solid rgba(184,85,247,.3);background:rgba(184,85,247,.04);color:rgba(184,85,247,.7);font-family:'Rajdhani';font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;">
+          <i class="ti ti-file-type-pdf" aria-hidden="true"></i> RELATÓRIO
+        </button>
       </div>
-      <div class="transport">
-        <button class="ctrl-btn" onclick="seekRelative(-10)"><i class="ti ti-player-skip-back"></i></button>
-        <button class="ctrl-btn play-btn" onclick="togglePlay()"><i class="ti ti-player-play" id="play-icon"></i></button>
-        <button class="ctrl-btn" onclick="seekRelative(10)"><i class="ti ti-player-skip-forward"></i></button>
-        <button class="ctrl-btn" onclick="stopAudio()"><i class="ti ti-player-stop"></i></button>
-      </div>
-      <div class="vol-wrap">
-        <i class="ti ti-volume" style="color:var(--muted2);font-size:14px;"></i>
-        <input type="range" id="vol-slider" min="0" max="150" value="100" oninput="setVolume(this.value)">
-        <span id="vol-val">100%</span>
-      </div>
-      <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()" style="display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:5px;border:1px solid rgba(255,227,53,0.15);background:rgba(255,227,53,0.03);color:rgba(255,227,53,0.25);font-family:'Rajdhani';font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:default;transition:all 0.3s;pointer-events:none;" id="headroom-btn" title="Muda para PROCESSADO para activar">
-        <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
-      </button>
-      <div id="export-wrap" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
-        <select id="export-fmt" title="Formato de exportacao">
-          <option value="wav" selected>WAV 16-bit</option>
-          <option value="mp3">MP3 320kbps &#9888;</option>
-        </select>
+
+      <!-- LINHA 3: DITHER · EXPORTAR -->
+      <div id="export-wrap" style="display:none;align-items:center;gap:8px;margin-top:4px;">
         <label class="export-dither-label" title="TPDF dither reduz quantization noise no WAV 16-bit">
           <input type="checkbox" id="export-dither" checked style="accent-color:#2dd4ff;">
           DITHER
@@ -615,6 +725,7 @@
           <i class="ti ti-download"></i> EXPORTAR
         </button>
       </div>
+
     </div>
     <div class="mode-bar">
       <div class="mode-dot" id="mode-dot"></div>
@@ -637,6 +748,45 @@
   </div>
 
   <!-- PIRADEX MODAL -->
+  <!-- Health Check Modal -->
+  <div id="health-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;align-items:center;justify-content:center;">
+    <div style="background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;color:var(--c3);letter-spacing:2px;">DIAGNÓSTICO</div>
+        <button onclick="document.getElementById('health-modal').style.display='none'" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+      </div>
+      <div id="health-list"></div>
+    </div>
+  </div>
+
+  <!-- Before/After Report Modal -->
+  <div id="ba-report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9997;align-items:center;justify-content:center;">
+    <div style="background:var(--bg1);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:400px;width:90%;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;color:var(--c1);letter-spacing:2px;">RESULTADO</div>
+        <button onclick="document.getElementById('ba-report-modal').style.display='none'" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;font-size:9px;color:var(--muted2);text-align:center;letter-spacing:.5px;">
+        <span>MÉTRICA</span><span>ANTES</span><span>DEPOIS</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;">
+        <div style="font-size:11px;color:var(--muted);">LUFS</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;color:var(--muted);" id="ba-lufs-before">—</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;" id="ba-lufs-after">—</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center;">
+        <div style="font-size:11px;color:var(--muted);">PEAK dB</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;color:var(--muted);" id="ba-peak-before">—</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;" id="ba-peak-after">—</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:6px 0;align-items:center;">
+        <div style="font-size:11px;color:var(--muted);">PLR dB</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;color:var(--muted);" id="ba-plr-before">—</div>
+        <div style="font-size:14px;font-weight:700;text-align:center;" id="ba-plr-after">—</div>
+      </div>
+    </div>
+  </div>
+
   <div class="piradex-modal" id="piradex-modal" style="display:none">
     <div class="piradex-modal-box">
       <div class="pm-header">

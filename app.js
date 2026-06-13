@@ -746,6 +746,7 @@ function loadFile(file){
       document.getElementById('waveform-wrap').style.display='flex';
       document.getElementById('drop-zone').style.display='none';
       document.getElementById('export-wrap').style.display='flex';
+  const efmtw=document.getElementById('export-fmt-wrap');if(efmtw)efmtw.style.display='block';;
       const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='flex';
       const nb=document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
       drawWaveform(); applyDSP();
@@ -1140,6 +1141,11 @@ function updateMeters(){
   }
   // Spectral balance overlay (every 30 frames)
   if(isPlaying&&audioCtx) _drawSpectralBalance();
+  // Automation
+  if(_autoActive&&isPlaying&&audioCtx&&audioBuffer){
+    const pos=audioCtx.currentTime-startTime;
+    _applyAutomationAtTime(pos,audioBuffer.duration);
+  }
 }
 
 function setVU(l,r){
@@ -1422,12 +1428,14 @@ async function _originalExport(){
       const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
       a.download=baseName+'.mp3';a.click();URL.revokeObjectURL(url);
       setStatus('✓ MP3 320kbps exportado'+lufsInfo+' · Nota: MP3 e lossy — WAV preserva qualidade total');
+      setTimeout(()=>_showBAReport(normalized), 500);
     } else {
       const wav=encodeWAV(normalized);
       const blob=new Blob([wav],{type:'audio/wav'});
       const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
       a.download=baseName+'.wav';a.click();URL.revokeObjectURL(url);
       setStatus('✓ WAV exportado'+lufsInfo+(dither?' · TPDF dither aplicado':''));
+      setTimeout(()=>_showBAReport(normalized), 500);
     }
   }catch(err){setStatus('Erro na exportacao: '+err.message);console.error(err);}
   btn.style.opacity='1';btn.style.pointerEvents='auto';
@@ -1887,6 +1895,7 @@ function newTrackUpload(){
   document.getElementById('drop-zone').style.display='flex';
   document.getElementById('waveform-wrap').style.display='none';
   document.getElementById('export-wrap').style.display='none';
+  const efmtw2=document.getElementById('export-fmt-wrap');if(efmtw2)efmtw2.style.display='none';;
   const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='none';
   document.getElementById('new-track-btn').style.display='none';
   // Reset to original mode
@@ -2552,3 +2561,796 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PIRADEX v6 — 10 NEW PROFESSIONAL FEATURES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── FEAT 1: Interactive EQ curve with draggable nodes ──────────────────────
+let eqDragNode = null, eqDragBand = null;
+const EQ_BANDS_CONFIG = [
+  {id:'sub',  f:60,   type:'lowshelf', node:()=>eqSub,     label:'SUB'},
+  {id:'bass', f:150,  type:'peaking',  node:()=>eqBass,    label:'BASS'},
+  {id:'low',  f:500,  type:'peaking',  node:()=>eqLowNode, label:'LOW'},
+  {id:'mid',  f:1200, type:'peaking',  node:()=>eqMid,     label:'MID'},
+  {id:'high', f:4000, type:'peaking',  node:()=>eqHigh,    label:'HIGH'},
+  {id:'air',  f:12000,type:'highshelf',node:()=>eqAir,     label:'AIR'},
+];
+
+function initInteractiveEQ(){
+  const canvas = document.getElementById('eq-interactive-canvas');
+  if(!canvas) return;
+  canvas.addEventListener('mousedown', eqMouseDown);
+  canvas.addEventListener('mousemove', eqMouseMove);
+  canvas.addEventListener('mouseup',   ()=>{ eqDragNode=null; eqDragBand=null; });
+  canvas.addEventListener('mouseleave',()=>{ eqDragNode=null; eqDragBand=null; });
+  canvas.addEventListener('touchstart', eqTouchStart, {passive:false});
+  canvas.addEventListener('touchmove',  eqTouchMove,  {passive:false});
+  canvas.addEventListener('touchend',   ()=>{ eqDragNode=null; eqDragBand=null; });
+  drawInteractiveEQ();
+}
+
+function eqFx(f, W){ return Math.log10(f/20)/Math.log10(22000/20)*W; }
+function eqGy(g, H){ return H/2 - (g/14)*(H/2-8); }
+function eqGFromY(y, H){ return ((H/2-y)/(H/2-8))*14; }
+
+function drawInteractiveEQ(){
+  const canvas = document.getElementById('eq-interactive-canvas');
+  if(!canvas||!canvas.getContext) return;
+  const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||100;
+  if(canvas.width!==W) canvas.width=W;
+  const ctx=canvas.getContext('2d');
+  const isDark = document.body.classList.contains('dark')||window.matchMedia('(prefers-color-scheme:dark)').matches;
+  ctx.fillStyle = isDark?'#07070e':'#f8f8f5';
+  ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = isDark?'#ffffff08':'#00000008'; ctx.lineWidth=0.5;
+  [-12,-6,0,6,12].forEach(db=>{
+    const y=eqGy(db,H);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    ctx.fillStyle=isDark?'#ffffff22':'#00000033';
+    ctx.font='8px monospace'; ctx.textAlign='left';
+    ctx.fillText((db>0?'+':'')+db,2,y-2);
+  });
+  ctx.setLineDash([2,4]);
+  [60,150,500,1200,4000,12000].forEach(f=>{
+    const x=eqFx(f,W);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  // zero line
+  ctx.strokeStyle = isDark?'#ffffff22':'#00000022'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+  // EQ curve
+  const gains = EQ_BANDS_CONFIG.map(b=>{ try{ return b.node()?.gain.value||0; }catch(e){return 0;} });
+  const pts = EQ_BANDS_CONFIG.map((b,i)=>({ x:eqFx(b.f,W), y:eqGy(gains[i],H) }));
+  ctx.strokeStyle='#534AB7'; ctx.lineWidth=2;
+  ctx.fillStyle='#534AB722';
+  ctx.beginPath(); ctx.moveTo(0,H/2);
+  pts.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(W,H/2);
+  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0,H/2);
+  pts.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(W,H/2); ctx.stroke();
+  // nodes
+  const NODE_COLS=['#b855f7','#2dd4ff','#2dff8a','#ffe135','#ff6b35','#ff3ab5'];
+  pts.forEach((p,i)=>{
+    ctx.fillStyle=NODE_COLS[i];
+    ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=isDark?'#fff':'#111';
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+    // label
+    ctx.fillStyle=NODE_COLS[i]; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+    const g=gains[i]; ctx.fillText((g>0?'+':'')+g.toFixed(1), p.x, p.y+(p.y>H/2?-10:14));
+  });
+}
+
+function eqGetNode(x,y,W,H){
+  const gains=EQ_BANDS_CONFIG.map(b=>{try{return b.node()?.gain.value||0;}catch(e){return 0;}});
+  for(let i=0;i<EQ_BANDS_CONFIG.length;i++){
+    const px=eqFx(EQ_BANDS_CONFIG[i].f,W), py=eqGy(gains[i],H);
+    if(Math.hypot(x-px,y-py)<12) return i;
+  }
+  return -1;
+}
+
+function eqMouseDown(e){
+  const canvas=e.target; const rect=canvas.getBoundingClientRect();
+  const W=canvas.width, H=canvas.height;
+  const x=(e.clientX-rect.left)*(W/rect.width);
+  const y=(e.clientY-rect.top)*(H/rect.height);
+  const idx=eqGetNode(x,y,W,H);
+  if(idx>=0){ eqDragBand=idx; e.preventDefault(); }
+}
+function eqMouseMove(e){
+  if(eqDragBand===null||eqDragBand<0) return;
+  const canvas=e.target; const rect=canvas.getBoundingClientRect();
+  const H=canvas.height; const y=(e.clientY-rect.top)*(H/rect.height);
+  const g=Math.max(-12,Math.min(12,eqGFromY(y,H)));
+  const band=EQ_BANDS_CONFIG[eqDragBand];
+  try{ band.node().gain.value=parseFloat(g.toFixed(1)); }catch(err){}
+  const slId='eq-'+band.id; const slEl=document.getElementById(slId);
+  if(slEl) slEl.value=g.toFixed(1);
+  const vEl=document.getElementById(slId+'-v');
+  if(vEl) vEl.textContent=(g>=0?'+':'')+g.toFixed(1)+' dB';
+  drawInteractiveEQ(); _snapUndoThrottled();
+}
+function eqTouchStart(e){
+  const t=e.touches[0]; const canvas=e.target; const rect=canvas.getBoundingClientRect();
+  const W=canvas.width, H=canvas.height;
+  const x=(t.clientX-rect.left)*(W/rect.width), y=(t.clientY-rect.top)*(H/rect.height);
+  const idx=eqGetNode(x,y,W,H);
+  if(idx>=0){ eqDragBand=idx; e.preventDefault(); }
+}
+function eqTouchMove(e){
+  if(eqDragBand===null||eqDragBand<0) return;
+  e.preventDefault();
+  const t=e.touches[0]; const canvas=e.target; const rect=canvas.getBoundingClientRect();
+  const H=canvas.height; const y=(t.clientY-rect.top)*(H/rect.height);
+  const g=Math.max(-12,Math.min(12,eqGFromY(y,H)));
+  const band=EQ_BANDS_CONFIG[eqDragBand];
+  try{ band.node().gain.value=parseFloat(g.toFixed(1)); }catch(err){}
+  drawInteractiveEQ(); _snapUndoThrottled();
+}
+
+// ── FEAT 2: LUFS histogram over time ───────────────────────────────────────
+let _lufsHistory=[], _lufsHistMax=300;
+let _lufsMin=-70, _lufsMax=-3, _lufsAvg=-9;
+
+function _recordLUFSPoint(){
+  if(!isPlaying||!analyserNode) return;
+  const td=new Float32Array(analyserNode.fftSize);
+  analyserNode.getFloatTimeDomainData(td);
+  let sq=0; for(let i=0;i<td.length;i++) sq+=td[i]*td[i];
+  const rms=Math.sqrt(sq/td.length);
+  const lufs=rms>0?-0.691+20*Math.log10(rms):-70;
+  _lufsHistory.push(Math.max(-70,Math.min(-3,lufs)));
+  if(_lufsHistory.length>_lufsHistMax) _lufsHistory.shift();
+  if(_lufsHistory.length>1){
+    _lufsMin=Math.min(..._lufsHistory);
+    _lufsMax=Math.max(..._lufsHistory);
+    _lufsAvg=_lufsHistory.reduce((a,b)=>a+b,0)/_lufsHistory.length;
+  }
+  _drawLUFSHistogram();
+  _updateLUFSStats();
+}
+setInterval(_recordLUFSPoint, 200);
+
+function _drawLUFSHistogram(){
+  const canvas=document.getElementById('lufs-histogram-canvas');
+  if(!canvas) return;
+  const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||50;
+  if(canvas.width!==W) canvas.width=W;
+  const ctx=canvas.getContext('2d');
+  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+  ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
+  if(!_lufsHistory.length) return;
+  const bw=W/_lufsHistMax;
+  _lufsHistory.forEach((v,i)=>{
+    const pct=(v+70)/(70-3);
+    const bh=Math.max(2,pct*H);
+    const col=v>-9.5?'#1D9E75':v>-11?'#534AB7':'#993C1D';
+    ctx.fillStyle=col+'cc';
+    ctx.fillRect(i*bw, H-bh, Math.max(1,bw-0.5), bh);
+  });
+  // target line -9
+  const ty=H-((-9+70)/(70-3))*H;
+  ctx.strokeStyle='#ffe13588'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(0,ty); ctx.lineTo(W,ty); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function _updateLUFSStats(){
+  const mn=document.getElementById('lufs-hist-min');
+  const av=document.getElementById('lufs-hist-avg');
+  const mx=document.getElementById('lufs-hist-max');
+  if(mn) mn.textContent=_lufsMin.toFixed(1);
+  if(av) av.textContent=_lufsAvg.toFixed(1);
+  if(mx) mx.textContent=_lufsMax.toFixed(1);
+}
+
+// ── FEAT 3: Before/After analysis ──────────────────────────────────────────
+let _beforeStats=null;
+
+function _captureBeforeStats(){
+  if(!audioBuffer) return;
+  const plr=_calcPLR(audioBuffer);
+  const lufs=_measureLUFS_BS1770(audioBuffer);
+  let lowE=0,midE=0,highE=0,tot=0;
+  for(let c=0;c<audioBuffer.numberOfChannels;c++){
+    const d=audioBuffer.getChannelData(c);
+    for(let i=0;i<d.length;i++){
+      const sr=audioBuffer.sampleRate, f=i/d.length*sr/2;
+      const v=d[i]*d[i];
+      if(f<300) lowE+=v; else if(f<4000) midE+=v; else highE+=v;
+      tot+=v;
+    }
+  }
+  _beforeStats={ lufs:lufs||(-70), peak:plr?.peakDb||0, plr:plr?.plr||0,
+    low:tot>0?(lowE/tot*100):33, mid:tot>0?(midE/tot*100):33, high:tot>0?(highE/tot*100):33 };
+}
+
+function _showBAReport(afterBuf){
+  const lufsAfter=_measureLUFS_BS1770(afterBuf);
+  const plrAfter=_calcPLR(afterBuf);
+  if(!_beforeStats) return;
+  const modal=document.getElementById('ba-report-modal');
+  if(!modal) return;
+  const set=(id,v,good)=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.textContent=typeof v==='number'?v.toFixed(1):v;
+    if(good!==undefined) el.style.color=good?'#1D9E75':'#ff4500';
+  };
+  set('ba-lufs-before',_beforeStats.lufs);
+  set('ba-lufs-after', lufsAfter, lufsAfter>-12&&lufsAfter<-7);
+  set('ba-peak-before',_beforeStats.peak);
+  set('ba-peak-after', plrAfter?.peakDb||0, (plrAfter?.peakDb||0)<=-1);
+  set('ba-plr-before', _beforeStats.plr);
+  set('ba-plr-after',  plrAfter?.plr||0, (plrAfter?.plr||0)>8);
+  modal.style.display='flex';
+}
+
+// ── FEAT 4: Health Check ────────────────────────────────────────────────────
+function runHealthCheck(){
+  if(!audioBuffer){ setStatus('Carrega um ficheiro primeiro'); return; }
+  const issues=[];
+  // Clipping
+  let clips=0;
+  for(let c=0;c<audioBuffer.numberOfChannels;c++){
+    const d=audioBuffer.getChannelData(c);
+    for(let i=0;i<d.length;i++) if(Math.abs(d[i])>=0.9999) clips++;
+  }
+  if(clips>0) issues.push({type:'error',icon:'ti-alert-circle',title:'Clipping detectado',msg:clips+' amostras a 0 dBFS — aplica headroom'});
+  // Phase
+  const corr=parseFloat(document.getElementById('phase-corr-val')?.textContent||'0');
+  if(corr<-0.1) issues.push({type:'error',icon:'ti-arrows-exchange',title:'Fase negativa',msg:'Correlação '+corr.toFixed(2)+' — incompatível com mono'});
+  else if(corr<0.3) issues.push({type:'warn',icon:'ti-alert-triangle',title:'Fase baixa',msg:'Correlação '+corr.toFixed(2)+' — pode ter problemas em mono'});
+  // Peak level
+  const plr=_calcPLR(audioBuffer);
+  if(plr&&plr.peakDb>-0.5) issues.push({type:'warn',icon:'ti-alert-triangle',title:'Nível de pico alto',msg:'Peak '+plr.peakDb.toFixed(1)+' dBFS — risco de clipping'});
+  if(plr&&plr.plr<4) issues.push({type:'warn',icon:'ti-waveform',title:'Dinâmica muito reduzida',msg:'PLR '+plr.plr.toFixed(1)+' dB — música hiperlimitada'});
+  // Low end excess
+  const fd=new Uint8Array(analyserNode?.frequencyBinCount||256);
+  if(analyserNode) analyserNode.getByteFrequencyData(fd);
+  const subEnergy=Array.from(fd.slice(0,8)).reduce((a,b)=>a+b,0)/8;
+  if(subEnergy>180) issues.push({type:'warn',icon:'ti-wave-square',title:'Sub excessivo @ 20–80Hz',msg:'Energia '+Math.round(subEnergy/2.55)+'% — pode mascarar o kick'});
+  if(!issues.length) issues.push({type:'ok',icon:'ti-circle-check',title:'Sem problemas detectados',msg:'Faixa pronta para masterização'});
+  _showHealthCheck(issues);
+}
+
+function _showHealthCheck(issues){
+  const modal=document.getElementById('health-modal');
+  const list=document.getElementById('health-list');
+  if(!modal||!list) return;
+  list.innerHTML='';
+  issues.forEach(({type,icon,title,msg})=>{
+    const col={error:'var(--color-text-danger)',warn:'var(--color-text-warning)',ok:'var(--color-text-success)'}[type];
+    const bg={error:'var(--color-background-danger)',warn:'var(--color-background-warning)',ok:'var(--color-background-success)'}[type];
+    const bd={error:'var(--color-border-danger)',warn:'var(--color-border-warning)',ok:'var(--color-border-success)'}[type];
+    const div=document.createElement('div');
+    div.style.cssText=`display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:6px;border:0.5px solid ${bd};background:${bg};margin-bottom:6px;`;
+    div.innerHTML=`<i class="ti ${icon}" style="font-size:16px;color:${col};margin-top:1px;flex-shrink:0" aria-hidden="true"></i>
+      <div><div style="font-size:13px;font-weight:500;color:${col};margin-bottom:2px;">${title}</div>
+      <div style="font-size:12px;color:var(--color-text-secondary);">${msg}</div></div>`;
+    list.appendChild(div);
+  });
+  modal.style.display='flex';
+}
+
+// ── FEAT 5: User presets (localStorage) ────────────────────────────────────
+function _getUserPresets(){
+  try{ return JSON.parse(localStorage.getItem('piradex_user_presets')||'[]'); }catch(e){ return []; }
+}
+function _saveUserPresets(p){ try{ localStorage.setItem('piradex_user_presets',JSON.stringify(p)); }catch(e){} }
+
+function saveCurrentAsPreset(){
+  const name=document.getElementById('save-preset-name')?.value||('Preset '+new Date().toLocaleDateString());
+  const snap={ name, date:new Date().toISOString().slice(0,10),
+    knobs:{...kvals}, eq:{sub:eqSub?.gain.value,bass:eqBass?.gain.value,low:eqLowNode?.gain.value,
+      mid:eqMid?.gain.value,high:eqHigh?.gain.value,air:eqAir?.gain.value},
+    comp:{thr:compNode?.threshold.value,ratio:compNode?.ratio.value},
+    loud:masterGain?.gain.value, preset:curPreset };
+  const presets=_getUserPresets();
+  presets.unshift(snap);
+  if(presets.length>20) presets.pop();
+  _saveUserPresets(presets);
+  _renderUserPresets();
+  setStatus('Preset "'+name+'" guardado');
+  document.getElementById('save-preset-name').value='';
+}
+
+function loadUserPreset(idx){
+  const presets=_getUserPresets();
+  const p=presets[idx]; if(!p) return;
+  Object.assign(kvals,p.knobs);
+  if(audioCtx&&p.eq){
+    eqSub.gain.value=p.eq.sub||0; eqBass.gain.value=p.eq.bass||0;
+    eqLowNode.gain.value=p.eq.low||0; eqMid.gain.value=p.eq.mid||0;
+    eqHigh.gain.value=p.eq.high||0; eqAir.gain.value=p.eq.air||0;
+  }
+  if(audioCtx&&p.comp){ compNode.threshold.value=p.comp.thr||0; compNode.ratio.value=p.comp.ratio||1; }
+  refreshKnobs(); syncEQSliders(); applyDSP(); drawInteractiveEQ();
+  setStatus('Preset "'+p.name+'" carregado');
+}
+
+function deleteUserPreset(idx){
+  const presets=_getUserPresets();
+  presets.splice(idx,1);
+  _saveUserPresets(presets);
+  _renderUserPresets();
+}
+
+function exportUserPresets(){
+  const data=JSON.stringify(_getUserPresets(),null,2);
+  const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='piradex_presets.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importUserPresets(file){
+  const r=new FileReader();
+  r.onload=e=>{ try{
+    const p=JSON.parse(e.target.result);
+    const existing=_getUserPresets();
+    _saveUserPresets([...p,...existing].slice(0,20));
+    _renderUserPresets();
+    setStatus(p.length+' presets importados');
+  }catch(err){ setStatus('Erro ao importar presets'); }};
+  r.readAsText(file);
+}
+
+function _renderUserPresets(){
+  const list=document.getElementById('user-presets-list');
+  if(!list) return;
+  const presets=_getUserPresets();
+  list.innerHTML='';
+  if(!presets.length){
+    list.innerHTML='<div style="font-size:12px;color:var(--color-text-tertiary);padding:8px 0;text-align:center;">Sem presets guardados</div>';
+    return;
+  }
+  presets.forEach((p,i)=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;border:0.5px solid var(--color-border-tertiary);margin-bottom:4px;background:var(--color-background-secondary);cursor:pointer;';
+    div.innerHTML=`<i class="ti ti-music" style="font-size:14px;color:var(--color-text-info)" aria-hidden="true"></i>
+      <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--color-text-primary);">${p.name}</div>
+      <div style="font-size:10px;color:var(--color-text-tertiary);">${p.date} · ${p.preset||'custom'}</div></div>
+      <button onclick="loadUserPreset(${i})" style="font-size:10px;padding:2px 8px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-info);cursor:pointer;">USAR</button>
+      <button onclick="deleteUserPreset(${i})" style="font-size:10px;padding:2px 6px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-tertiary);cursor:pointer;">×</button>`;
+    list.appendChild(div);
+  });
+}
+
+// ── FEAT 6: Parameter automation ───────────────────────────────────────────
+let _autoPoints={ LOUD:[], BASS:[], WIDE:[] };
+let _autoActive=false;
+let _autoCanvas=null, _autoCtx=null, _autoDrag=null;
+
+function initAutomation(){
+  const canvas=document.getElementById('automation-canvas');
+  if(!canvas) return;
+  _autoCanvas=canvas; _autoCtx=canvas.getContext('2d');
+  canvas.addEventListener('click', autoAddPoint);
+  canvas.addEventListener('mousedown', autoStartDrag);
+  canvas.addEventListener('mousemove', autoDragMove);
+  canvas.addEventListener('mouseup', ()=>_autoDrag=null);
+  drawAutomation();
+}
+
+function autoAddPoint(e){
+  const param=document.getElementById('auto-param-sel')?.value||'LOUD';
+  const rect=_autoCanvas.getBoundingClientRect();
+  const x=(e.clientX-rect.left)/_autoCanvas.width;
+  const y=1-(e.clientY-rect.top)/_autoCanvas.height;
+  _autoPoints[param].push({x,y});
+  _autoPoints[param].sort((a,b)=>a.x-b.x);
+  drawAutomation();
+}
+
+function autoStartDrag(e){
+  const param=document.getElementById('auto-param-sel')?.value||'LOUD';
+  const rect=_autoCanvas.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/_autoCanvas.width;
+  const my=1-(e.clientY-rect.top)/_autoCanvas.height;
+  const pts=_autoPoints[param]||[];
+  for(let i=0;i<pts.length;i++){
+    if(Math.hypot(mx-pts[i].x,my-pts[i].y)<0.05){ _autoDrag={param,idx:i}; return; }
+  }
+}
+function autoDragMove(e){
+  if(!_autoDrag) return;
+  const rect=_autoCanvas.getBoundingClientRect();
+  const x=(e.clientX-rect.left)/_autoCanvas.width;
+  const y=Math.max(0,Math.min(1,1-(e.clientY-rect.top)/_autoCanvas.height));
+  _autoPoints[_autoDrag.param][_autoDrag.idx]={x:Math.max(0,Math.min(1,x)),y};
+  drawAutomation();
+}
+
+function clearAutomation(){
+  const param=document.getElementById('auto-param-sel')?.value||'LOUD';
+  _autoPoints[param]=[]; drawAutomation();
+}
+
+function drawAutomation(){
+  const canvas=_autoCanvas; if(!canvas||!_autoCtx) return;
+  const W=canvas.width, H=canvas.height;
+  const ctx=_autoCtx;
+  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+  ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
+  const PARAM_COLS={LOUD:'#ff3ab5',BASS:'#b855f7',WIDE:'#2dff8a'};
+  ctx.strokeStyle=isDark?'#ffffff08':'#00000008'; ctx.lineWidth=0.5;
+  [.25,.5,.75].forEach(p=>{ctx.beginPath();ctx.moveTo(0,p*H);ctx.lineTo(W,p*H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(p*W,0);ctx.lineTo(p*W,H);ctx.stroke();});
+  Object.entries(_autoPoints).forEach(([param,pts])=>{
+    if(!pts.length) return;
+    const col=PARAM_COLS[param]||'#888';
+    ctx.strokeStyle=col+'aa'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(pts[0].x*W,(1-pts[0].y)*H);
+    pts.forEach(p=>ctx.lineTo(p.x*W,(1-p.y)*H)); ctx.stroke();
+    pts.forEach(p=>{
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x*W,(1-p.y)*H,5,0,Math.PI*2); ctx.fill();
+    });
+  });
+  // labels
+  ctx.fillStyle=isDark?'#ffffff33':'#00000033'; ctx.font='9px monospace'; ctx.textAlign='center';
+  ['0:00','1:08','2:16','3:24','4:31'].forEach((l,i)=>ctx.fillText(l,i*W/4,H-3));
+}
+
+function _applyAutomationAtTime(t, duration){
+  if(!_autoActive) return;
+  const pos=Math.max(0,Math.min(1,t/duration));
+  Object.entries(_autoPoints).forEach(([param,pts])=>{
+    if(pts.length<2) return;
+    let val=pts[0].y;
+    for(let i=0;i<pts.length-1;i++){
+      if(pos>=pts[i].x&&pos<=pts[i+1].x){
+        const r=(pos-pts[i].x)/(pts[i+1].x-pts[i].x);
+        val=pts[i].y+r*(pts[i+1].y-pts[i].y); break;
+      }
+    }
+    kvals[param]=Math.round(val*100);
+  });
+  applyDSP();
+}
+
+// ── FEAT 7: Batch processing ────────────────────────────────────────────────
+let _batchQueue=[], _batchRunning=false, _batchResults=[];
+
+function addToBatch(files){
+  Array.from(files).forEach(f=>{
+    if(!_batchQueue.find(b=>b.name===f.name)){
+      _batchQueue.push({name:f.name, file:f, status:'pending', progress:0, lufs:null});
+    }
+  });
+  _renderBatchList();
+}
+
+function _renderBatchList(){
+  const list=document.getElementById('batch-list');
+  if(!list) return;
+  list.innerHTML='';
+  _batchQueue.forEach((item,i)=>{
+    const statusIcon={pending:'ti-clock',processing:'ti-loader',done:'ti-circle-check',error:'ti-alert-circle'}[item.status];
+    const statusCol={pending:'var(--color-text-tertiary)',processing:'var(--color-text-info)',done:'var(--color-text-success)',error:'var(--color-text-danger)'}[item.status];
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;border:0.5px solid var(--color-border-tertiary);margin-bottom:4px;background:var(--color-background-secondary);';
+    div.innerHTML=`<i class="ti ${statusIcon}" style="font-size:13px;color:${statusCol};flex-shrink:0" aria-hidden="true"></i>
+      <div style="flex:1;min-width:0;"><div style="font-size:11px;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div></div>
+      <div style="width:60px;height:4px;background:var(--color-background-primary);border-radius:2px;overflow:hidden;flex-shrink:0;">
+        <div style="height:100%;width:${item.progress}%;background:${statusCol};border-radius:2px;transition:width .3s;"></div>
+      </div>
+      <span style="font-size:10px;color:${statusCol};min-width:36px;text-align:right;">${item.lufs?item.lufs.toFixed(1):(item.status==='done'?'ok':'—')}</span>
+      ${item.status!=='processing'?`<button onclick="_removeBatchItem(${i})" style="font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-tertiary);cursor:pointer;">×</button>`:''}`;
+    list.appendChild(div);
+  });
+  const ct=document.getElementById('batch-count');
+  const done=_batchQueue.filter(b=>b.status==='done').length;
+  if(ct) ct.textContent=`${done}/${_batchQueue.length} concluídas`;
+}
+
+function _removeBatchItem(i){ _batchQueue.splice(i,1); _renderBatchList(); }
+
+async function runBatch(){
+  if(_batchRunning||!_batchQueue.length) return;
+  _batchRunning=true;
+  const btn=document.getElementById('batch-run-btn');
+  if(btn) btn.textContent='A processar...';
+  for(let i=0;i<_batchQueue.length;i++){
+    const item=_batchQueue[i];
+    if(item.status==='done') continue;
+    item.status='processing'; item.progress=0; _renderBatchList();
+    try{
+      const buf=await new Promise((res,rej)=>{
+        const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej;
+        r.readAsArrayBuffer(item.file);
+      });
+      const tmpCtx=new AudioContext();
+      const decoded=await tmpCtx.decodeAudioData(buf);
+      item.progress=30; _renderBatchList();
+      // Apply headroom
+      let peak=0;
+      for(let c=0;c<decoded.numberOfChannels;c++){
+        const d=decoded.getChannelData(c);
+        for(let s=0;s<d.length;s++) peak=Math.max(peak,Math.abs(d[s]));
+      }
+      const hGain=peak>0?Math.pow(10,(-6-20*Math.log10(peak))/20):1;
+      const offCtx=new OfflineAudioContext(decoded.numberOfChannels,decoded.length,decoded.sampleRate);
+      const src=offCtx.createBufferSource(); src.buffer=decoded;
+      const mk=(t,f,g,Q)=>{const n=offCtx.createBiquadFilter();n.type=t;n.frequency.value=f;n.gain.value=g||0;if(Q)n.Q.value=Q;return n;};
+      const oSub=mk('lowshelf',60,eqSub?.gain.value||0);
+      const oBass=mk('peaking',150,eqBass?.gain.value||0,0.8);
+      const oLow=mk('peaking',500,eqLowNode?.gain.value||0,1.0);
+      const oMid=mk('peaking',1200,eqMid?.gain.value||0,0.9);
+      const oHigh=mk('peaking',4000,eqHigh?.gain.value||0,1.0);
+      const oAir=mk('highshelf',12000,eqAir?.gain.value||0);
+      const oComp=offCtx.createDynamicsCompressor();
+      oComp.threshold.value=compNode?.threshold.value||-20; oComp.ratio.value=compNode?.ratio.value||4;
+      oComp.attack.value=0.003; oComp.release.value=0.1; oComp.knee.value=6;
+      const oLim=offCtx.createDynamicsCompressor();
+      oLim.threshold.value=-1; oLim.ratio.value=20; oLim.attack.value=0.001; oLim.release.value=0.05; oLim.knee.value=0;
+      const oGain=offCtx.createGain(); oGain.gain.value=hGain*(masterGain?.gain.value||1);
+      src.connect(oSub);oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
+      oAir.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(offCtx.destination);
+      src.start(0);
+      item.progress=60; _renderBatchList();
+      const rendered=await offCtx.startRendering();
+      item.progress=85; _renderBatchList();
+      const lufs=_measureLUFS_BS1770(rendered);
+      item.lufs=lufs;
+      const normalized=normalizeLUFS(rendered,0.178);
+      const dithered=_applyDither(normalized,16);
+      const wav=encodeWAV(dithered);
+      const blob=new Blob([wav],{type:'audio/wav'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url;
+      a.download=item.name.replace(/\.[^.]+$/,'')+'_PIRADEX.wav';
+      a.click(); URL.revokeObjectURL(url);
+      await tmpCtx.close();
+      item.status='done'; item.progress=100;
+    }catch(err){ item.status='error'; item.progress=0; console.error('Batch error:',err); }
+    _renderBatchList();
+    await new Promise(r=>setTimeout(r,300));
+  }
+  _batchRunning=false;
+  if(btn) btn.textContent='PROCESSAR TUDO';
+  setStatus('Batch concluído: '+_batchQueue.filter(b=>b.status==='done').length+' faixas exportadas');
+}
+
+// ── FEAT 8: Reference overlay (spectral comparison) ────────────────────────
+function _drawReferenceOverlay(){
+  const canvas=document.getElementById('ref-overlay-canvas');
+  if(!canvas||!analyserNode) return;
+  const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||80;
+  if(canvas.width!==W) canvas.width=W;
+  const ctx=canvas.getContext('2d');
+  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+  ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
+  const fd=new Uint8Array(analyserNode.frequencyBinCount);
+  analyserNode.getByteFrequencyData(fd);
+  const sr=audioCtx?.sampleRate||44100;
+  const fx=f=>Math.log10(f/20)/Math.log10(sr/2/20)*W;
+  ctx.strokeStyle='#534AB7'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=1;i<fd.length;i++){
+    const f=i*sr/2/analyserNode.fftSize;
+    if(f<20||f>20000) continue;
+    const x=fx(f), y=H-(fd[i]/255)*H;
+    i===1?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // Reference from refBuffer if available
+  if(typeof refBuffer!=='undefined'&&refBuffer){
+    const offCtx2=new OfflineAudioContext(1,4096,refBuffer.sampleRate);
+    const an=offCtx2.createAnalyser(); an.fftSize=2048;
+    const src=offCtx2.createBufferSource(); src.buffer=refBuffer;
+    src.connect(an); an.connect(offCtx2.destination); src.start(0);
+    const rfd=new Uint8Array(an.frequencyBinCount);
+    an.getByteFrequencyData(rfd);
+    ctx.strokeStyle='#993C1D'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath();
+    for(let i=1;i<rfd.length;i++){
+      const f=i*(refBuffer.sampleRate/2)/an.fftSize;
+      if(f<20||f>20000) continue;
+      const x=fx(f), y=H-(rfd[i]/255)*H;
+      i===1?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  ['60Hz','250Hz','1kHz','4kHz','16kHz'].forEach((lbl,i)=>{
+    const freqs=[60,250,1000,4000,16000];
+    const x=fx(freqs[i]);
+    ctx.strokeStyle=isDark?'#ffffff10':'#00000010'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.fillStyle=isDark?'#ffffff44':'#00000044'; ctx.font='8px monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl,x,H-2);
+  });
+}
+
+// ── FEAT 9: Geographic market profiles ─────────────────────────────────────
+const GEO_PROFILES = {
+  angola_radio: { name:'Angola — Rádio + Clube', flag:'🇦🇴',
+    lufs:-8, eq:{sub:3.5,bass:1.5,low:-0.5,mid:-0.5,high:0.5,air:0.5},
+    knobs:{CLEAN:48,BASS:68,LOUD:72,WIDE:50,PUNCH:60,FOCUS:52},
+    desc:'Sub pesado, kick agressivo, loudness máximo para sistemas de som angolanos' },
+  caboverde_festa: { name:'Cabo Verde — Festa + PA', flag:'🇨🇻',
+    lufs:-9, eq:{sub:2.5,bass:1.0,low:0.5,mid:0.5,high:0.5,air:1.0},
+    knobs:{CLEAN:50,BASS:62,LOUD:68,WIDE:65,PUNCH:52,FOCUS:55},
+    desc:'Graves quentes, campo stereo aberto, ideal para sistemas PA de festa' },
+  europa_streaming: { name:'Europa — Spotify / Apple', flag:'🇪🇺',
+    lufs:-14, eq:{sub:0,bass:0,low:0,mid:0,high:1.0,air:1.5},
+    knobs:{CLEAN:62,BASS:48,LOUD:50,WIDE:55,PUNCH:40,FOCUS:60},
+    desc:'Normalização Spotify -14 LUFS, dinâmica preservada, compatível com loudness normalization' },
+  brasil_funk: { name:'Brasil — Funk + Streaming', flag:'🇧🇷',
+    lufs:-10, eq:{sub:1.5,bass:0.5,low:1.0,mid:0.8,high:1.0,air:1.0},
+    knobs:{CLEAN:55,BASS:58,LOUD:65,WIDE:52,PUNCH:58,FOCUS:62},
+    desc:'Mids presentes para voz, sub controlado, punch alto para funk e pagode' },
+  senegal_afro: { name:'Senegal — Afrobeats + Mbalax', flag:'🇸🇳',
+    lufs:-9, eq:{sub:2.0,bass:1.0,low:0.5,mid:-0.5,high:1.0,air:1.5},
+    knobs:{CLEAN:55,BASS:62,LOUD:68,WIDE:58,PUNCH:55,FOCUS:58},
+    desc:'Percussão presente, sub moderado, ar e abertura para vocais' },
+  mozambique_marrabenta: { name:'Moçambique — Rádio + Club', flag:'🇲🇿',
+    lufs:-9, eq:{sub:1.5,bass:1.0,low:0.5,mid:0.5,high:0.5,air:0.5},
+    knobs:{CLEAN:50,BASS:60,LOUD:68,WIDE:55,PUNCH:55,FOCUS:55},
+    desc:'Balanço geral, compatível com rádio moçambicana e sistemas de club' },
+};
+
+function applyGeoProfile(key){
+  const p=GEO_PROFILES[key]; if(!p) return;
+  Object.assign(kvals,p.knobs);
+  if(audioCtx){
+    eqSub.gain.value=p.eq.sub; eqBass.gain.value=p.eq.bass; eqLowNode.gain.value=p.eq.low;
+    eqMid.gain.value=p.eq.mid; eqHigh.gain.value=p.eq.high; eqAir.gain.value=p.eq.air;
+  }
+  const loudSl=document.getElementById('loud-target');
+  const loudV=document.getElementById('loud-target-v');
+  if(loudSl) loudSl.value=p.lufs;
+  if(loudV) loudV.textContent=p.lufs+'.0 LUFS';
+  refreshKnobs(); syncEQSliders(); applyDSP(); drawInteractiveEQ();
+  document.querySelectorAll('.geo-profile-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('geo-'+key)?.classList.add('active');
+  setStatus('Perfil geográfico: '+p.flag+' '+p.name+' · alvo '+p.lufs+' LUFS');
+}
+
+function _renderGeoProfiles(){
+  const wrap=document.getElementById('geo-profiles-wrap');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  Object.entries(GEO_PROFILES).forEach(([key,p])=>{
+    const btn=document.createElement('div');
+    btn.id='geo-'+key; btn.className='geo-profile-btn';
+    btn.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:0.5px solid var(--color-border-tertiary);margin-bottom:5px;cursor:pointer;background:var(--color-background-secondary);transition:all .15s;';
+    btn.innerHTML=`<span style="font-size:18px;">${p.flag}</span>
+      <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--color-text-primary);">${p.name}</div>
+      <div style="font-size:10px;color:var(--color-text-tertiary);">${p.lufs} LUFS · ${p.desc.slice(0,45)}...</div></div>
+      <span style="font-size:9px;color:var(--color-text-info);border:0.5px solid var(--color-border-info);border-radius:3px;padding:2px 6px;">${p.lufs} LUFS</span>`;
+    btn.onclick=()=>applyGeoProfile(key);
+    wrap.appendChild(btn);
+  });
+}
+
+// ── FEAT 10: PDF session report ─────────────────────────────────────────────
+function generatePDFReport(){
+  if(!audioBuffer){ setStatus('Carrega e processa um ficheiro primeiro'); return; }
+  const plr=_calcPLR(audioBuffer);
+  const lufs=_measureLUFS_BS1770(audioBuffer);
+  const phase=parseFloat(document.getElementById('phase-corr-val')?.textContent||'0');
+  const trackName=document.getElementById('track-name')?.textContent||'Desconhecida';
+  const geoKey=document.querySelector('.geo-profile-btn.active')?.id?.replace('geo-','');
+  const geoName=geoKey?GEO_PROFILES[geoKey]?.name||'—':'—';
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Piradex Report — ${trackName}</title>
+<style>
+body{font-family:monospace;background:#07070e;color:#e8e8e8;padding:40px;margin:0}
+.header{border-bottom:2px solid #2dd4ff;padding-bottom:16px;margin-bottom:24px}
+.logo{font-size:28px;font-weight:700;color:#2dd4ff;letter-spacing:4px}
+.subtitle{font-size:14px;color:#555;margin-top:4px}
+.section{margin-bottom:24px}
+.section-title{font-size:11px;color:#555;letter-spacing:2px;margin-bottom:12px;border-bottom:1px solid #1a1a2e;padding-bottom:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.metric{background:#0f0f1a;border:1px solid #1a1a2e;border-radius:8px;padding:12px}
+.metric-label{font-size:10px;color:#555;letter-spacing:1px;margin-bottom:4px}
+.metric-value{font-size:22px;font-weight:700}
+.eq-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.eq-bar{height:6px;border-radius:3px;min-width:2px;max-width:100px}
+.footer{border-top:1px solid #1a1a2e;padding-top:16px;font-size:10px;color:#333;text-align:center}
+</style></head><body>
+<div class="header">
+  <div class="logo">PIRADEX MASTERING SUITE</div>
+  <div class="subtitle">Relatório de Sessão · ${new Date().toLocaleDateString('pt-PT')} · ${new Date().toLocaleTimeString('pt-PT')}</div>
+</div>
+<div class="section">
+  <div class="section-title">FAIXA</div>
+  <div style="font-size:18px;font-weight:700;color:#2dd4ff;margin-bottom:4px">${trackName}</div>
+  <div style="font-size:12px;color:#555">Preset: ${curPreset.toUpperCase()} · Mercado: ${geoName}</div>
+</div>
+<div class="section">
+  <div class="section-title">MÉTRICAS FINAIS</div>
+  <div class="grid">
+    <div class="metric"><div class="metric-label">LUFS BS.1770</div><div class="metric-value" style="color:#2dd4ff">${(lufs||0).toFixed(1)}</div></div>
+    <div class="metric"><div class="metric-label">PEAK</div><div class="metric-value" style="color:#b855f7">${(plr?.peakDb||0).toFixed(1)} dB</div></div>
+    <div class="metric"><div class="metric-label">PLR DINÂMICA</div><div class="metric-value" style="color:#ffe135">${(plr?.plr||0).toFixed(1)} dB</div></div>
+    <div class="metric"><div class="metric-label">FASE STEREO</div><div class="metric-value" style="color:${phase>0.3?'#2dff8a':'#ff4500'}">${phase.toFixed(2)}</div></div>
+    <div class="metric"><div class="metric-label">HEADROOM</div><div class="metric-value" style="color:#ffe135">-6 dBFS</div></div>
+    <div class="metric"><div class="metric-label">TARGET LUFS</div><div class="metric-value" style="color:#2dff8a">${document.getElementById('loud-target')?.value||'-9'}</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">EQ APLICADO</div>
+  ${EQ_BANDS_CONFIG.map(b=>{
+    const g=b.node()?.gain.value||0;
+    const col=g>0?'#2dff8a':g<0?'#ff4500':'#555';
+    const w=Math.abs(g)/12*80;
+    return `<div class="eq-row">
+      <span style="min-width:40px;font-size:10px;color:#888">${b.label}</span>
+      <span style="min-width:32px;font-size:10px;color:#555">${b.f>999?(b.f/1000).toFixed(1)+'kHz':b.f+'Hz'}</span>
+      <div class="eq-bar" style="width:${w}px;background:${col}"></div>
+      <span style="font-size:11px;color:${col};min-width:40px">${g>=0?'+':''}${g.toFixed(1)} dB</span>
+    </div>`;
+  }).join('')}
+</div>
+<div class="section">
+  <div class="section-title">KNOBS</div>
+  <div class="grid">
+    ${Object.entries(kvals).map(([k,v])=>`<div class="metric"><div class="metric-label">${k}</div><div class="metric-value" style="color:#888;font-size:18px">${v}</div></div>`).join('')}
+  </div>
+</div>
+<div class="footer">
+  Masterizado com PIRADEX MASTERING SUITE · beatfreakstudio.com · v6.0<br>
+  ${new Date().toISOString()}
+</div>
+</body></html>`;
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(w) setTimeout(()=>w.print(),500);
+  URL.revokeObjectURL(url);
+  setStatus('Relatório gerado — usa Ctrl+P para imprimir como PDF');
+}
+
+// ── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  switch(e.key){
+    case 'j': case 'J': if(e.ctrlKey||e.metaKey) break; togglePlay(); break;
+    case 'k': case 'K': if(e.ctrlKey||e.metaKey) break; stopAudio(); break;
+    case 'e': case 'E': if(!e.ctrlKey) openTab('eq',document.querySelector('[data-tab="eq"]')); break;
+    case 'c': case 'C': if(!e.ctrlKey) openTab('comp',document.querySelector('[data-tab="comp"]')); break;
+    case 'h': case 'H': if(!e.ctrlKey) runHealthCheck(); break;
+    case 'ArrowLeft': seekRelative(-5); break;
+    case 'ArrowRight': seekRelative(5); break;
+  }
+});
+
+// ── INIT ALL NEW FEATURES on DOM ready ──────────────────────────────────────
+(function _initV6(){
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', _setupV6);
+  } else {
+    setTimeout(_setupV6, 500);
+  }
+})();
+
+function _setupV6(){
+  initInteractiveEQ();
+  initAutomation();
+  _renderUserPresets();
+  _renderGeoProfiles();
+  // Hook drawInteractiveEQ into existing EQ slider changes
+  const origSyncEQ = window.syncEQSliders;
+  window.syncEQSliders = function(){ if(origSyncEQ) origSyncEQ(); drawInteractiveEQ(); };
+  // Hook reference overlay into animation loop
+  const origAnim = window._drawSpectralBalance;
+  let _refFrame=0;
+  window._drawSpectralBalance = function(){
+    if(origAnim) origAnim();
+    _refFrame++; if(_refFrame%4===0) _drawReferenceOverlay();
+  };
+  // Capture before stats when file loads
+  const origLoad = window.loadFile;
+  window.loadFile = function(file){
+    if(origLoad) origLoad(file);
+    setTimeout(()=>_captureBeforeStats(), 2000);
+  };
+  console.log('[Piradex v6] All 10 features initialized');
+}

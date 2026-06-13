@@ -21,8 +21,8 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .bypass{font-size:9px;padding:4px 12px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);background:transparent;cursor:pointer;font-family:'Rajdhani';letter-spacing:2px;font-weight:600;transition:all 0.15s;}
 .bypass:hover{border-color:#ff3ab5aa;color:#ff3ab5;}
 .bypass.on{background:#ff3ab533;border-color:#ff3ab5;color:#ff3ab5;box-shadow:0 0 10px #ff3ab533;}
-.lic-badge{font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border2);color:var(--muted);cursor:pointer;letter-spacing:2px;font-family:'Orbitron',monospace;font-weight:700;transition:all 0.15s;}
-.lic-badge:hover{border-color:var(--c4);}
+.lic-badge{font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid rgba(255,227,53,0.35);color:rgba(255,227,53,0.4);cursor:pointer;letter-spacing:2px;font-family:'Orbitron',monospace;font-weight:700;transition:all 0.15s;}
+.lic-badge:hover{border-color:#ffe135;color:#ffe135;}
 
 /* PRESETS */
 .presets-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 14px;display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;}
