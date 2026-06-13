@@ -58,12 +58,17 @@
     .mb-val{font-size:9px;color:#888;font-family:'Rajdhani',monospace;text-align:right;}
 
     /* ── Export format selector ── */
-    #export-wrap{align-items:center;gap:6px;}
+    #export-opts{align-items:stretch;gap:6px;}
     #export-fmt{background:#0f0f1a;color:#2dd4ff;border:1px solid rgba(45,212,255,.35);
       border-radius:5px;padding:5px 8px;font-family:'Rajdhani',monospace;font-size:10px;
       font-weight:700;letter-spacing:1px;cursor:pointer;outline:none;}
     .export-dither-label{font-size:9px;color:#666;display:flex;align-items:center;gap:4px;
       font-family:'Rajdhani',monospace;letter-spacing:.5px;cursor:pointer;}
+    .export-btn{display:flex;align-items:center;justify-content:center;gap:6px;
+      padding:9px 12px;border-radius:6px;border:1px solid rgba(45,255,138,.5);
+      background:rgba(45,255,138,.10);color:#2dff8a;font-family:'Rajdhani',monospace;
+      font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;width:100%;transition:all .15s;}
+    .export-btn:hover{background:rgba(45,255,138,.18);border-color:#2dff8a;}
 
     /* ── Undo keyboard hint ── */
     .undo-hint{font-size:8px;color:#333;letter-spacing:.5px;}
@@ -472,10 +477,10 @@
       <div class="module-title">REFERENCE TRACK — Mastering Guide</div>
       <div style="margin:8px 0 12px;">
         <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;">SOBREPOSIÇÃO ESPECTRAL — faixa vs referência</div>
-        <canvas id="ref-overlay-canvas" style="width:100%;height:60px;display:block;border-radius:4px;border:0.5px solid var(--border);background:var(--bg3);"></canvas>
+        <canvas id="ref-overlay-canvas" height="90" style="width:100%;height:90px;display:block;border-radius:4px;border:0.5px solid var(--border);background:#07070e;"></canvas>
         <div style="display:flex;gap:12px;margin-top:3px;font-size:8px;color:var(--muted2);">
-          <span><span style="display:inline-block;width:10px;height:2px;background:#534AB7;vertical-align:middle;margin-right:3px;"></span>faixa</span>
-          <span><span style="display:inline-block;width:10px;height:2px;background:#993C1D;vertical-align:middle;margin-right:3px;border-top:1px dashed #993C1D;"></span>referência</span>
+          <span><span style="display:inline-block;width:10px;height:2px;background:#2dd4ff;vertical-align:middle;margin-right:3px;"></span>faixa</span>
+          <span><span style="display:inline-block;width:10px;height:2px;background:#ffb020;vertical-align:middle;margin-right:3px;border-top:1px dashed #ffb020;"></span>referência</span>
         </div>
       </div>
       <div class="ref-drop" id="ref-drop"
@@ -491,6 +496,14 @@
       <div id="ref-info" style="display:none;">
         <div class="ref-stats" id="ref-stats"></div>
         <canvas id="ref-canvas" height="60" style="width:100%;border-radius:6px;background:var(--bg3);border:1px solid var(--border);margin-top:10px;"></canvas>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+          <button id="ref-play-btn" onclick="toggleRefPlay()" style="display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;border:1px solid var(--c6);background:rgba(186,117,23,0.12);color:var(--c6);font-family:'Rajdhani';font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">
+            <i class="ti ti-player-play" id="ref-play-icon"></i> OUVIR REFERÊNCIA
+          </button>
+          <button onclick="loadRefAgain()" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Rajdhani';font-size:11px;letter-spacing:1px;cursor:pointer;">
+            <i class="ti ti-upload"></i> TROCAR
+          </button>
+        </div>
         <div class="ref-compare" id="ref-compare" style="display:none"></div>
         <button class="paywall-cta" onclick="applyRefToPreset()" style="margin-top:12px;font-size:12px;padding:10px;animation:none;background:linear-gradient(90deg,var(--c6),var(--c1));">APLICAR CONFIGURAÇÃO DA REFERÊNCIA</button>
       </div>
@@ -642,7 +655,7 @@
   </div>
   <div class="player-section">
     <div class="player-top">
-      <div style="display:flex;flex-direction:column;gap:6px;min-width:150px;">
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:170px;">
         <div class="drop-zone" id="drop-zone"
           onclick="document.getElementById('sf').click()"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -652,9 +665,22 @@
           <span class="dz-title">Arrasta o áudio aqui</span>
           <span class="dz-sub">MP3 · WAV · OGG · FLAC</span>
         </div>
-        <button onclick="newTrackUpload()" id="new-track-btn" style="display:none;padding:5px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-family:'Rajdhani';font-size:10px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--c5)';this.style.color='var(--c5)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted2)'">
+        <button onclick="newTrackUpload()" id="new-track-btn" style="display:none;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);font-family:'Rajdhani';font-size:10px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--c5)';this.style.color='var(--c5)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted2)'">
           <i class="ti ti-music-up"></i> IMPORTAR
         </button>
+        <!-- EXPORTAR — agora aqui em cima, por baixo do IMPORTAR -->
+        <button class="export-btn" id="export-btn" onclick="exportMastered()" style="display:none;">
+          <i class="ti ti-download"></i> EXPORTAR
+        </button>
+        <div id="export-opts" style="display:none;flex-direction:column;gap:5px;">
+          <select id="export-fmt" title="Formato de exportação" style="width:100%;">
+            <option value="wav" selected>WAV 16-bit</option>
+            <option value="mp3">MP3 320kbps &#9888;</option>
+          </select>
+          <label class="export-dither-label" title="TPDF dither reduz quantization noise no WAV 16-bit" style="font-size:10px;">
+            <input type="checkbox" id="export-dither" checked style="accent-color:#2dd4ff;"> DITHER
+          </label>
+        </div>
       </div>
       <input type="file" id="sf" accept="audio/*" style="display:none">
       <div class="waveform-wrap" id="waveform-wrap" style="display:none">
@@ -672,8 +698,8 @@
     </div>
     <div class="player-controls">
 
-      <!-- LINHA 1: ORIGINAL · PROCESSADO · transport · volume -->
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+      <!-- LINHA 1: ORIGINAL · PROCESSADO · transport · volume (estática) -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;min-height:46px;">
         <div class="ab-toggle">
           <button class="ab-btn active" id="btn-before" onclick="setMode('before')"><i class="ti ti-player-play"></i> ORIGINAL</button>
           <button class="ab-btn" id="btn-after" onclick="setMode('after')"><i class="ti ti-sparkles"></i> PROCESSADO</button>
@@ -687,12 +713,12 @@
         <div class="vol-wrap">
           <i class="ti ti-volume" style="color:var(--muted2);font-size:14px;"></i>
           <input type="range" id="vol-slider" min="0" max="150" value="100" oninput="setVolume(this.value)">
-          <span id="vol-val">100%</span>
+          <span id="vol-val" style="min-width:42px;display:inline-block;text-align:right;">100%</span>
         </div>
       </div>
 
-      <!-- LINHA 2: HEADROOM · WAV selector · Health + Report -->
-      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+      <!-- LINHA 2: HEADROOM · DIAGNÓSTICO · RELATÓRIO (estática) -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-height:38px;margin-top:4px;">
         <button class="headroom-btn" id="headroom-btn" onclick="applyHeadroom()"
           style="display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:5px;
                  border:1px solid rgba(255,227,53,0.15);background:rgba(255,227,53,0.03);
@@ -701,28 +727,11 @@
           title="Muda para PROCESSADO para activar">
           <i class="ti ti-adjustments-horizontal"></i> HEADROOM -6dB
         </button>
-        <div id="export-fmt-wrap" style="display:none;">
-          <select id="export-fmt" title="Formato de exportacao">
-            <option value="wav" selected>WAV 16-bit</option>
-            <option value="mp3">MP3 320kbps &#9888;</option>
-          </select>
-        </div>
         <button onclick="runHealthCheck()" title="Diagnóstico automático (H)" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:5px;border:1px solid rgba(255,227,53,.3);background:rgba(255,227,53,.04);color:rgba(255,227,53,.6);font-family:'Rajdhani';font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;">
           <i class="ti ti-stethoscope" aria-hidden="true"></i> DIAGNÓSTICO
         </button>
         <button onclick="generatePDFReport()" title="Gerar relatório PDF" style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:5px;border:1px solid rgba(184,85,247,.3);background:rgba(184,85,247,.04);color:rgba(184,85,247,.7);font-family:'Rajdhani';font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;">
           <i class="ti ti-file-type-pdf" aria-hidden="true"></i> RELATÓRIO
-        </button>
-      </div>
-
-      <!-- LINHA 3: DITHER · EXPORTAR -->
-      <div id="export-wrap" style="display:none;align-items:center;gap:8px;margin-top:4px;">
-        <label class="export-dither-label" title="TPDF dither reduz quantization noise no WAV 16-bit">
-          <input type="checkbox" id="export-dither" checked style="accent-color:#2dd4ff;">
-          DITHER
-        </label>
-        <button class="export-btn" id="export-btn" onclick="exportMastered()">
-          <i class="ti ti-download"></i> EXPORTAR
         </button>
       </div>
 

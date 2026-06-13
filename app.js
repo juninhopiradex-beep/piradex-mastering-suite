@@ -68,6 +68,12 @@ let shapeWS=null, shapeDryGain=null, shapeWetGain=null;
 let widthMerger=null, widthSplitter=null;
 let msEqMidLow=null, msEqMidHigh=null, msEqSideLow=null, msEqSideHigh=null;
 let msMidGain=null, msSideGain=null;
+let shapeMixer=null, shapeTrimGain=null;
+let mbInputGain=null, mbBandsGain=null, mbOutGain=null;
+let msSplitter=null, msMerger=null, msInL=null, msInR=null;
+let msMidSum=null, msSideSum=null, msInvR1=null, msInvSide=null;
+let msMidEqLow=null, msMidEqMid=null, msMidEqHigh=null;
+let msSideEqLow=null, msSideEqMid=null, msSideEqHigh=null;
 let analyserNode=null;
 let isPlaying=false, pauseOffset=0, startTime=0;
 let animProgress, animRunning=false;
@@ -161,24 +167,98 @@ function buildChain() {
   specSmooth = new Float32Array(2048).fill(-150);
 
   // Shape mixer node
-  const shapeMixer = audioCtx.createGain(); shapeMixer.gain.value = 1.0;
+  shapeMixer = audioCtx.createGain(); shapeMixer.gain.value = 1.0;
 
+  // ── TRANSIENT SHAPER node (in series, dry by default) ───────────────────
+  _transientNode = audioCtx.createDynamicsCompressor();
+  _transientNode.threshold.value = 0;   // disabled at rest
+  _transientNode.ratio.value     = 1;
+  _transientNode.attack.value    = 0.003;
+  _transientNode.release.value   = 0.25;
+  _transientNode.knee.value      = 6;
+
+  // ── MULTIBAND nodes (parallel 3-band, summed) ───────────────────────────
+  _initMultiband();
+  // mb input/output routing gains
+  mbInputGain  = audioCtx.createGain(); mbInputGain.gain.value  = 1.0; // feeds direct path when OFF
+  mbBandsGain  = audioCtx.createGain(); mbBandsGain.gain.value  = 0.0; // feeds multiband path when ON
+  mbOutGain    = audioCtx.createGain(); mbOutGain.gain.value    = 1.0;
+
+  // ── M/S processing via channel splitter/merger ──────────────────────────
+  // Encode L/R → Mid/Side, apply gains, decode back to L/R
+  msSplitter = audioCtx.createChannelSplitter(2);
+  msMerger   = audioCtx.createChannelMerger(2);
+  // We build M/S with a small matrix using gains; simplest robust approach:
+  // Mid  = (L+R)/2 ; Side = (L-R)/2 ; then L = Mid+Side ; R = Mid-Side
+  // Implemented with gain nodes + inverters.
+  msInL  = audioCtx.createGain(); msInR  = audioCtx.createGain();
+  msMidSum = audioCtx.createGain(); msMidSum.gain.value = 0.5;
+  msSideSum= audioCtx.createGain(); msSideSum.gain.value= 0.5;
+  msInvR1  = audioCtx.createGain(); msInvR1.gain.value = -1; // for side = L - R
+  msInvSide= audioCtx.createGain(); msInvSide.gain.value= -1; // for R = Mid - Side
+  // msMidGain / msSideGain already created above (user-controllable)
+
+  // ── MASTER OUTPUT / ANALYSER routing ────────────────────────────────────
   // WET CHAIN (PROCESSADO):
-  // source → EQ → shapeMixer(dry+wet shape) → comp → limiter → masterGain → analyser → out
+  // src → EQ → shape(mix) → [MULTIBAND or direct] → comp → transient → limiter → M/S → master → analyser → out
   eqSub.connect(eqBass); eqBass.connect(eqLowNode); eqLowNode.connect(eqMid);
   eqMid.connect(eqHigh); eqHigh.connect(eqAir);
+
+  // shape parallel
   eqAir.connect(shapeDryGain); shapeDryGain.connect(shapeMixer);
-  eqAir.connect(shapeWS);     shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
-  shapeMixer.connect(compNode);
-  compNode.connect(limiterNode);
-  limiterNode.connect(masterGain);
+  eqAir.connect(shapeWS);      shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
+
+  // shape trim (absolute output gain for shape stage)
+  shapeTrimGain = audioCtx.createGain(); shapeTrimGain.gain.value = 1.0;
+  shapeMixer.connect(shapeTrimGain);
+
+  // shapeTrim → multiband split point
+  // direct (multiband OFF): shapeTrim → mbInputGain → comp
+  shapeTrimGain.connect(mbInputGain); mbInputGain.connect(compNode);
+  // multiband (ON): shapeTrim → 3 bands → comps → mbBandsGain → comp
+  shapeTrimGain.connect(_mbLow);  _mbLow.connect(_mbLowComp);   _mbLowComp.connect(mbBandsGain);
+  shapeTrimGain.connect(_mbMid);  _mbMid.connect(_mbMidComp);   _mbMidComp.connect(mbBandsGain);
+  shapeTrimGain.connect(_mbHigh); _mbHigh.connect(_mbHighComp); _mbHighComp.connect(mbBandsGain);
+  mbBandsGain.connect(compNode);
+
+  // comp → transient → limiter
+  compNode.connect(_transientNode);
+  _transientNode.connect(limiterNode);
+
+  // limiter → M/S encode/process/decode → masterGain
+  // Split incoming stereo
+  limiterNode.connect(msSplitter);
+  // L path
+  msSplitter.connect(msInL, 0);
+  // R path
+  msSplitter.connect(msInR, 1);
+  // Mid = 0.5*(L + R)
+  msInL.connect(msMidSum); msInR.connect(msMidSum);
+  // Side = 0.5*(L - R)
+  msInL.connect(msSideSum); msInR.connect(msInvR1); msInvR1.connect(msSideSum);
+  // Apply user gains
+  // Mid path EQ (3 bands) then gain
+  msMidEqLow  = audioCtx.createBiquadFilter(); msMidEqLow.type='lowshelf';  msMidEqLow.frequency.value=250;  msMidEqLow.gain.value=0;
+  msMidEqMid  = audioCtx.createBiquadFilter(); msMidEqMid.type='peaking';   msMidEqMid.frequency.value=1500; msMidEqMid.Q.value=0.8; msMidEqMid.gain.value=0;
+  msMidEqHigh = audioCtx.createBiquadFilter(); msMidEqHigh.type='highshelf';msMidEqHigh.frequency.value=6000; msMidEqHigh.gain.value=0;
+  msSideEqLow = audioCtx.createBiquadFilter(); msSideEqLow.type='lowshelf'; msSideEqLow.frequency.value=250;  msSideEqLow.gain.value=0;
+  msSideEqMid = audioCtx.createBiquadFilter(); msSideEqMid.type='peaking';  msSideEqMid.frequency.value=1500; msSideEqMid.Q.value=0.8; msSideEqMid.gain.value=0;
+  msSideEqHigh= audioCtx.createBiquadFilter(); msSideEqHigh.type='highshelf';msSideEqHigh.frequency.value=6000;msSideEqHigh.gain.value=0;
+
+  msMidSum.connect(msMidEqLow); msMidEqLow.connect(msMidEqMid); msMidEqMid.connect(msMidEqHigh); msMidEqHigh.connect(msMidGain);
+  msSideSum.connect(msSideEqLow); msSideEqLow.connect(msSideEqMid); msSideEqMid.connect(msSideEqHigh); msSideEqHigh.connect(msSideGain);
+  // Decode: L = Mid + Side ; R = Mid - Side
+  msMidGain.connect(msMerger, 0, 0);   // Mid → L
+  msSideGain.connect(msMerger, 0, 0);  // +Side → L
+  msMidGain.connect(msMerger, 0, 1);   // Mid → R
+  msSideGain.connect(msInvSide); msInvSide.connect(msMerger, 0, 1); // -Side → R
+  msMerger.connect(masterGain);
+
   masterGain.connect(analyserNode);
 
-  // DRY CHAIN (ORIGINAL):
-  // source → dryGain → analyser → out
+  // DRY CHAIN (ORIGINAL): source → dryGain → analyser → out
   dryGain.connect(analyserNode);
 
-  // Analyser → destination
   analyserNode.connect(audioCtx.destination);
 
   applyShapeCurve();
@@ -281,20 +361,17 @@ function updateShape(){
   if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1-mix, audioCtx.currentTime, 0.05);
   if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(mix,   audioCtx.currentTime, 0.05);
   applyShapeCurve();
-  if(masterGain&&audioCtx&&trim!==0){
-    const trimFactor=Math.pow(10,trim/20);
-    masterGain.gain.setTargetAtTime(masterGain.gain.value*trimFactor, audioCtx.currentTime, 0.1);
+  // Trim applied to dedicated node (absolute) — never compounds into masterGain
+  if(shapeTrimGain&&audioCtx){
+    shapeTrimGain.gain.setTargetAtTime(Math.pow(10,trim/20), audioCtx.currentTime, 0.08);
   }
+  _snapUndoThrottled();
 }
 
 // ===== DSP =====
 function applyDSP() {
   if(!audioCtx) return;
   if(piradexOn){ applyPiradexDSP(); return; }
-
-  // Reset stereo to unity before any processing — prevents residual
-  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.02);
-  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,  audioCtx.currentTime, 0.02);
 
   const {BASS:bass,CLEAN:clean,LOUD:loud,PUNCH:punch,FOCUS:focus,WIDE:wide}=kvals;
 
@@ -332,20 +409,16 @@ function applyDSP() {
   }
 
   // ── Master gain calibrated so LOUD=65 ≈ -9 LUFS output
-  // LOUD 50 = 1.0 (unity), LOUD 65 = 1.45 (~+3dB toward -9 LUFS)
-  // LOUD 0  = 0.1 (near silence), LOUD 100 = 2.5 (max)
   const gainFactor = loud <= 50
     ? 0.1 + (loud/50) * 0.9    // 0→50: 0.1→1.0
     : 1.0 + ((loud-50)/50) * 1.5; // 50→100: 1.0→2.5
   masterGain.gain.setTargetAtTime(gainFactor, audioCtx.currentTime, 0.08);
 
-  // ── Width via EQ — ABSOLUTE SET (not additive, prevents residual)
-  // Store width contribution separately, apply as absolute offset
-  const wDelta = (wide - 50) / 50; // -1 to +1
-  // These are SET absolutely each call — no accumulation
-  widthAirOffset  = wDelta * 2.0;
-  widthHighOffset = wDelta * 1.2;
-  // Applied below after base EQ so they don't compound
+  // ── Width via the WIDE knob → Side gain (real M/S, no EQ corruption)
+  if(msSideGain){
+    const sideG = Math.max(0, wide/50); // 50=unity(1.0), 0=mono, 100=2x
+    msSideGain.gain.setTargetAtTime(sideG, audioCtx.currentTime, 0.08);
+  }
 
   if(bypassOn){
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
@@ -353,16 +426,12 @@ function applyDSP() {
     limiterNode.threshold.value=0; limiterNode.ratio.value=1;
     if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
     if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0,audioCtx.currentTime,0.02);
+    if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
+    if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
     masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
     syncEQSliders();
     updateLUFSDisplay();
     return; // stop here — nothing should overwrite bypass
-  }
-
-  // Apply width offsets on top of EQ (absolute, not additive)
-  if(typeof widthAirOffset!=='undefined'){
-    eqAir.gain.value  += widthAirOffset;
-    eqHigh.gain.value += widthHighOffset;
   }
 
   // ── Re-enforce any active module bypasses ──────────────────────────────────
@@ -487,19 +556,15 @@ function updateWidth(){
   document.getElementById('width-bass-mono-v').textContent=bm+' Hz';
   document.getElementById('wm-fill').style.width=Math.min(100,w/2)+'%';
   if(!audioCtx) return;
-  // SET (not add) — prevents residual noise on repeated changes
-  // w=100 = unity, 0=narrow/mono, 200=max wide
-  const wNorm = w/100; // 0=mono, 1=unity, 2=double-wide
-  // Apply width via independent gain nodes
-  if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0, wNorm), audioCtx.currentTime, 0.08);
-  if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10, mid/20), audioCtx.currentTime, 0.08);
-  // High shelf for width perception — SET absolute value
-  const wDelta=(wNorm-1)*3; // -3 to +3 dB
-  eqAir.gain.setTargetAtTime( (eqAir.gain.value-lastWidthAirDelta||0)+wDelta, audioCtx.currentTime, 0.08);
-  lastWidthAirDelta=wDelta;
-  // Side EQ
-  eqHigh.gain.setTargetAtTime( Math.max(-12,Math.min(12, side*0.5)), audioCtx.currentTime, 0.08);
-  setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB · BassM: '+bm+'Hz');
+  const now=audioCtx.currentTime;
+  // Width acts ONLY on the Side channel gain — never touches EQ.
+  // w=0 → mono (side=0), w=100 → unity (side=1), w=200 → double-wide (side=2)
+  const sideBoost = Math.pow(10, side/20);      // side EQ trim in dB → linear
+  const sideGain  = Math.max(0, (w/100) * sideBoost);
+  const midGain   = Math.pow(10, mid/20);
+  if(msSideGain) msSideGain.gain.setTargetAtTime(sideGain, now, 0.08);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(midGain,  now, 0.08);
+  setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB');
 }
 
 function updateExcite(){
@@ -562,31 +627,64 @@ function updateMidSide(){
     if(el)el.textContent=(v>=0?'+':'')+v.toFixed(1)+' dB';
   });
   if(!audioCtx) return;
+  const now=audioCtx.currentTime;
+  const mLow=get('ms-mid-low'), mMid=get('ms-mid-mid'), mHigh=get('ms-mid-high'), mGain=get('ms-mid-gain');
+  const sLow=get('ms-side-low'), sMid=get('ms-side-mid'), sHigh=get('ms-side-high'), sGain=get('ms-side-gain');
 
-  const mLow=get('ms-mid-low'), mMid=get('ms-mid-mid'), mHigh=get('ms-mid-high');
-  const mGain=get('ms-mid-gain');
-  const sLow=get('ms-side-low'), sMid=get('ms-side-mid'), sHigh=get('ms-side-high');
-  const sGain=get('ms-side-gain');
-  const mComp=get('ms-mid-comp'), sComp=get('ms-side-comp');
+  // Absolute writes to the DEDICATED M/S EQ nodes — never touches main EQ
+  if(msMidEqLow)  msMidEqLow.gain.setTargetAtTime(mLow, now, 0.08);
+  if(msMidEqMid)  msMidEqMid.gain.setTargetAtTime(mMid, now, 0.08);
+  if(msMidEqHigh) msMidEqHigh.gain.setTargetAtTime(mHigh, now, 0.08);
+  if(msSideEqLow) msSideEqLow.gain.setTargetAtTime(sLow, now, 0.08);
+  if(msSideEqMid) msSideEqMid.gain.setTargetAtTime(sMid, now, 0.08);
+  if(msSideEqHigh)msSideEqHigh.gain.setTargetAtTime(sHigh, now, 0.08);
 
-  // Apply ADDITIVELY (not replace) — small factors to avoid volume collapse
-  if(mLow!==0)  eqSub.gain.setTargetAtTime(eqSub.gain.value+mLow*0.2, audioCtx.currentTime, 0.1);
-  if(mMid!==0)  eqMid.gain.setTargetAtTime(eqMid.gain.value+mMid*0.2, audioCtx.currentTime, 0.1);
-  if(mHigh!==0) eqAir.gain.setTargetAtTime(eqAir.gain.value+mHigh*0.2, audioCtx.currentTime, 0.1);
-  if(sLow!==0)  eqBass.gain.setTargetAtTime(eqBass.gain.value+sLow*0.15, audioCtx.currentTime, 0.1);
-  if(sHigh!==0) eqHigh.gain.setTargetAtTime(eqHigh.gain.value+sHigh*0.15, audioCtx.currentTime, 0.1);
+  // Mid/Side gains — absolute (Side also respects WIDTH knob via updateWidth, so here only when changed)
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mGain/20), now, 0.08);
+  if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.0, Math.pow(10,sGain/20)), now, 0.08);
 
-  // Gains: only apply if non-zero, keep reference at 1.0 (0dB) as baseline
-  if(mGain!==0&&msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mGain/20), audioCtx.currentTime, 0.15);
-  if(sGain!==0&&msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.01,Math.pow(10,sGain/20)*(kvals.WIDE/100)), audioCtx.currentTime, 0.15);
-
-  // Compressor threshold adjustment (delta only)
-  if(mComp<0&&compNode) compNode.threshold.value=Math.max(-50, compNode.threshold.value+mComp*0.3);
-
-  setStatus('M/S: Mid EQ '+mLow.toFixed(1)+'/'+(mMid>=0?'+':'')+mMid.toFixed(1)+'/'+mHigh.toFixed(1)+'dB · Side '+(sLow>=0?'+':'')+sLow.toFixed(1)+'/'+(sHigh>=0?'+':'')+sHigh.toFixed(1)+'dB');
+  _snapUndoThrottled();
+  setStatus('M/S: Mid '+mLow.toFixed(1)+'/'+(mMid>=0?'+':'')+mMid.toFixed(1)+'/'+mHigh.toFixed(1)+' · Side '+(sLow>=0?'+':'')+sLow.toFixed(1)+'/'+(sMid>=0?'+':'')+sMid.toFixed(1)+'/'+(sHigh>=0?'+':'')+sHigh.toFixed(1)+' dB');
 }
 
 // ===== REFERENCE TRACK =====
+let _refSource=null, _refPlaying=false;
+
+function toggleRefPlay(){
+  if(!refBuffer){ setStatus('Carrega uma referência primeiro'); return; }
+  initAudio();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  if(_refPlaying){ _stopRefPlay(); return; }
+  // stop main track if playing to avoid overlap
+  if(isPlaying){ try{stopAudio();}catch(e){} }
+  _refSource=audioCtx.createBufferSource();
+  _refSource.buffer=refBuffer;
+  // route reference straight to output + analyser so overlay updates with ref
+  _refSource.connect(analyserNode);
+  _refSource.onended=()=>{ _refPlaying=false; _updateRefPlayBtn(); };
+  _refSource.start(0);
+  _refPlaying=true; _updateRefPlayBtn();
+  setStatus('▶ A ouvir referência: '+(refStats?.name||'').replace(/\.[^.]+$/,''));
+}
+function _stopRefPlay(){
+  if(_refSource){ try{_refSource.stop();}catch(e){} _refSource=null; }
+  _refPlaying=false; _updateRefPlayBtn();
+  setStatus('Referência parada');
+}
+function _updateRefPlayBtn(){
+  const ic=document.getElementById('ref-play-icon');
+  const btn=document.getElementById('ref-play-btn');
+  if(ic) ic.className=_refPlaying?'ti ti-player-pause':'ti ti-player-play';
+  if(btn) btn.innerHTML=(_refPlaying?'<i class="ti ti-player-pause" id="ref-play-icon"></i> PARAR REFERÊNCIA':'<i class="ti ti-player-play" id="ref-play-icon"></i> OUVIR REFERÊNCIA');
+}
+function loadRefAgain(){
+  _stopRefPlay();
+  document.getElementById('ref-info').style.display='none';
+  document.getElementById('ref-drop').style.display='';
+  document.getElementById('ref-file').value='';
+  _refSpectrum=null;
+}
+
 function handleRefDrop(e){
   e.preventDefault(); document.getElementById('ref-drop').classList.remove('drag-over');
   if(e.dataTransfer.files[0]) loadRef(e.dataTransfer.files[0]);
@@ -623,6 +721,8 @@ function analyseAndDisplayRef(name){
   const dynRange=(peak>0&&rms>0)?20*Math.log10(peak/rms):20;
   const tot=lowE+midE+highE||1;
   refStats={lufs,peakdB,dynRange,lowR:lowE/tot,midR:midE/tot,highR:highE/tot,name};
+  _computeRefSpectrum();
+  _drawReferenceOverlay();
 
   // Show info panel, hide drop zone
   document.getElementById('ref-drop').style.display='none';
@@ -680,49 +780,37 @@ function analyseAndDisplayRef(name){
 
 function applyRefToPreset(){
   if(!refStats){setStatus('Carrega uma referência primeiro');return;}
-  if(playMode!=='before'){
-    setStatus('⚠️ Volta ao modo ORIGINAL para aplicar a referência');
-    return;
-  }
-  initAudio(); // ensure audioCtx exists
-  // Reset ALL DSP first
+  initAudio();
   resetAllDSP();
   resetModuleBypasses();
-  if(audioCtx){
-    eqSub.gain.value=0; eqBass.gain.value=0; eqLowNode.gain.value=0;
-    eqMid.gain.value=0; eqHigh.gain.value=0; eqAir.gain.value=0;
-  }
-  // Match loudness
-  const diffLUFS=refStats.lufs-(-9);
-  kvals.LOUD=Math.round(Math.min(95,Math.max(20,50+diffLUFS*3)));
-  // Match bass
-  if(refStats.lowR>0.50){ kvals.BASS=Math.min(90,kvals.BASS+15); if(audioCtx)eqSub.gain.value+=3; }
-  else if(refStats.lowR<0.20){ kvals.BASS=Math.max(20,kvals.BASS-15); if(audioCtx)eqSub.gain.value-=2; }
-  // Match mids
-  if(refStats.midR>0.15){ kvals.FOCUS=Math.min(85,kvals.FOCUS+10); if(audioCtx)eqMid.gain.value+=2; }
-  // Match highs
-  if(refStats.highR>0.10){ kvals.CLEAN=Math.min(85,kvals.CLEAN+10); if(audioCtx)eqAir.gain.value+=2; }
-  // Match dynamics
-  if(refStats.dynRange>18) kvals.PUNCH=Math.min(85,kvals.PUNCH+15);
-  else if(refStats.dynRange<8) kvals.PUNCH=Math.max(20,kvals.PUNCH-10);
+
+  // Translate reference analysis into KNOB values (so applyDSP reproduces it reliably)
+  const diffLUFS = refStats.lufs - (-9);
+  kvals.LOUD = Math.round(Math.min(95, Math.max(35, 65 + diffLUFS*2)));
+
+  // Bass: based on low-energy ratio
+  if(refStats.lowR>0.45)      kvals.BASS=72;
+  else if(refStats.lowR>0.32) kvals.BASS=62;
+  else if(refStats.lowR<0.18) kvals.BASS=40;
+  else                        kvals.BASS=52;
+
+  // Mids / focus
+  kvals.FOCUS = refStats.midR>0.45 ? 64 : refStats.midR<0.30 ? 44 : 52;
+
+  // Highs / clean
+  kvals.CLEAN = refStats.highR>0.30 ? 64 : refStats.highR<0.18 ? 44 : 54;
+
+  // Dynamics / punch
+  kvals.PUNCH = refStats.dynRange>16 ? 68 : refStats.dynRange<8 ? 40 : 52;
+
+  // Width neutral
+  kvals.WIDE = 52;
 
   refreshKnobs();
-  // Apply EQ from refStats analysis
-  if(audioCtx){
-    // Apply reference-based EQ directly
-    eqSub.gain.value    = refStats.lowR>0.4  ?  2.0 : refStats.lowR<0.1 ? -2.0 : 0.5;
-    eqBass.gain.value   = refStats.lowR>0.35 ?  1.5 : 0.0;
-    eqLowNode.gain.value= refStats.lowR>0.3  ?  1.0 : 0.0;
-    eqMid.gain.value    = refStats.midR>0.1  ?  1.2 : 0.0;
-    eqHigh.gain.value   = refStats.highR>0.05?  1.0 : 0.0;
-    eqAir.gain.value    = refStats.highR>0.03?  0.8 : 0.0;
-    // Gain for loudness matching
-    const gainDb = Math.max(-6, Math.min(6, -9 - refStats.lufs));
-    masterGain.gain.setTargetAtTime(Math.pow(10,gainDb/20), audioCtx.currentTime, 0.1);
-  }
-  syncEQSliders();
-  setMode('after'); // switch to PROCESSADO
-  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+'  — em PROCESSADO · ajusta por cima');
+  setMode('after');   // switch to PROCESSADO
+  applyDSP();         // produce the sound from the knobs (persists)
+  drawInteractiveEQ();
+  setStatus('✓ Referência aplicada: '+refStats.name.replace(/\.[^.]+$/,'')+' — agora em PROCESSADO. Ouve a diferença e ajusta por cima.');
 }
 
 // ===== FILE LOAD =====
@@ -745,8 +833,8 @@ function loadFile(file){
       document.getElementById('time-total').textContent=fmtTime(audioBuffer.duration);
       document.getElementById('waveform-wrap').style.display='flex';
       document.getElementById('drop-zone').style.display='none';
-      document.getElementById('export-wrap').style.display='flex';
-  const efmtw=document.getElementById('export-fmt-wrap');if(efmtw)efmtw.style.display='block';;
+      const eb=document.getElementById('export-btn'); if(eb) eb.style.display='flex';
+      const eo=document.getElementById('export-opts'); if(eo) eo.style.display='flex';
       const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='flex';
       const nb=document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
       drawWaveform(); applyDSP();
@@ -1395,11 +1483,23 @@ async function _originalExport(){
     const oSDry=offCtx.createGain();oSDry.gain.value=1-mix;
     const oSWet=offCtx.createGain();oSWet.gain.value=mix;
     const oSMix=offCtx.createGain();oSMix.gain.value=1;
+    const oSTrim=offCtx.createGain();oSTrim.gain.value=shapeTrimGain?shapeTrimGain.gain.value:1;
+    // Transient (mirror live node)
+    const oTrans=offCtx.createDynamicsCompressor();
+    if(_transientNode){
+      oTrans.threshold.value=_transientNode.threshold.value;
+      oTrans.ratio.value=_transientNode.ratio.value;
+      oTrans.attack.value=_transientNode.attack.value;
+      oTrans.release.value=_transientNode.release.value;
+      oTrans.knee.value=6;
+    } else { oTrans.threshold.value=0; oTrans.ratio.value=1; }
     const oGain=offCtx.createGain();oGain.gain.value=masterGain.gain.value;
     oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
     oAir.connect(oSDry);oSDry.connect(oSMix);
     oAir.connect(oShape);oShape.connect(oSWet);oSWet.connect(oSMix);
-    oSMix.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(offCtx.destination);
+    oSMix.connect(oSTrim);
+    oSTrim.connect(oComp);oComp.connect(oTrans);oTrans.connect(oLim);oLim.connect(oGain);
+    oGain.connect(offCtx.destination);
     const src=offCtx.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
     const rendered=await offCtx.startRendering();
     const isHouse=curPreset==='house';
@@ -1635,16 +1735,10 @@ function _measureLUFS_BS1770(buffer){
   return 10*Math.log10(gated.reduce((a,b)=>a+Math.pow(10,b/10),0)/gated.length);
 }
 
-// Transient Shaper (Feat 9)
+// Transient Shaper — node is created in buildChain and lives in series
 let _transientNode=null, _transientDry=null, _transientWet=null;
 let _transientAttack=50, _transientSustain=50;
-function _initTransient(){
-  if(_transientNode||!audioCtx) return;
-  _transientNode=audioCtx.createDynamicsCompressor();
-  _transientNode.threshold.value=-40; _transientNode.ratio.value=4;
-  _transientNode.attack.value=0.001; _transientNode.release.value=0.2;
-  _transientNode.knee.value=6;
-}
+function _initTransient(){ /* node created in buildChain */ }
 function updateTransient(){
   const a=parseFloat(document.getElementById('trans-attack')?.value||50);
   const s=parseFloat(document.getElementById('trans-sustain')?.value||50);
@@ -1653,13 +1747,25 @@ function updateTransient(){
   if(sv) sv.textContent=(s>=50?'+':'')+(s-50)+'%';
   _transientAttack=a; _transientSustain=s;
   if(!_transientNode||!audioCtx) return;
-  // Attack: controls how fast transients pass through (lower = more punch)
-  const atkMs=Math.max(0.001, 0.05*(1-(a-50)/100));
-  const relMs=Math.max(0.05,  0.3*(s/100));
-  _transientNode.attack.value=atkMs;
-  _transientNode.release.value=relMs;
-  const ratio=1+(a/50)*6;
-  _transientNode.ratio.value=ratio;
+  const now=audioCtx.currentTime;
+  // At 50/50 → no effect (ratio 1). Above 50 attack → punch (compress sustain, fast attack).
+  const aN=(a-50)/50;  // -1..+1
+  const sN=(s-50)/50;  // -1..+1
+  if(Math.abs(aN)<0.02 && Math.abs(sN)<0.02){
+    // neutral — bypass
+    _transientNode.threshold.setTargetAtTime(0, now, 0.05);
+    _transientNode.ratio.setTargetAtTime(1, now, 0.05);
+    return;
+  }
+  // More attack = lower threshold + faster attack + higher ratio → emphasises transients
+  const thr = -10 - Math.abs(aN)*25;          // -10..-35 dB
+  const ratio = 1 + Math.abs(aN)*5;           // 1..6
+  const atk = aN>0 ? 0.0008 : 0.02;           // punchy vs soft
+  const rel = sN>0 ? 0.30 : 0.08;             // more sustain = longer release
+  _transientNode.threshold.setTargetAtTime(thr, now, 0.05);
+  _transientNode.ratio.setTargetAtTime(ratio, now, 0.05);
+  _transientNode.attack.setTargetAtTime(atk, now, 0.05);
+  _transientNode.release.setTargetAtTime(rel, now, 0.05);
   _snapUndoThrottled();
   setStatus('Transient shaper: Attack '+(a>=50?'+':'')+(a-50)+'% · Sustain '+(s>=50?'+':'')+(s-50)+'%');
 }
@@ -1699,8 +1805,8 @@ function _initMultiband(){
 function updateMultiband(){
   const active=document.getElementById('mb-toggle')?.checked;
   mbActive=active||false;
-  if(!active||!audioCtx) return;
-  _initMultiband();
+  if(!audioCtx) return;
+  const now=audioCtx.currentTime;
   const get=id=>parseFloat(document.getElementById(id)?.value||0);
   ['low','mid','high'].forEach(band=>{
     const thr=get('mb-'+band+'-thr');
@@ -1710,10 +1816,15 @@ function updateMultiband(){
     const vR=document.getElementById('mb-'+band+'-ratio-v');
     if(vT) vT.textContent=thr+' dB';
     if(vR) vR.textContent=ratio+':1';
-    if(comp&&audioCtx){comp.threshold.value=thr;comp.ratio.value=ratio;}
+    if(comp){comp.threshold.value=thr;comp.ratio.value=ratio;}
   });
+  // Crossfade: ON → bands path, OFF → direct path
+  if(mbInputGain&&mbBandsGain){
+    mbInputGain.gain.setTargetAtTime(mbActive?0:1, now, 0.05);
+    mbBandsGain.gain.setTargetAtTime(mbActive?1:0, now, 0.05);
+  }
   _snapUndoThrottled();
-  setStatus('Multiband COMP activo: Low/Mid/High independentes');
+  setStatus(mbActive?'Multiband COMP activo: Low/Mid/High independentes':'Multiband COMP desligado');
 }
 
 // PLR (Peak to Loudness Ratio — Feat 13)
@@ -1894,8 +2005,8 @@ function newTrackUpload(){
   audioBuffer=null; refBuffer=null; refStats=null;
   document.getElementById('drop-zone').style.display='flex';
   document.getElementById('waveform-wrap').style.display='none';
-  document.getElementById('export-wrap').style.display='none';
-  const efmtw2=document.getElementById('export-fmt-wrap');if(efmtw2)efmtw2.style.display='none';;
+  const eb2=document.getElementById('export-btn'); if(eb2) eb2.style.display='none';
+  const eo2=document.getElementById('export-opts'); if(eo2) eo2.style.display='none';
   const hb=document.getElementById('headroom-btn'); if(hb) hb.style.display='none';
   document.getElementById('new-track-btn').style.display='none';
   // Reset to original mode
@@ -2023,12 +2134,25 @@ function applyModuleBypass(module, bypassed){
       break;
     case 'midside':
       if(bypassed){
-        moduleBypassSaved.midside={mid:msMidGain?.gain.value||1,side:msSideGain?.gain.value||1};
-        if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
-        if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.05);
+        moduleBypassSaved.midside={
+          mid:msMidGain?.gain.value||1, side:msSideGain?.gain.value||1,
+          ml:msMidEqLow?.gain.value||0, mm:msMidEqMid?.gain.value||0, mh:msMidEqHigh?.gain.value||0,
+          sl:msSideEqLow?.gain.value||0, sm:msSideEqMid?.gain.value||0, sh:msSideEqHigh?.gain.value||0
+        };
+        const now=audioCtx.currentTime;
+        if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,now,0.05);
+        if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,now,0.05);
+        [msMidEqLow,msMidEqMid,msMidEqHigh,msSideEqLow,msSideEqMid,msSideEqHigh].forEach(n=>{if(n)n.gain.setTargetAtTime(0,now,0.05);});
       } else if(moduleBypassSaved.midside){
-        if(msMidGain)  msMidGain.gain.setTargetAtTime(moduleBypassSaved.midside.mid,audioCtx.currentTime,0.05);
-        if(msSideGain) msSideGain.gain.setTargetAtTime(moduleBypassSaved.midside.side,audioCtx.currentTime,0.05);
+        const now=audioCtx.currentTime, s=moduleBypassSaved.midside;
+        if(msMidGain)  msMidGain.gain.setTargetAtTime(s.mid,now,0.05);
+        if(msSideGain) msSideGain.gain.setTargetAtTime(s.side,now,0.05);
+        if(msMidEqLow)  msMidEqLow.gain.setTargetAtTime(s.ml,now,0.05);
+        if(msMidEqMid)  msMidEqMid.gain.setTargetAtTime(s.mm,now,0.05);
+        if(msMidEqHigh) msMidEqHigh.gain.setTargetAtTime(s.mh,now,0.05);
+        if(msSideEqLow) msSideEqLow.gain.setTargetAtTime(s.sl,now,0.05);
+        if(msSideEqMid) msSideEqMid.gain.setTargetAtTime(s.sm,now,0.05);
+        if(msSideEqHigh)msSideEqHigh.gain.setTargetAtTime(s.sh,now,0.05);
       }
       break;
     case 'dyn':
@@ -2600,7 +2724,7 @@ function drawInteractiveEQ(){
   const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||100;
   if(canvas.width!==W) canvas.width=W;
   const ctx=canvas.getContext('2d');
-  const isDark = document.body.classList.contains('dark')||window.matchMedia('(prefers-color-scheme:dark)').matches;
+  const isDark = true; // app is always dark-themed
   ctx.fillStyle = isDark?'#07070e':'#f8f8f5';
   ctx.fillRect(0,0,W,H);
   // grid
@@ -2723,7 +2847,7 @@ function _drawLUFSHistogram(){
   const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||50;
   if(canvas.width!==W) canvas.width=W;
   const ctx=canvas.getContext('2d');
-  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+  const isDark=true; // app is always dark-themed
   ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
   if(!_lufsHistory.length) return;
   const bw=W/_lufsHistMax;
@@ -2976,7 +3100,7 @@ function drawAutomation(){
   const canvas=_autoCanvas; if(!canvas||!_autoCtx) return;
   const W=canvas.width, H=canvas.height;
   const ctx=_autoCtx;
-  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+  const isDark=true; // app is always dark-themed
   ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
   const PARAM_COLS={LOUD:'#ff3ab5',BASS:'#b855f7',WIDE:'#2dff8a'};
   ctx.strokeStyle=isDark?'#ffffff08':'#00000008'; ctx.lineWidth=0.5;
@@ -3118,53 +3242,106 @@ async function runBatch(){
 }
 
 // ── FEAT 8: Reference overlay (spectral comparison) ────────────────────────
+// Stored reference spectrum (computed once on load)
+let _refSpectrum=null; // Float32Array of 0..1 magnitudes, log-freq binned
+
+function _computeRefSpectrum(){
+  if(!refBuffer){ _refSpectrum=null; return; }
+  const NB=64; // number of log bins to display
+  const data=refBuffer.getChannelData(0);
+  const sr=refBuffer.sampleRate;
+  // crude band energy via downsampled Goertzel-ish: use simple FFT on a window
+  const N=4096;
+  const start=Math.floor(data.length/2 - N/2);
+  const re=new Float32Array(N), im=new Float32Array(N);
+  for(let i=0;i<N;i++){ re[i]=data[Math.max(0,start+i)]||0; im[i]=0; }
+  // Hann window
+  for(let i=0;i<N;i++){ re[i]*=0.5*(1-Math.cos(2*Math.PI*i/(N-1))); }
+  // naive DFT only for the log-spaced target freqs (fast enough at 64 bins)
+  const bins=new Float32Array(NB);
+  for(let b=0;b<NB;b++){
+    const f=20*Math.pow(20000/20, b/(NB-1));
+    const k=f/sr*N;
+    let sr2=0, si2=0;
+    const wstep=2*Math.PI*k/N;
+    for(let n=0;n<N;n+=4){ // step 4 for speed
+      const ph=wstep*n;
+      sr2+=re[n]*Math.cos(ph); si2-=re[n]*Math.sin(ph);
+    }
+    bins[b]=Math.sqrt(sr2*sr2+si2*si2);
+  }
+  // normalize to 0..1 (dB scaled)
+  let mx=1e-9; for(let b=0;b<NB;b++) mx=Math.max(mx,bins[b]);
+  for(let b=0;b<NB;b++){
+    const db=20*Math.log10((bins[b]/mx)+1e-6); // -120..0
+    bins[b]=Math.max(0,Math.min(1,(db+72)/72)); // map -72..0 → 0..1
+  }
+  _refSpectrum=bins;
+}
+
 function _drawReferenceOverlay(){
   const canvas=document.getElementById('ref-overlay-canvas');
-  if(!canvas||!analyserNode) return;
+  if(!canvas) return;
   const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||80;
   if(canvas.width!==W) canvas.width=W;
   const ctx=canvas.getContext('2d');
-  const isDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-  ctx.fillStyle=isDark?'#07070e':'#f8f8f5'; ctx.fillRect(0,0,W,H);
-  const fd=new Uint8Array(analyserNode.frequencyBinCount);
-  analyserNode.getByteFrequencyData(fd);
+  // black background always
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+
+  // grid + freq labels
+  const freqs=[60,250,1000,4000,16000], lbls=['60Hz','250Hz','1kHz','4kHz','16kHz'];
   const sr=audioCtx?.sampleRate||44100;
-  const fx=f=>Math.log10(f/20)/Math.log10(sr/2/20)*W;
-  ctx.strokeStyle='#534AB7'; ctx.lineWidth=1.5;
-  ctx.beginPath();
-  for(let i=1;i<fd.length;i++){
-    const f=i*sr/2/analyserNode.fftSize;
-    if(f<20||f>20000) continue;
-    const x=fx(f), y=H-(fd[i]/255)*H;
-    i===1?ctx.moveTo(x,y):ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  // Reference from refBuffer if available
-  if(typeof refBuffer!=='undefined'&&refBuffer){
-    const offCtx2=new OfflineAudioContext(1,4096,refBuffer.sampleRate);
-    const an=offCtx2.createAnalyser(); an.fftSize=2048;
-    const src=offCtx2.createBufferSource(); src.buffer=refBuffer;
-    src.connect(an); an.connect(offCtx2.destination); src.start(0);
-    const rfd=new Uint8Array(an.frequencyBinCount);
-    an.getByteFrequencyData(rfd);
-    ctx.strokeStyle='#993C1D'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
-    ctx.beginPath();
-    for(let i=1;i<rfd.length;i++){
-      const f=i*(refBuffer.sampleRate/2)/an.fftSize;
+  const fx=f=>Math.log10(f/20)/Math.log10(20000/20)*W;
+  freqs.forEach((f,i)=>{
+    const x=fx(f);
+    ctx.strokeStyle='#ffffff0e'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H-12); ctx.stroke();
+    ctx.fillStyle='#ffffff55'; ctx.font='9px monospace'; ctx.textAlign='center';
+    ctx.fillText(lbls[i],x,H-2);
+  });
+
+  // ── FAIXA (current track) — live spectrum, CYAN filled ───────────────────
+  if(analyserNode){
+    const fd=new Uint8Array(analyserNode.frequencyBinCount);
+    analyserNode.getByteFrequencyData(fd);
+    ctx.beginPath(); ctx.moveTo(0,H-12);
+    for(let i=1;i<fd.length;i++){
+      const f=i*sr/2/analyserNode.fftSize;
       if(f<20||f>20000) continue;
-      const x=fx(f), y=H-(rfd[i]/255)*H;
-      i===1?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      const x=fx(f), y=(H-12)-(fd[i]/255)*(H-16);
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H-12); ctx.closePath();
+    ctx.fillStyle='rgba(45,212,255,0.18)'; ctx.fill();
+    ctx.strokeStyle='#2dd4ff'; ctx.lineWidth=2;
+    ctx.beginPath();
+    let started=false;
+    for(let i=1;i<fd.length;i++){
+      const f=i*sr/2/analyserNode.fftSize;
+      if(f<20||f>20000) continue;
+      const x=fx(f), y=(H-12)-(fd[i]/255)*(H-16);
+      started?ctx.lineTo(x,y):ctx.moveTo(x,y); started=true;
+    }
+    ctx.stroke();
+  }
+
+  // ── REFERÊNCIA — stored spectrum, AMBER dashed ───────────────────────────
+  if(_refSpectrum){
+    const NB=_refSpectrum.length;
+    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.beginPath();
+    for(let b=0;b<NB;b++){
+      const f=20*Math.pow(20000/20, b/(NB-1));
+      const x=fx(f), y=(H-12)-_refSpectrum[b]*(H-16);
+      b===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     }
     ctx.stroke(); ctx.setLineDash([]);
   }
-  ['60Hz','250Hz','1kHz','4kHz','16kHz'].forEach((lbl,i)=>{
-    const freqs=[60,250,1000,4000,16000];
-    const x=fx(freqs[i]);
-    ctx.strokeStyle=isDark?'#ffffff10':'#00000010'; ctx.lineWidth=0.5;
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
-    ctx.fillStyle=isDark?'#ffffff44':'#00000044'; ctx.font='8px monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl,x,H-2);
-  });
+
+  // legend
+  ctx.textAlign='left'; ctx.font='9px monospace';
+  ctx.fillStyle='#2dd4ff'; ctx.fillRect(8,8,14,3); ctx.fillText('faixa',26,12);
+  ctx.fillStyle='#ffb020'; ctx.fillRect(80,8,14,3); ctx.fillText('referência',98,12);
 }
 
 // ── FEAT 9: Geographic market profiles ─────────────────────────────────────
