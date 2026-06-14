@@ -57,6 +57,9 @@
     .mb-band-name{font-size:9px;font-weight:700;letter-spacing:1px;font-family:'Rajdhani',monospace;}
     .mb-val{font-size:9px;color:#888;font-family:'Rajdhani',monospace;text-align:right;}
 
+    /* Stop layout reflow/tremble when playback starts: fixed-width digits */
+    *{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
+
     /* ── Export format selector ── */
     #export-opts{align-items:stretch;gap:6px;}
     #export-fmt{background:#0f0f1a;color:#2dd4ff;border:1px solid rgba(45,212,255,.35);
@@ -69,6 +72,11 @@
       background:rgba(45,255,138,.10);color:#2dff8a;font-family:'Rajdhani',monospace;
       font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;width:100%;transition:all .15s;}
     .export-btn:hover{background:rgba(45,255,138,.18);border-color:#2dff8a;}
+    .eq-presets-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 12px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+    .eq-presets-label{font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-right:4px;font-family:'Rajdhani',monospace;}
+    .eq-preset-chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:'Rajdhani',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;cursor:pointer;transition:all .15s;}
+    .eq-preset-chip:hover{border-color:var(--c1);color:var(--c1);}
+    .eq-preset-chip.active{border-color:var(--c1);color:var(--c1);background:rgba(45,212,255,.1);box-shadow:0 0 0 1px var(--c1);}
 
     /* ── Undo keyboard hint ── */
     .undo-hint{font-size:8px;color:#333;letter-spacing:.5px;}
@@ -141,6 +149,7 @@
     <div class="tab" onclick="openTab('excite',this)">EXCITE</div>
     <div class="tab" onclick="openTab('loud',this)">LOUD</div>
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
+    <div class="tab" onclick="openTab('clip',this)">CLIP</div>
     <div class="tab" onclick="openTab('midside',this)">M/S</div>
       <div class="tab" onclick="openTab('trans',this)">TRANS</div>
       <div class="tab" onclick="openTab('mband',this)">MBAND</div>
@@ -233,6 +242,20 @@
   <div class="tab-panel" id="tab-eq">
     <div class="module-panel">
       <div class="module-title-row"><div class="module-title">EQUALIZER — 6 Band Parametric</div><button class="module-bypass-btn" id="bypass-eq" onclick="toggleModuleBypass('eq')" title="Bypass EQ">BYPASS</button></div>
+      <div class="eq-presets-row">
+        <span class="eq-presets-label">PRESETS EQ</span>
+        <button class="eq-preset-chip" onclick="applyEQPreset('flat',this)">Flat</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('warm',this)">Warm</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('bright',this)">Bright</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('vshape',this)">V-Shape</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('bass',this)">Bass Boost</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('vocal',this)">Vocal</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('kuduro',this)">Kuduro</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('kizomba',this)">Kizomba</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('afrohouse',this)">Afro-House</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('club',this)">Club</button>
+        <button class="eq-preset-chip" onclick="applyEQPreset('air',this)">Air</button>
+      </div>
       <div class="eq-bands">
         <div class="eq-band">
           <div class="eq-band-label">SUB</div><div class="eq-band-freq">60 Hz</div>
@@ -375,7 +398,7 @@
           <span style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;font-family:'Rajdhani';">BALANCE ESPECTRAL</span>
           <span style="font-size:8px;color:var(--muted2);">&#9135;&#9135; = target preset</span>
         </div>
-        <canvas id="spec-balance-canvas" style="width:100%;height:48px;display:block;border-radius:4px;"></canvas>
+        <canvas id="spec-balance-canvas" height="52" style="width:100%;height:52px;display:block;border-radius:4px;"></canvas>
         <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);">
           <span style="font-size:9px;color:var(--muted2);letter-spacing:1px;min-width:60px;font-family:'Rajdhani';">PLR DIN.</span>
           <div style="flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;">
@@ -429,6 +452,9 @@
             <option value="off">OFF</option>
             <option value="4x" selected>4x Oversampling</option>
             <option value="8x">8x Oversampling</option>
+            <option value="16x">16x Oversampling</option>
+            <option value="32x">32x Oversampling</option>
+            <option value="64x">64x Oversampling</option>
           </select><span></span>
         </div>
       </div>
@@ -436,6 +462,37 @@
         <div class="lim-h-row"><div class="lim-h-label">L</div><div class="lim-h-track" style="flex:1"><div class="lim-h-fill" id="lim-fill-l" style="width:5%"></div></div></div>
         <div class="lim-h-row"><div class="lim-h-label">R</div><div class="lim-h-track" style="flex:1"><div class="lim-h-fill" id="lim-fill-r" style="width:5%"></div></div></div>
         <div class="lim-h-marks"><span>0 dBFS</span><span>-6</span><span>-12</span><span>-24</span></div>
+      </div>
+    </div>
+
+    <!-- CLIPPER MODULE (StandardCLIP-style) -->
+    <div class="module-panel">
+      <div class="module-title-row"><div class="module-title">CLIPPER — StandardCLIP Style</div><button class="module-bypass-btn" id="bypass-clip" onclick="toggleModuleBypass('clip')" title="Bypass Clipper">BYPASS</button></div>
+      <div class="mb-toggle-row" style="margin-bottom:12px;">
+        <input type="checkbox" id="clip-toggle" onchange="updateClipper()" style="width:16px;height:16px;accent-color:var(--c4);">
+        <span class="mb-toggle-label">ACTIVAR CLIPPER</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
+        Up-sampling → Input Gain → Clipping → Output Gain → Down-sampling → Ceiling.<br>
+        Aumenta loudness percebido cortando os picos antes do limiter, com oversampling para evitar aliasing.
+      </div>
+      <div class="module-controls">
+        <div class="mod-ctrl"><label>INPUT DRIVE</label><input type="range" min="0" max="18" value="0" step="0.5" id="clip-drive" oninput="updateClipper()"><span id="clip-drive-v">+0.0 dB</span></div>
+        <div class="mod-ctrl"><label>CEILING</label><input type="range" min="-6" max="-0.1" value="-0.1" step="0.1" id="clip-ceiling" oninput="updateClipper()"><span id="clip-ceiling-v">-0.1 dB</span></div>
+        <div class="mod-ctrl"><label>MODO</label>
+          <select id="clip-mode" onchange="updateClipper()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
+            <option value="soft" selected>Soft Clip</option>
+            <option value="softpro">Soft Clip Pro</option>
+            <option value="hard">Hard Clip</option>
+            <option value="sine">Sine Clip</option>
+          </select><span></span>
+        </div>
+        <div class="mod-ctrl"><label>OVERSAMPLING</label>
+          <select id="clip-os" onchange="updateClipper()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
+            <option value="4x" selected>x16 | x64</option>
+            <option value="2x">x4 | x16</option>
+          </select><span></span>
+        </div>
       </div>
     </div>
   </div>
@@ -513,7 +570,7 @@
   <!-- tab TRANS -->
   <div class="tab-panel" id="tab-trans">
     <div class="module-panel">
-      <div class="module-title-row"><div class="module-title">TRANSIENT SHAPER — Attack &amp; Sustain</div></div>
+      <div class="module-title-row"><div class="module-title">TRANSIENT SHAPER — Attack &amp; Sustain</div><button class="module-bypass-btn" id="bypass-transient" onclick="toggleModuleBypass('transient')" title="Bypass Transient Shaper">BYPASS</button></div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6;">Controla transientes (punch) e sustain independentemente do compressor. Attack alto = mais punch nos kicks.</p>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
         <span style="font-size:11px;color:var(--muted);min-width:70px;letter-spacing:1px;">ATTACK</span>
@@ -540,7 +597,7 @@
   <!-- tab MBAND -->
   <div class="tab-panel" id="tab-mband">
     <div class="module-panel">
-      <div class="module-title-row"><div class="module-title">MULTIBAND COMPRESSOR — 3 Bandas Independentes</div></div>
+      <div class="module-title-row"><div class="module-title">MULTIBAND COMPRESSOR — 3 Bandas Independentes</div><button class="module-bypass-btn" id="bypass-multiband" onclick="toggleModuleBypass('multiband')" title="Bypass Multiband">BYPASS</button></div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <input type="checkbox" id="mb-toggle" onchange="updateMultiband()" style="width:16px;height:16px;accent-color:var(--c2);">
         <span style="font-size:11px;color:var(--muted);letter-spacing:1px;">ACTIVAR COMPRESSAO MULTIBANDA</span>

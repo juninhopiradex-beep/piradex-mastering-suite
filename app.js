@@ -74,6 +74,9 @@ let msSplitter=null, msMerger=null, msInL=null, msInR=null;
 let msMidSum=null, msSideSum=null, msInvR1=null, msInvSide=null;
 let msMidEqLow=null, msMidEqMid=null, msMidEqHigh=null;
 let msSideEqLow=null, msSideEqMid=null, msSideEqHigh=null;
+let msDirectGain=null, msProcGain=null;
+let clipInGain=null, clipShaper=null, clipOutGain=null;
+let clipBypassed=false;
 let analyserNode=null;
 let isPlaying=false, pauseOffset=0, startTime=0;
 let animProgress, animRunning=false;
@@ -99,7 +102,10 @@ function openTab(name, el) {
   el.classList.add('active');
   const panel=document.getElementById('tab-'+name);
   if(panel) panel.classList.add('active');
-  if(name==='eq') setTimeout(drawEQCurve,50);
+  // redraw canvases now that the panel is visible (offsetWidth is correct)
+  if(name==='eq')      setTimeout(()=>{drawInteractiveEQ();},60);
+  if(name==='balance') setTimeout(()=>{ if(typeof drawBalanceBars==='function') drawBalanceBars(); },60);
+  if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
 }
 
 // ===== AUDIO INIT =====
@@ -141,11 +147,11 @@ function buildChain() {
   limiterNode.release.value   = 0.05;
   limiterNode.knee.value      = 0;
 
-  // Shape — starts as pure dry (no saturation)
+  // Shape — single SERIAL waveshaper (mix baked into curve → no parallel comb filtering)
   shapeWS      = audioCtx.createWaveShaper();
   shapeWS.oversample = '4x';
-  shapeDryGain = audioCtx.createGain(); shapeDryGain.gain.value = 1.0; // 100% dry
-  shapeWetGain = audioCtx.createGain(); shapeWetGain.gain.value = 0.0; // 0% wet
+  shapeDryGain = audioCtx.createGain(); shapeDryGain.gain.value = 1.0; // kept for compatibility, unused in serial path
+  shapeWetGain = audioCtx.createGain(); shapeWetGain.gain.value = 1.0;
 
   // MasterGain = 1.0 ALWAYS at rest (unity gain)
   masterGain = audioCtx.createGain(); masterGain.gain.value = 1.0;
@@ -199,60 +205,78 @@ function buildChain() {
   // msMidGain / msSideGain already created above (user-controllable)
 
   // ── MASTER OUTPUT / ANALYSER routing ────────────────────────────────────
-  // WET CHAIN (PROCESSADO):
-  // src → EQ → shape(mix) → [MULTIBAND or direct] → comp → transient → limiter → M/S → master → analyser → out
+  // Clean serial chain. M/S and Multiband are OPT-IN crossfade stages that are
+  // fully transparent (unity, bit-equivalent) when not engaged.
+  //
+  // src → EQ(6) → shapeWS → shapeTrim → [MB direct|bands] → comp → transient
+  //     → limiter → [MS direct|processed] → master → analyser → out
+
   eqSub.connect(eqBass); eqBass.connect(eqLowNode); eqLowNode.connect(eqMid);
   eqMid.connect(eqHigh); eqHigh.connect(eqAir);
 
-  // shape parallel
-  eqAir.connect(shapeDryGain); shapeDryGain.connect(shapeMixer);
-  eqAir.connect(shapeWS);      shapeWS.connect(shapeWetGain); shapeWetGain.connect(shapeMixer);
+  // Shape — serial waveshaper (mix baked into curve, no parallel comb)
+  eqAir.connect(shapeWS); shapeWS.connect(shapeMixer);
 
-  // shape trim (absolute output gain for shape stage)
+  // Shape trim
   shapeTrimGain = audioCtx.createGain(); shapeTrimGain.gain.value = 1.0;
   shapeMixer.connect(shapeTrimGain);
 
-  // shapeTrim → multiband split point
-  // direct (multiband OFF): shapeTrim → mbInputGain → comp
+  // ── MULTIBAND crossfade (direct vs 3-band) ──────────────────────────────
+  // direct path (default ON): shapeTrim → mbInputGain → compNode
   shapeTrimGain.connect(mbInputGain); mbInputGain.connect(compNode);
-  // multiband (ON): shapeTrim → 3 bands → comps → mbBandsGain → comp
-  shapeTrimGain.connect(_mbLow);  _mbLow.connect(_mbLowComp);   _mbLowComp.connect(mbBandsGain);
-  shapeTrimGain.connect(_mbMid);  _mbMid.connect(_mbMidComp);   _mbMidComp.connect(mbBandsGain);
-  shapeTrimGain.connect(_mbHigh); _mbHigh.connect(_mbHighComp); _mbHighComp.connect(mbBandsGain);
+  // band path (engaged): shapeTrim → crossover bands → comps → mbBandsGain → compNode
+  shapeTrimGain.connect(_mbLow);
+  shapeTrimGain.connect(_mbMid);
+  shapeTrimGain.connect(_mbHigh);
+  _mbLowComp.connect(mbBandsGain);
+  _mbMidComp.connect(mbBandsGain);
+  _mbHighComp.connect(mbBandsGain);
   mbBandsGain.connect(compNode);
 
-  // comp → transient → limiter
+  // comp → transient → CLIPPER → limiter
   compNode.connect(_transientNode);
-  _transientNode.connect(limiterNode);
+  // Clipper: input gain → waveshaper(soft/hard clip) → output gain (oversampled)
+  clipInGain  = audioCtx.createGain(); clipInGain.gain.value = 1.0;
+  clipShaper  = audioCtx.createWaveShaper(); clipShaper.oversample='4x';
+  clipOutGain = audioCtx.createGain(); clipOutGain.gain.value = 1.0;
+  _buildClipCurve(0, 'soft'); // identity at rest
+  _transientNode.connect(clipInGain);
+  clipInGain.connect(clipShaper);
+  clipShaper.connect(clipOutGain);
+  clipOutGain.connect(limiterNode);
 
-  // limiter → M/S encode/process/decode → masterGain
-  // Split incoming stereo
+  // ── M/S crossfade (direct vs processed) ─────────────────────────────────
+  // msDirectGain (default 1.0) = clean stereo passthrough — NO matrix, no noise
+  // msProcGain   (default 0.0) = the M/S-processed branch, only faded in when used
+  msDirectGain = audioCtx.createGain(); msDirectGain.gain.value = 1.0;
+  msProcGain   = audioCtx.createGain(); msProcGain.gain.value   = 0.0;
+
+  // direct passthrough
+  limiterNode.connect(msDirectGain); msDirectGain.connect(masterGain);
+
+  // processed M/S branch
   limiterNode.connect(msSplitter);
-  // L path
   msSplitter.connect(msInL, 0);
-  // R path
   msSplitter.connect(msInR, 1);
-  // Mid = 0.5*(L + R)
+  // Mid = 0.5(L+R)
   msInL.connect(msMidSum); msInR.connect(msMidSum);
-  // Side = 0.5*(L - R)
+  // Side = 0.5(L-R)
   msInL.connect(msSideSum); msInR.connect(msInvR1); msInvR1.connect(msSideSum);
-  // Apply user gains
-  // Mid path EQ (3 bands) then gain
+  // dedicated Mid/Side EQ
   msMidEqLow  = audioCtx.createBiquadFilter(); msMidEqLow.type='lowshelf';  msMidEqLow.frequency.value=250;  msMidEqLow.gain.value=0;
   msMidEqMid  = audioCtx.createBiquadFilter(); msMidEqMid.type='peaking';   msMidEqMid.frequency.value=1500; msMidEqMid.Q.value=0.8; msMidEqMid.gain.value=0;
   msMidEqHigh = audioCtx.createBiquadFilter(); msMidEqHigh.type='highshelf';msMidEqHigh.frequency.value=6000; msMidEqHigh.gain.value=0;
   msSideEqLow = audioCtx.createBiquadFilter(); msSideEqLow.type='lowshelf'; msSideEqLow.frequency.value=250;  msSideEqLow.gain.value=0;
   msSideEqMid = audioCtx.createBiquadFilter(); msSideEqMid.type='peaking';  msSideEqMid.frequency.value=1500; msSideEqMid.Q.value=0.8; msSideEqMid.gain.value=0;
   msSideEqHigh= audioCtx.createBiquadFilter(); msSideEqHigh.type='highshelf';msSideEqHigh.frequency.value=6000;msSideEqHigh.gain.value=0;
-
   msMidSum.connect(msMidEqLow); msMidEqLow.connect(msMidEqMid); msMidEqMid.connect(msMidEqHigh); msMidEqHigh.connect(msMidGain);
   msSideSum.connect(msSideEqLow); msSideEqLow.connect(msSideEqMid); msSideEqMid.connect(msSideEqHigh); msSideEqHigh.connect(msSideGain);
-  // Decode: L = Mid + Side ; R = Mid - Side
-  msMidGain.connect(msMerger, 0, 0);   // Mid → L
-  msSideGain.connect(msMerger, 0, 0);  // +Side → L
-  msMidGain.connect(msMerger, 0, 1);   // Mid → R
-  msSideGain.connect(msInvSide); msInvSide.connect(msMerger, 0, 1); // -Side → R
-  msMerger.connect(masterGain);
+  // Decode L=Mid+Side, R=Mid-Side into a 2-ch merger
+  msMidGain.connect(msMerger, 0, 0);
+  msSideGain.connect(msMerger, 0, 0);
+  msMidGain.connect(msMerger, 0, 1);
+  msSideGain.connect(msInvSide); msInvSide.connect(msMerger, 0, 1);
+  msMerger.connect(msProcGain); msProcGain.connect(masterGain);
 
   masterGain.connect(analyserNode);
 
@@ -278,25 +302,78 @@ const SHAPE_INFO={
   deess:'DE-ESS: atenuação de sibilantes e harshness acima de 5kHz.'
 };
 
-function makeShapeCurve(mode, drive) {
-  const n=512, curve=new Float32Array(n);
-  const k=Math.max(0.001, drive);
+// ===== CLIPPER (StandardCLIP-style) =====
+// Signal: input gain → clip transfer fn → output gain → (ceiling handled by limiter)
+let clipMode='soft', clipDriveDb=0, clipCeilingDb=-0.1;
+function _buildClipCurve(driveDb, mode){
+  if(!clipShaper) return;
+  const n=4096, curve=new Float32Array(n);
+  const drive=Math.pow(10, (driveDb||0)/20); // input gain inside the shaper
+  for(let i=0;i<n;i++){
+    let x=((i*2/(n-1))-1)*drive;
+    let y;
+    switch(mode){
+      case 'hard':    y=Math.max(-1,Math.min(1,x)); break;
+      case 'soft':    y=Math.tanh(x); break;                 // smooth soft clip
+      case 'softpro': { const k=2.5; y=Math.sign(x)*(1-Math.exp(-k*Math.abs(x)))/(1-Math.exp(-k)); break; }
+      case 'sine':    y=Math.abs(x)<1?Math.sin(x*Math.PI/2):Math.sign(x); break;
+      default:        y=Math.tanh(x);
+    }
+    curve[i]=Math.max(-1,Math.min(1,y));
+  }
+  clipShaper.curve=curve;
+}
+function updateClipper(){
+  const on=document.getElementById('clip-toggle')?.checked;
+  const drive=parseFloat(document.getElementById('clip-drive')?.value||0);
+  const ceil =parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
+  const mode =document.getElementById('clip-mode')?.value||'soft';
+  const dv=document.getElementById('clip-drive-v'), cv=document.getElementById('clip-ceiling-v');
+  if(dv) dv.textContent=(drive>=0?'+':'')+drive.toFixed(1)+' dB';
+  if(cv) cv.textContent=ceil.toFixed(1)+' dB';
+  clipMode=mode; clipDriveDb=drive; clipCeilingDb=ceil;
+  if(!audioCtx) return;
+  // oversampling selector
+  const os=document.getElementById('clip-os')?.value||'4x';
+  if(clipShaper) clipShaper.oversample = (os==='2x')?'2x':'4x';
+  const now=audioCtx.currentTime;
+  if(clipBypassed || !on){
+    // transparent: identity curve, unity gains
+    _buildClipCurve(0,'soft');
+    if(clipInGain)  clipInGain.gain.setTargetAtTime(1, now, 0.05);
+    if(clipOutGain) clipOutGain.gain.setTargetAtTime(1, now, 0.05);
+  } else {
+    _buildClipCurve(drive, mode);
+    // input gain pushes into the clip; output gain compensates toward ceiling
+    if(clipInGain)  clipInGain.gain.setTargetAtTime(1, now, 0.05);
+    if(clipOutGain) clipOutGain.gain.setTargetAtTime(Math.pow(10, ceil/20), now, 0.05);
+  }
+  _snapUndoThrottled();
+  setStatus(on&&!clipBypassed ? ('Clipper '+mode.toUpperCase()+': drive '+(drive>=0?'+':'')+drive.toFixed(1)+'dB · ceiling '+ceil.toFixed(1)+'dB') : 'Clipper desligado');
+}
+
+function makeShapeCurve(mode, drive, mix) {  const n=2048, curve=new Float32Array(n);
+  const k=Math.max(0, drive);
+  const m=(mix==null)?1:Math.max(0,Math.min(1,mix)); // dry/wet baked in
   for(let i=0;i<n;i++){
     const x=(i*2/(n-1))-1;
+    if(k<0.001){ curve[i]=x; continue; }
+    let y;
     switch(mode){
-      case 'tape':        curve[i]=Math.tanh(x*(1+k*4))/(1+k*0.2); break;
+      case 'tape':        y=Math.tanh(x*(1+k*3))/Math.tanh(1+k*3); break;
       case 'tube':
-      case 'valvulado':   curve[i]=(1+k)*x/(1+k*Math.abs(x)); break;
+      case 'valvulado':   { const a=1+k*2; y=Math.sign(x)*(1-Math.exp(-a*Math.abs(x)))/(1-Math.exp(-a)); break; }
       case 'transistor':
-      case 'solidstate':  curve[i]=Math.sign(x)*Math.pow(Math.abs(x),Math.max(0.1,1-k*0.8)); break;
-      case 'analogico':   curve[i]=Math.tanh(x*(1+k*3))*(1+k*0.15); break;
-      case 'clip':        { const th=Math.max(0.05,1-k*0.9); curve[i]=Math.max(-th,Math.min(th,x))/th; break; }
-      case 'paralimit':   curve[i]=x/Math.sqrt(1+x*x*(k*4)); break;
-      case 'transparente':curve[i]=x*(1+k*0.3); break;
-      case 'deess':       curve[i]=x>0.5*( 1-k*0.5)?0.5*(1-k*0.5)+(x-0.5*(1-k*0.5))*0.2:
-                           x<-0.5*(1-k*0.5)?-0.5*(1-k*0.5)+(x+0.5*(1-k*0.5))*0.2:x; break;
-      default:            curve[i]=Math.tanh(x*(1+k*2));
+      case 'solidstate':  y=Math.sign(x)*Math.pow(Math.abs(x),Math.max(0.3,1-k*0.5)); break;
+      case 'analogico':   y=Math.tanh(x*(1+k*2.5))/Math.tanh(1+k*2.5); break;
+      case 'clip':        { const th=Math.max(0.1,1-k*0.8); y=Math.max(-th,Math.min(th,x))/th; break; }
+      case 'paralimit':   y=x/Math.sqrt(1+x*x*k*3); y*=Math.sqrt(1+k*3); break;
+      case 'transparente':y=Math.tanh(x*(1+k))/Math.tanh(1+k); break;
+      case 'deess':       y=x; break;
+      default:            y=Math.tanh(x*(1+k*2))/Math.tanh(1+k*2);
     }
+    // blend dry/wet inside the transfer function (serial, no comb filtering)
+    curve[i]=Math.max(-1,Math.min(1,(1-m)*x + m*y));
   }
   return curve;
 }
@@ -304,7 +381,8 @@ function makeShapeCurve(mode, drive) {
 function applyShapeCurve() {
   if(!shapeWS) return;
   const drive=parseFloat(document.getElementById('shape-drive')?.value||0)/100;
-  shapeWS.curve=makeShapeCurve(shapeMode, drive);
+  const mix=parseFloat(document.getElementById('shape-mix')?.value||0)/100;
+  shapeWS.curve=makeShapeCurve(shapeMode, drive, mix);
 }
 
 // Shape presets — each mode has its own parameter defaults
@@ -341,9 +419,6 @@ function setShapeMode(mode,el){
     document.getElementById('shape-3rd-v').textContent=preset['3rd']+'%';
     document.getElementById('shape-trim-v').textContent=(preset.trim>=0?'+':'')+preset.trim.toFixed(1)+' dB';
     document.getElementById('shape-info').textContent=preset.info;
-    // Apply DSP
-    if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1-preset.mix/100, audioCtx?.currentTime||0, 0.05);
-    if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(preset.mix/100,   audioCtx?.currentTime||0, 0.05);
   }
   applyShapeCurve();
   if(isPlaying&&playMode==='after') setStatus('Shape: '+mode.toUpperCase()+' activo — ouve a diferença em PROCESSADO');
@@ -358,10 +433,8 @@ function updateShape(){
   document.getElementById('shape-2nd-v').textContent=document.getElementById('shape-2nd').value+'%';
   document.getElementById('shape-3rd-v').textContent=document.getElementById('shape-3rd').value+'%';
   document.getElementById('shape-trim-v').textContent=(trim>=0?'+':'')+trim.toFixed(1)+' dB';
-  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1-mix, audioCtx.currentTime, 0.05);
-  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(mix,   audioCtx.currentTime, 0.05);
+  // mix + drive baked into the serial curve — no parallel path
   applyShapeCurve();
-  // Trim applied to dedicated node (absolute) — never compounds into masterGain
   if(shapeTrimGain&&audioCtx){
     shapeTrimGain.gain.setTargetAtTime(Math.pow(10,trim/20), audioCtx.currentTime, 0.08);
   }
@@ -418,6 +491,7 @@ function applyDSP() {
   if(msSideGain){
     const sideG = Math.max(0, wide/50); // 50=unity(1.0), 0=mono, 100=2x
     msSideGain.gain.setTargetAtTime(sideG, audioCtx.currentTime, 0.08);
+    if(typeof _msEngage==='function') _msEngage();
   }
 
   if(bypassOn){
@@ -472,6 +546,42 @@ function syncEQSliders(){
     if(lbl) lbl.textContent=(v>=0?'+':'')+v.toFixed(1)+' dB';
   }
   drawEQCurve();
+}
+
+// ===== EQ PRESETS =====
+// Each: [sub, bass, low, mid, high, air] in dB
+const EQ_PRESETS={
+  flat:     [0,0,0,0,0,0],
+  warm:     [2.5,2,1,0,-1,-1.5],
+  bright:   [-1,-0.5,0,1,2.5,3.5],
+  vshape:   [4,2.5,0,-2,2.5,4],
+  bass:     [5,4,2,0,0,0],
+  vocal:    [-2,-1,1,3,2,1],
+  kuduro:   [4.5,3,-1,1.5,2.5,2],     // punchy lows + crisp highs
+  kizomba:  [2,2.5,1.5,1,0.5,1],      // warm, smooth
+  afrohouse:[3.5,2,-0.5,0.5,2,3],     // club-ready
+  club:     [4,1.5,-1,0,2,3.5],       // loud system curve
+  air:      [0,0,0,0.5,1.5,4.5]       // top-end sheen
+};
+function applyEQPreset(name,el){
+  if(audioBuffer && !headroomApplied){
+    setStatus('Aplica primeiro o HEADROOM -6dB para usar o EQ');
+    return;
+  }
+  const p=EQ_PRESETS[name]; if(!p) return;
+  const ids=['sub','bass','low','mid','high','air'];
+  const nodes={sub:eqSub,bass:eqBass,low:eqLowNode,mid:eqMid,high:eqHigh,air:eqAir};
+  ids.forEach((id,i)=>{
+    const sl=document.getElementById('eq-'+id), lbl=document.getElementById('eq-'+id+'-v');
+    if(sl) sl.value=p[i];
+    if(lbl) lbl.textContent=(p[i]>=0?'+':'')+p[i].toFixed(1)+' dB';
+    if(nodes[id]&&audioCtx) nodes[id].gain.value=p[i];
+  });
+  document.querySelectorAll('.eq-preset-chip').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  drawInteractiveEQ();
+  _snapUndoThrottled();
+  setStatus('Preset EQ aplicado: '+name);
 }
 
 function updateEQBand(band, val){
@@ -564,6 +674,7 @@ function updateWidth(){
   const midGain   = Math.pow(10, mid/20);
   if(msSideGain) msSideGain.gain.setTargetAtTime(sideGain, now, 0.08);
   if(msMidGain)  msMidGain.gain.setTargetAtTime(midGain,  now, 0.08);
+  _msEngage();
   setStatus('Width: '+w+'% · Mid: '+(mid>=0?'+':'')+mid+'dB · Side: '+(side>=0?'+':'')+side+'dB');
 }
 
@@ -631,21 +742,38 @@ function updateMidSide(){
   const mLow=get('ms-mid-low'), mMid=get('ms-mid-mid'), mHigh=get('ms-mid-high'), mGain=get('ms-mid-gain');
   const sLow=get('ms-side-low'), sMid=get('ms-side-mid'), sHigh=get('ms-side-high'), sGain=get('ms-side-gain');
 
-  // Absolute writes to the DEDICATED M/S EQ nodes — never touches main EQ
   if(msMidEqLow)  msMidEqLow.gain.setTargetAtTime(mLow, now, 0.08);
   if(msMidEqMid)  msMidEqMid.gain.setTargetAtTime(mMid, now, 0.08);
   if(msMidEqHigh) msMidEqHigh.gain.setTargetAtTime(mHigh, now, 0.08);
   if(msSideEqLow) msSideEqLow.gain.setTargetAtTime(sLow, now, 0.08);
   if(msSideEqMid) msSideEqMid.gain.setTargetAtTime(sMid, now, 0.08);
   if(msSideEqHigh)msSideEqHigh.gain.setTargetAtTime(sHigh, now, 0.08);
-
-  // Mid/Side gains — absolute (Side also respects WIDTH knob via updateWidth, so here only when changed)
   if(msMidGain)  msMidGain.gain.setTargetAtTime(Math.pow(10,mGain/20), now, 0.08);
   if(msSideGain) msSideGain.gain.setTargetAtTime(Math.max(0.0, Math.pow(10,sGain/20)), now, 0.08);
 
+  // engage processed branch only if something is non-neutral
+  _msEngage();
   _snapUndoThrottled();
   setStatus('M/S: Mid '+mLow.toFixed(1)+'/'+(mMid>=0?'+':'')+mMid.toFixed(1)+'/'+mHigh.toFixed(1)+' · Side '+(sLow>=0?'+':'')+sLow.toFixed(1)+'/'+(sMid>=0?'+':'')+sMid.toFixed(1)+'/'+(sHigh>=0?'+':'')+sHigh.toFixed(1)+' dB');
 }
+
+// Decide whether the processed M/S branch should be active (any non-neutral param)
+function _msEngage(){
+  if(!audioCtx||!msDirectGain||!msProcGain) return;
+  const get=id=>parseFloat(document.getElementById(id)?.value||0);
+  const ids=['ms-mid-low','ms-mid-mid','ms-mid-high','ms-mid-gain','ms-side-low','ms-side-mid','ms-side-high','ms-side-gain'];
+  let active=ids.some(id=>Math.abs(get(id))>0.05);
+  // Width knobs also engage it
+  const w=parseFloat(document.getElementById('width-main')?.value||100);
+  const mid=parseFloat(document.getElementById('width-mid')?.value||0);
+  const side=parseFloat(document.getElementById('width-side')?.value||0);
+  if(Math.abs(w-100)>0.5||Math.abs(mid)>0.05||Math.abs(side)>0.05) active=true;
+  if(msBypassed) active=false;
+  const now=audioCtx.currentTime;
+  msDirectGain.gain.setTargetAtTime(active?0:1, now, 0.06);
+  msProcGain.gain.setTargetAtTime(active?1:0, now, 0.06);
+}
+let msBypassed=false;
 
 // ===== REFERENCE TRACK =====
 let _refSource=null, _refPlaying=false;
@@ -1058,8 +1186,10 @@ function drawSpectrum(){
   const canvas=document.getElementById('spec'); if(!canvas)return;
   const ctx=canvas.getContext('2d');
   const ow=canvas.offsetWidth||300, oh=canvas.offsetHeight||160;
-  if(canvas.width!==ow) canvas.width=ow;
-  if(canvas.height!==oh) canvas.height=oh;
+  // Only resize when the change is meaningful (>2px) — prevents per-frame
+  // tremble while the layout settles on first load.
+  if(Math.abs(canvas.width-ow)>2) canvas.width=ow;
+  if(Math.abs(canvas.height-oh)>2) canvas.height=oh;
   const W=canvas.width, H=canvas.height;
   const padL=28,padR=6,padT=6,padB=18;
 
@@ -1518,7 +1648,29 @@ async function _originalExport(){
     oAir.connect(oSDry);oSDry.connect(oSMix);
     oAir.connect(oShape);oShape.connect(oSWet);oSWet.connect(oSMix);
     oSMix.connect(oSTrim);
-    oSTrim.connect(oComp);oComp.connect(oTrans);oTrans.connect(oLim);oLim.connect(oGain);
+    oSTrim.connect(oComp);oComp.connect(oTrans);
+    // Clipper (mirror live) — only if engaged
+    const clipOn=document.getElementById('clip-toggle')?.checked && !clipBypassed;
+    if(clipOn){
+      const oClipIn=offCtx.createGain();oClipIn.gain.value=1;
+      const oClipWS=offCtx.createWaveShaper();oClipWS.oversample='4x';
+      const dDb=parseFloat(document.getElementById('clip-drive')?.value||0);
+      const cDb=parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
+      const mode=document.getElementById('clip-mode')?.value||'soft';
+      const n=4096,curve=new Float32Array(n),drive=Math.pow(10,dDb/20);
+      for(let i=0;i<n;i++){let x=((i*2/(n-1))-1)*drive;let y;
+        if(mode==='hard')y=Math.max(-1,Math.min(1,x));
+        else if(mode==='softpro'){const k=2.5;y=Math.sign(x)*(1-Math.exp(-k*Math.abs(x)))/(1-Math.exp(-k));}
+        else if(mode==='sine')y=Math.abs(x)<1?Math.sin(x*Math.PI/2):Math.sign(x);
+        else y=Math.tanh(x);
+        curve[i]=Math.max(-1,Math.min(1,y));}
+      oClipWS.curve=curve;
+      const oClipOut=offCtx.createGain();oClipOut.gain.value=Math.pow(10,cDb/20);
+      oTrans.connect(oClipIn);oClipIn.connect(oClipWS);oClipWS.connect(oClipOut);oClipOut.connect(oLim);
+    } else {
+      oTrans.connect(oLim);
+    }
+    oLim.connect(oGain);
     oGain.connect(offCtx.destination);
     const src=offCtx.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
     const rendered=await offCtx.startRendering();
@@ -1591,11 +1743,14 @@ function _drawSpectralBalance(){
   if(_specBalFrame%6!==0) return; // every 6 frames ~10fps
   const canvas=document.getElementById('spec-balance-canvas');
   if(!canvas||!analyserNode) return;
-  const W=canvas.offsetWidth||300, H=canvas.height||40;
+  const realW=canvas.offsetWidth||0;
+  if(realW<50) return;
+  const W=realW, H=canvas.height||52;
   if(canvas.width!==W) canvas.width=W;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,W,H);
-  // Get frequency data
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+
   const fd=new Uint8Array(analyserNode.frequencyBinCount);
   analyserNode.getByteFrequencyData(fd);
   const sr=audioCtx?.sampleRate||44100;
@@ -1610,32 +1765,49 @@ function _drawSpectralBalance(){
   }
   const tot=lowE+midE+highE||1;
   const lowPct=lowE/tot*100, midPct=midE/tot*100, highPct=highE/tot*100;
-  // Draw bars
-  const bw=W/3-4;
-  [[lowPct,'#b855f7','LOW'],[midPct,'#2dd4ff','MID'],[highPct,'#2dff8a','HIGH']].forEach(([pct,col,lbl],i)=>{
-    const x=i*(W/3)+2;
-    ctx.fillStyle='#1a1a28'; ctx.fillRect(x,0,bw,H-12);
-    ctx.fillStyle=col+'88'; ctx.fillRect(x,H-12-(pct/100)*(H-12),bw,(pct/100)*(H-12));
-    ctx.fillStyle=col; ctx.font='bold 8px Rajdhani,sans-serif'; ctx.textAlign='center';
-    ctx.fillText(lbl+' '+pct.toFixed(0)+'%',x+bw/2,H-2);
-    // Update suggestion cards
+
+  const gap=6;
+  const bw=(W-gap*4)/3;
+  const barTop=4, barBot=H-16, barH=barBot-barTop;
+  [[lowPct,[184,85,247],'LOW'],[midPct,[45,212,255],'MID'],[highPct,[45,255,138],'HIGH']].forEach(([pct,rgb,lbl],i)=>{
+    const x=gap+i*(bw+gap);
+    // track background
+    ctx.fillStyle='#15151f'; ctx.fillRect(x,barTop,bw,barH);
+    ctx.strokeStyle='rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',0.35)'; ctx.lineWidth=1;
+    ctx.strokeRect(x+0.5,barTop+0.5,bw-1,barH-1);
+    // filled portion — solid bright colour
+    const fh=(pct/100)*barH;
+    const grd=ctx.createLinearGradient(0,barBot-fh,0,barBot);
+    grd.addColorStop(0,'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',1)');
+    grd.addColorStop(1,'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',0.55)');
+    ctx.fillStyle=grd;
+    ctx.fillRect(x,barBot-fh,bw,fh);
+    // percentage inside/above the bar, white bold for contrast
+    ctx.fillStyle='#fff'; ctx.font='bold 13px Rajdhani,sans-serif'; ctx.textAlign='center';
+    ctx.fillText(pct.toFixed(0)+'%', x+bw/2, barBot-fh-6>14 ? barBot-fh-6 : barTop+14);
+    // label below
+    ctx.fillStyle='rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',1)';
+    ctx.font='bold 9px Rajdhani,sans-serif';
+    ctx.fillText(lbl, x+bw/2, H-3);
+    // suggestion cards
     const ids=[['sug-low-bar','sug-low-pct'],['sug-mid-bar','sug-mid-pct'],['sug-high-bar','sug-high-pct']];
     const bars=document.getElementById(ids[i][0]),lblEl=document.getElementById(ids[i][1]);
     if(bars) bars.style.width=pct.toFixed(0)+'%';
     if(lblEl) lblEl.textContent=pct.toFixed(0)+'%';
   });
-  // Target overlay from current preset
+
+  // Target overlay (dashed white line = target preset)
   const target=SPECTRAL_TARGETS[curPreset];
   if(target){
-    [[target.low,'#b855f750'],[target.mid,'#2dd4ff50'],[target.high,'#2dff8a50']].forEach(([pct,col],i)=>{
-      const x=i*(W/3)+2;
-      const ty=H-12-(pct/100)*(H-12);
-      ctx.strokeStyle=col.replace('50','ff'); ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+    [[target.low],[target.mid],[target.high]].forEach(([pct],i)=>{
+      const x=gap+i*(bw+gap);
+      const ty=barBot-(pct/100)*barH;
+      ctx.strokeStyle='#ffffffcc'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
       ctx.beginPath(); ctx.moveTo(x,ty); ctx.lineTo(x+bw,ty); ctx.stroke();
       ctx.setLineDash([]);
     });
   }
-  // Update PLR display
+
   const plr=_calcPLR(audioBuffer);
   if(plr){
     const plrEl=document.getElementById('plr-val');
@@ -1812,14 +1984,36 @@ let _mbMixer=null;
 let mbActive=false;
 function _initMultiband(){
   if(_mbLow||!audioCtx) return;
-  const mk=(t,f,g,Q)=>{const n=audioCtx.createBiquadFilter();n.type=t;n.frequency.value=f;n.gain.value=g||0;if(Q)n.Q.value=Q;return n;};
-  _mbLow  = mk('lowpass',  250,0,0.7);
-  _mbMid  = mk('bandpass', 2000,0,0.8);
-  _mbHigh = mk('highpass', 6000,0,0.7);
+  // Linkwitz-Riley style crossovers (cascaded Butterworth) so bands sum flat.
+  // Low band:  LP@250 (x2)
+  // Mid band:  HP@250 (x2) → LP@4000 (x2)
+  // High band: HP@4000 (x2)
+  const LP=(f)=>{const n=audioCtx.createBiquadFilter();n.type='lowpass';n.frequency.value=f;n.Q.value=0.7071;return n;};
+  const HP=(f)=>{const n=audioCtx.createBiquadFilter();n.type='highpass';n.frequency.value=f;n.Q.value=0.7071;return n;};
+  // LOW
+  _mbLow=audioCtx.createGain();
+  const lpA=LP(250), lpB=LP(250);
+  _mbLow.connect(lpA); lpA.connect(lpB);
+  _mbLow._out=lpB;
+  // MID
+  _mbMid=audioCtx.createGain();
+  const hpA=HP(250), hpB=HP(250), lpC=LP(4000), lpD=LP(4000);
+  _mbMid.connect(hpA); hpA.connect(hpB); hpB.connect(lpC); lpC.connect(lpD);
+  _mbMid._out=lpD;
+  // HIGH
+  _mbHigh=audioCtx.createGain();
+  const hpC=HP(4000), hpD=HP(4000);
+  _mbHigh.connect(hpC); hpC.connect(hpD);
+  _mbHigh._out=hpD;
+  // Per-band compressors
   const mkComp=(thr,ratio)=>{const c=audioCtx.createDynamicsCompressor();c.threshold.value=thr;c.ratio.value=ratio;c.attack.value=0.005;c.release.value=0.12;c.knee.value=6;return c;};
   _mbLowComp  = mkComp(-24,3);
   _mbMidComp  = mkComp(-20,2.5);
   _mbHighComp = mkComp(-18,2);
+  // band out → comp (the crossover output feeds the comp)
+  _mbLow._out.connect(_mbLowComp);
+  _mbMid._out.connect(_mbMidComp);
+  _mbHigh._out.connect(_mbHighComp);
   _mbMixer=audioCtx.createGain(); _mbMixer.gain.value=1;
 }
 function updateMultiband(){
@@ -2063,7 +2257,7 @@ function makeEditable(el, callback, min, max, suffix){
 
 
 // ===== MODULE BYPASS SYSTEM =====
-const moduleBypassState = {eq:false, comp:false, dyn:false, shape:false, width:false, excite:false, loud:false, limit:false, midside:false};
+const moduleBypassState = {eq:false, comp:false, dyn:false, shape:false, width:false, excite:false, loud:false, limit:false, midside:false, transient:false, multiband:false, clip:false};
 
 // Saved values for each bypassed module
 const moduleBypassSaved = {};
@@ -2117,14 +2311,38 @@ function applyModuleBypass(module, bypassed){
         limiterNode.ratio.value=moduleBypassSaved.limit.ratio;
       }
       break;
+    case 'transient':
+      if(bypassed){
+        if(_transientNode){
+          moduleBypassSaved.transient={thr:_transientNode.threshold.value,ratio:_transientNode.ratio.value};
+          _transientNode.threshold.setTargetAtTime(0,audioCtx.currentTime,0.03);
+          _transientNode.ratio.setTargetAtTime(1,audioCtx.currentTime,0.03);
+        }
+      } else {
+        updateTransient(); // restore from current slider values
+      }
+      break;
+    case 'clip':
+      clipBypassed = bypassed;
+      updateClipper();
+      break;
+    case 'multiband':
+      if(bypassed){
+        moduleBypassSaved.multiband=true;
+        // force direct path (bands off) regardless of toggle
+        if(mbInputGain) mbInputGain.gain.setTargetAtTime(1,audioCtx.currentTime,0.05);
+        if(mbBandsGain) mbBandsGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);
+      } else {
+        updateMultiband(); // restore based on toggle state
+      }
+      break;
     case 'shape':
       if(bypassed){
-        moduleBypassSaved.shape={dry:shapeDryGain.gain.value,wet:shapeWetGain.gain.value};
-        shapeDryGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
-        shapeWetGain.gain.setTargetAtTime(0.0,audioCtx.currentTime,0.02);
-      } else if(moduleBypassSaved.shape){
-        shapeDryGain.gain.setTargetAtTime(moduleBypassSaved.shape.dry,audioCtx.currentTime,0.02);
-        shapeWetGain.gain.setTargetAtTime(moduleBypassSaved.shape.wet,audioCtx.currentTime,0.02);
+        moduleBypassSaved.shape=true;
+        // identity curve = transparent
+        if(shapeWS){ const c=new Float32Array(2048); for(let i=0;i<2048;i++)c[i]=(i*2/2047)-1; shapeWS.curve=c; }
+      } else {
+        applyShapeCurve(); // restore from sliders
       }
       break;
     case 'width':
@@ -2156,6 +2374,16 @@ function applyModuleBypass(module, bypassed){
       }
       break;
     case 'midside':
+      if(bypassed){
+        msBypassed=true;
+        if(msDirectGain) msDirectGain.gain.setTargetAtTime(1,audioCtx.currentTime,0.05);
+        if(msProcGain)   msProcGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);
+      } else {
+        msBypassed=false;
+        _msEngage(); // re-evaluate based on current settings
+      }
+      break;
+    case '__midside_old__':
       if(bypassed){
         moduleBypassSaved.midside={
           mid:msMidGain?.gain.value||1, side:msSideGain?.gain.value||1,
@@ -2744,8 +2972,18 @@ function eqGFromY(y, H){ return ((H/2-y)/(H/2-8))*14; }
 function drawInteractiveEQ(){
   const canvas = document.getElementById('eq-interactive-canvas');
   if(!canvas||!canvas.getContext) return;
-  const W=canvas.offsetWidth||canvas.width||300, H=canvas.height||100;
+  const realW = canvas.offsetWidth||0;
+  // Don't draw until the canvas has a real layout width — prevents the
+  // "giant node" look on first open when offsetWidth is still 0/300.
+  if(realW < 50){ return; }
+  const W=realW, H=canvas.height||100;
   if(canvas.width!==W) canvas.width=W;
+  if(!canvas._eqResizeBound){
+    canvas._eqResizeBound=true;
+    if(window.ResizeObserver){
+      new ResizeObserver(()=>{ drawInteractiveEQ(); }).observe(canvas);
+    }
+  }
   const ctx=canvas.getContext('2d');
   const isDark = true; // app is always dark-themed
   ctx.fillStyle = isDark?'#07070e':'#f8f8f5';
@@ -3536,6 +3774,7 @@ function _setupV6(){
   initAutomation();
   _renderUserPresets();
   _renderGeoProfiles();
+  if(typeof updateClipper==='function') try{updateClipper();}catch(e){}
   // Hook drawInteractiveEQ into existing EQ slider changes
   const origSyncEQ = window.syncEQSliders;
   window.syncEQSliders = function(){ if(origSyncEQ) origSyncEQ(); drawInteractiveEQ(); };
