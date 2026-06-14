@@ -1,33 +1,29 @@
 ═══════════════════════════════════════════════════════════
-  MASTERING SUITE by Piradex — v1.0.1 (correção DSP)
+  MASTERING SUITE by Piradex — v1.0.1
   BeatFreak Studio · beatfreakstudio.com/mastersuite
 ═══════════════════════════════════════════════════════════
 
-NESTA VERSÃO — CORREÇÕES DE ÁUDIO:
-• Cadeia de áudio reconstruída: todos os módulos agora
-  ligados em série e a processar de verdade.
-• Transient Shaper — agora produz efeito audível.
-• Multiband Comp — 3 bandas com crossfade real.
-• Mid/Side — processamento real (split/merge), com EQ
-  Mid e Side dedicados. Sem mais ruído nem efeito preso.
-• Harmonic Shaper — corrigido o trim que ficava preso.
-• Width — só atua no canal Side (não corrompe o EQ).
-• EQ, Histograma LUFS e Reference Track — fundo preto.
-• Reference Track — botão OUVIR, gráfico faixa vs
-  referência visível (faixa azul / referência âmbar),
-  e APLICAR que persiste no som.
-• Player — EXPORTAR movido para cima (sob IMPORTAR);
-  menus estáticos (não tremem).
+CORREÇÕES NESTA VERSÃO:
+• EQ Bypass — já NÃO perde os faders. Se configuras o EQ
+  (ex: bass +12) e fazes bypass, ao desligar o bypass volta
+  exactamente à tua configuração. Edições manuais nos faders
+  são preservadas (não voltam ao default).
+• Seek na pista — clicar na waveform já não pára o som nem
+  o espectro. Salta para a posição e continua a tocar.
+• Mensagem do Headroom — agora é curta e só aparece ao tentar
+  usar um preset antes de aplicar o HEADROOM.
+• Toda a cadeia DSP corrigida (Transient, Multiband, M/S,
+  Shape, Width a funcionar de verdade).
 
-COMO USAR:
-1. Abre "index.html" no browser (Chrome recomendado)
-2. Importa uma música (WAV ou MP3)
-3. Aplica HEADROOM -6dB
-4. Escolhe preset / perfil geográfico / ajusta módulos
-5. Exporta em WAV ou MP3
+FLUXO RECOMENDADO:
+1. Abre "index.html" no Chrome
+2. Importa a música
+3. Aplica HEADROOM -6dB (desbloqueia os presets)
+4. Escolhe preset / ajusta módulos
+5. Exporta WAV ou MP3
 
 ATALHOS: J=play · K=stop · E=EQ · C=Comp · H=Diagnóstico
-         ← →=seek 5s · Ctrl+Z/Y=Undo/Redo
+         ← →=seek · Ctrl+Z/Y=Undo/Redo
 
 © 2026 Juninho Piradex · BeatFreak Studio
 ═══════════════════════════════════════════════════════════

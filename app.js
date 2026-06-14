@@ -862,11 +862,17 @@ function drawWaveform(){
     g.addColorStop(0,cols[ci]+'cc'); g.addColorStop(1,cols[ci]+'33');
     ctx2.fillStyle=g; ctx2.fillRect(i,32-h/2,1,h);
   }
-  document.getElementById('waveform-container').onclick=(e)=>{
-    if(!audioBuffer)return;
-    const rect=document.getElementById('waveform-container').getBoundingClientRect();
-    seekTo(((e.clientX-rect.left)/rect.width)*audioBuffer.duration);
-  };
+  // bind click handler once
+  const wc=document.getElementById('waveform-container');
+  if(wc && !wc._seekBound){
+    wc._seekBound=true;
+    wc.addEventListener('click',(e)=>{
+      if(!audioBuffer)return;
+      const rect=wc.getBoundingClientRect();
+      const frac=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+      seekTo(frac*audioBuffer.duration);
+    });
+  }
 }
 
 // ===== PLAYBACK =====
@@ -882,7 +888,9 @@ function playAudio(){
 
   if(playMode==='after'){
     // PROCESSADO: source → EQ chain → ... → analyser → out
-    applyDSP();
+    // NOTE: do NOT call applyDSP() here — the chain already holds the current
+    // settings (knobs + manual fader edits). Re-running applyDSP would recompute
+    // EQ from the knobs and wipe any manual fader changes.
     sourceNode.connect(eqSub);
   } else {
     // ORIGINAL: source → dryGain(1.0) → analyser → out
@@ -908,12 +916,24 @@ function stopAudio(){
   document.getElementById('time-cur').textContent='0:00';
   vuL=0.02;vuR=0.02;
 }
-function stopSource(){if(sourceNode){try{sourceNode.stop();}catch(e){}sourceNode=null;}}
+function stopSource(){
+  if(sourceNode){
+    try{ sourceNode.onended=null; sourceNode.stop(); }catch(e){}
+    sourceNode=null;
+  }
+}
 function seekTo(t){
-  const was=isPlaying,pos=was?audioCtx.currentTime-startTime:pauseOffset;
-  stopSource();isPlaying=false;
-  pauseOffset=Math.max(0,Math.min(t,audioBuffer.duration-0.01));
-  if(was)playAudio();else setProgress(pauseOffset/audioBuffer.duration);
+  if(!audioBuffer||!audioCtx) return;
+  const was=isPlaying;
+  stopSource();
+  isPlaying=false;
+  pauseOffset=Math.max(0,Math.min(t,audioBuffer.duration-0.05));
+  setProgress(pauseOffset/audioBuffer.duration);
+  document.getElementById('time-cur').textContent=fmtTime(pauseOffset);
+  if(was){
+    // resume playback from the new position
+    playAudio();
+  }
 }
 function seekRelative(d){if(!audioBuffer)return;seekTo((isPlaying?audioCtx.currentTime-startTime:pauseOffset)+d);}
 function setVolume(v){
@@ -970,6 +990,9 @@ function setMode(mode){
     // RESET ALL DSP to zero/bypass when going back to ORIGINAL
     resetAllDSP();
     resetModuleBypasses();
+  } else {
+    // Entering PROCESSADO — apply current knob/preset settings to the chain once
+    applyDSP();
   }
 
   updateModeUI(mode);
@@ -1259,11 +1282,8 @@ function setPreset(key,el){
   if(audioBuffer && !headroomApplied){
     const hb=document.getElementById('headroom-btn');
     if(hb){hb.style.boxShadow='0 0 0 3px var(--c3),0 0 20px var(--c3)';hb.style.transform='scale(1.1)';
-      setTimeout(()=>{hb.style.boxShadow='';hb.style.transform='';},1800);}
-    let peak=0;
-    for(let c=0;c<audioBuffer.numberOfChannels;c++){const d=audioBuffer.getChannelData(c);for(let i=0;i<d.length;i++)peak=Math.max(peak,Math.abs(d[i]));}
-    const peakDb=peak>0?20*Math.log10(peak):0;const gainNeeded=-6-peakDb;const dir=gainNeeded>=0?'+':'';
-    setStatus('⚠ Aplica o HEADROOM -6dB primeiro! Pico: '+peakDb.toFixed(1)+' dBFS → vai aplicar '+dir+gainNeeded.toFixed(1)+' dB');
+      setTimeout(()=>{hb.style.boxShadow='';hb.style.transform='';},1500);}
+    setStatus('Aplica primeiro o HEADROOM -6dB (botão amarelo) para desbloquear os presets');
     return;
   }
   curPreset=key; const p=PRESETS[key];
@@ -2060,7 +2080,10 @@ function toggleModuleBypass(module){
     btn.style.background  = active ? 'rgba(255,58,181,0.12)' : '';
   }
   applyModuleBypass(module, active);
-  applyDSP(); // re-enforce all active bypasses
+  // NOTE: we do NOT call applyDSP() here — that would recompute EQ from the
+  // knobs and wipe any manual fader edits or the just-restored bypass values.
+  // Each applyModuleBypass case manages its own nodes directly.
+  if(module==='eq') syncEQSliders(); // reflect restored/zeroed values on the faders
 }
 
 function applyModuleBypass(module, bypassed){
