@@ -76,6 +76,8 @@ let msMidEqLow=null, msMidEqMid=null, msMidEqHigh=null;
 let msSideEqLow=null, msSideEqMid=null, msSideEqHigh=null;
 let msDirectGain=null, msProcGain=null;
 let clipInGain=null, clipShaper=null, clipOutGain=null;
+let clipGoldWS=null, clipAlchemy=null, clipBoxTone=null;
+let clipWetGain=null, clipDryGain=null, clipSumGain=null;
 let clipBypassed=false;
 let analyserNode=null;
 let isPlaying=false, pauseOffset=0, startTime=0;
@@ -93,7 +95,7 @@ let loudTarget=-9;
 
 // ===== TABS =====
 function openTab(name, el) {
-  if(playMode==='before' && name!=='master'){
+  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis'){
     setStatus('Muda para PROCESSADO para aceder aos efeitos');
     return;
   }
@@ -105,6 +107,8 @@ function openTab(name, el) {
   // redraw canvases now that the panel is visible (offsetWidth is correct)
   if(name==='eq')      setTimeout(()=>{drawInteractiveEQ();},60);
   if(name==='balance') setTimeout(()=>{ if(typeof drawBalanceBars==='function') drawBalanceBars(); },60);
+  if(name==='clip')    setTimeout(()=>{ if(typeof _drawClipCurve==='function') _drawClipCurve(); },60);
+  if(name==='analysis')setTimeout(()=>{ if(audioBuffer && typeof runFullAnalysis==='function') runFullAnalysis(); },80);
   if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
 }
 
@@ -233,16 +237,35 @@ function buildChain() {
   _mbHighComp.connect(mbBandsGain);
   mbBandsGain.connect(compNode);
 
-  // comp → transient → CLIPPER → limiter
+  // comp → transient → CLIPPER (Gold Clip style) → limiter
   compNode.connect(_transientNode);
-  // Clipper: input gain → waveshaper(soft/hard clip) → output gain (oversampled)
-  clipInGain  = audioCtx.createGain(); clipInGain.gain.value = 1.0;
-  clipShaper  = audioCtx.createWaveShaper(); clipShaper.oversample='4x';
-  clipOutGain = audioCtx.createGain(); clipOutGain.gain.value = 1.0;
-  _buildClipCurve(0, 'soft'); // identity at rest
+  // Clipper sections: input trim → [parallel: dry | (clip → gold → alchemy)] → mix → output trim
+  clipInGain   = audioCtx.createGain(); clipInGain.gain.value = 1.0;   // INPUT TRIM
+  clipShaper   = audioCtx.createWaveShaper(); clipShaper.oversample='4x'; // CLIPPER curve
+  clipGoldWS   = audioCtx.createWaveShaper(); clipGoldWS.oversample='4x'; // GOLD saturation
+  clipAlchemy  = audioCtx.createBiquadFilter(); clipAlchemy.type='highshelf'; clipAlchemy.frequency.value=8000; clipAlchemy.gain.value=0; // ALCHEMY
+  clipBoxTone  = audioCtx.createBiquadFilter(); clipBoxTone.type='peaking'; clipBoxTone.frequency.value=3000; clipBoxTone.Q.value=0.7; clipBoxTone.gain.value=0; // BOX TONE
+  clipWetGain  = audioCtx.createGain(); clipWetGain.gain.value = 1.0;  // wet (processed) level
+  clipDryGain  = audioCtx.createGain(); clipDryGain.gain.value = 0.0;  // dry (parallel) level
+  clipOutGain  = audioCtx.createGain(); clipOutGain.gain.value = 1.0;  // OUTPUT TRIM
+  clipSumGain  = audioCtx.createGain(); clipSumGain.gain.value = 1.0;  // wet+dry sum
+  _buildClipCurve(0, 'modern');
+  _buildGoldCurve(0, 'smooth');
+
+  // input trim feeds both the processed branch and the parallel-dry branch
   _transientNode.connect(clipInGain);
+  // processed: inGain → clip → gold → alchemy → boxtone → wetGain → sum
   clipInGain.connect(clipShaper);
-  clipShaper.connect(clipOutGain);
+  clipShaper.connect(clipGoldWS);
+  clipGoldWS.connect(clipAlchemy);
+  clipAlchemy.connect(clipBoxTone);
+  clipBoxTone.connect(clipWetGain);
+  clipWetGain.connect(clipSumGain);
+  // parallel dry: inGain → dryGain → sum
+  clipInGain.connect(clipDryGain);
+  clipDryGain.connect(clipSumGain);
+  // sum → output trim → limiter
+  clipSumGain.connect(clipOutGain);
   clipOutGain.connect(limiterNode);
 
   // ── M/S crossfade (direct vs processed) ─────────────────────────────────
@@ -302,56 +325,158 @@ const SHAPE_INFO={
   deess:'DE-ESS: atenuação de sibilantes e harshness acima de 5kHz.'
 };
 
-// ===== CLIPPER (StandardCLIP-style) =====
-// Signal: input gain → clip transfer fn → output gain → (ceiling handled by limiter)
-let clipMode='soft', clipDriveDb=0, clipCeilingDb=-0.1;
+// ===== CLIPPER (Gold Clip-style: Clipper + Gold + Alchemy + Parallel) =====
+let clipMode='modern', clipDriveDb=0, clipCeilingDb=-0.1;
+
+// CLIPPER transfer curve — Modern/Classic (analog knee) vs Hard (clean)
 function _buildClipCurve(driveDb, mode){
   if(!clipShaper) return;
-  const n=4096, curve=new Float32Array(n);
-  const drive=Math.pow(10, (driveDb||0)/20); // input gain inside the shaper
+  const n=8192, curve=new Float32Array(n);
+  const ceil=Math.pow(10,(clipCeilingDb||0)/20);
   for(let i=0;i<n;i++){
-    let x=((i*2/(n-1))-1)*drive;
+    let x=((i*2/(n-1))-1);
     let y;
     switch(mode){
-      case 'hard':    y=Math.max(-1,Math.min(1,x)); break;
-      case 'soft':    y=Math.tanh(x); break;                 // smooth soft clip
-      case 'softpro': { const k=2.5; y=Math.sign(x)*(1-Math.exp(-k*Math.abs(x)))/(1-Math.exp(-k)); break; }
-      case 'sine':    y=Math.abs(x)<1?Math.sin(x*Math.PI/2):Math.sign(x); break;
-      default:        y=Math.tanh(x);
+      case 'hard':    y=Math.max(-ceil,Math.min(ceil,x)); break;
+      case 'classic': { // medium knee
+        const k=1.6; const t=x/ceil;
+        y=ceil*Math.tanh(t*k)/Math.tanh(k); break; }
+      case 'modern':  { // softer knee, brighter
+        const k=1.1; const t=x/ceil;
+        y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2))*( Math.tanh(k)/Math.max(1e-6,Math.tanh(k)) );
+        y=Math.max(-ceil,Math.min(ceil,y)); break; }
+      case 'off':     y=x; break;
+      default:        y=Math.max(-ceil,Math.min(ceil,x));
     }
     curve[i]=Math.max(-1,Math.min(1,y));
   }
   clipShaper.curve=curve;
 }
+
+// GOLD — loudness saturation: amplifies low-level info, up to +6 dB non-linear gain
+function _buildGoldCurve(amount, mode){
+  if(!clipGoldWS) return;
+  const n=8192, curve=new Float32Array(n);
+  const a=Math.max(0,Math.min(1,amount/100));
+  if(a<0.001){ for(let i=0;i<n;i++) curve[i]=(i*2/(n-1))-1; clipGoldWS.curve=curve; return; }
+  const drive=1+a*( mode==='aggressive'?2.0:1.0 ); // up to ~+6dB
+  for(let i=0;i<n;i++){
+    const x=((i*2/(n-1))-1);
+    // upward saturation: expands quiet parts, soft-limits loud — keeps peaks
+    let y = Math.sign(x)*Math.pow(Math.abs(x), 1/(1+a*0.6)); // upward compression of low-level
+    y = Math.tanh(y*drive)/Math.tanh(drive);
+    curve[i]=Math.max(-1,Math.min(1,(1-a)*x + a*y));
+  }
+  clipGoldWS.curve=curve;
+}
+
 function updateClipper(){
   const on=document.getElementById('clip-toggle')?.checked;
   const drive=parseFloat(document.getElementById('clip-drive')?.value||0);
   const ceil =parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
-  const mode =document.getElementById('clip-mode')?.value||'soft';
-  const dv=document.getElementById('clip-drive-v'), cv=document.getElementById('clip-ceiling-v');
-  if(dv) dv.textContent=(drive>=0?'+':'')+drive.toFixed(1)+' dB';
-  if(cv) cv.textContent=ceil.toFixed(1)+' dB';
+  const mode =document.getElementById('clip-mode')?.value||'modern';
+  const gold =parseFloat(document.getElementById('clip-gold')?.value||0);
+  const goldMode=document.getElementById('clip-gold-mode')?.value||'smooth';
+  const alch =parseFloat(document.getElementById('clip-alchemy')?.value||0);
+  const box  =parseFloat(document.getElementById('clip-boxtone')?.value||0);
+  const mix  =parseFloat(document.getElementById('clip-mix')?.value||100);
+  const out  =parseFloat(document.getElementById('clip-out')?.value||0);
+  const unity=document.getElementById('clip-unity')?.checked;
+  // labels
+  const setL=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+  setL('clip-drive-v',(drive>=0?'+':'')+drive.toFixed(1)+' dB');
+  setL('clip-ceiling-v',ceil.toFixed(1)+' dB');
+  setL('clip-gold-v',gold.toFixed(0)+'%');
+  setL('clip-alchemy-v',alch.toFixed(0)+'%');
+  setL('clip-boxtone-v',box.toFixed(0)+'%');
+  setL('clip-mix-v',mix.toFixed(0)+'%');
+  setL('clip-out-v',(out>=0?'+':'')+out.toFixed(1)+' dB');
+
   clipMode=mode; clipDriveDb=drive; clipCeilingDb=ceil;
   if(!audioCtx) return;
-  // oversampling selector
   const os=document.getElementById('clip-os')?.value||'4x';
-  if(clipShaper) clipShaper.oversample = (os==='2x')?'2x':'4x';
+  if(clipShaper)  clipShaper.oversample=(os==='2x')?'2x':'4x';
+  if(clipGoldWS)  clipGoldWS.oversample=(os==='2x')?'2x':'4x';
   const now=audioCtx.currentTime;
-  if(clipBypassed || !on){
-    // transparent: identity curve, unity gains
-    _buildClipCurve(0,'soft');
-    if(clipInGain)  clipInGain.gain.setTargetAtTime(1, now, 0.05);
-    if(clipOutGain) clipOutGain.gain.setTargetAtTime(1, now, 0.05);
+
+  const active = on && !clipBypassed;
+  if(!active){
+    // transparent passthrough
+    _buildClipCurve(0,'off'); _buildGoldCurve(0,'smooth');
+    if(clipInGain)  clipInGain.gain.setTargetAtTime(1,now,0.05);
+    if(clipWetGain) clipWetGain.gain.setTargetAtTime(1,now,0.05);
+    if(clipDryGain) clipDryGain.gain.setTargetAtTime(0,now,0.05);
+    if(clipAlchemy) clipAlchemy.gain.setTargetAtTime(0,now,0.05);
+    if(clipBoxTone) clipBoxTone.gain.setTargetAtTime(0,now,0.05);
+    if(clipOutGain) clipOutGain.gain.setTargetAtTime(1,now,0.05);
   } else {
     _buildClipCurve(drive, mode);
-    // input gain pushes into the clip; output gain compensates toward ceiling
-    if(clipInGain)  clipInGain.gain.setTargetAtTime(1, now, 0.05);
-    if(clipOutGain) clipOutGain.gain.setTargetAtTime(Math.pow(10, ceil/20), now, 0.05);
+    _buildGoldCurve(gold, goldMode);
+    // INPUT TRIM pushes signal into the clip ceiling
+    if(clipInGain) clipInGain.gain.setTargetAtTime(Math.pow(10,drive/20), now, 0.05);
+    // ALCHEMY: reduces harshness near clip → gentle high-shelf cut scaling with amount
+    if(clipAlchemy) clipAlchemy.gain.setTargetAtTime(-(alch/100)*4, now, 0.05); // up to -4dB smoothing
+    // BOX TONE: presence bump in mids/highs
+    if(clipBoxTone) clipBoxTone.gain.setTargetAtTime((box/100)*4, now, 0.05); // up to +4dB
+    // PARALLEL MIX
+    if(clipWetGain) clipWetGain.gain.setTargetAtTime(mix/100, now, 0.05);
+    if(clipDryGain) clipDryGain.gain.setTargetAtTime(1-(mix/100), now, 0.05);
+    // OUTPUT TRIM (+ optional unity-gain auto compensation for input drive)
+    let outGain=Math.pow(10,out/20);
+    if(unity) outGain *= Math.pow(10,-drive/20); // undo input trim level boost
+    if(clipOutGain) clipOutGain.gain.setTargetAtTime(outGain, now, 0.05);
   }
   _snapUndoThrottled();
-  setStatus(on&&!clipBypassed ? ('Clipper '+mode.toUpperCase()+': drive '+(drive>=0?'+':'')+drive.toFixed(1)+'dB · ceiling '+ceil.toFixed(1)+'dB') : 'Clipper desligado');
+  _drawClipCurve();
+  setStatus(active ? ('Clipper '+mode.toUpperCase()+' · drive +'+drive.toFixed(1)+'dB · Gold '+gold.toFixed(0)+'% · Alchemy '+alch.toFixed(0)+'% · mix '+mix.toFixed(0)+'%') : 'Clipper desligado');
 }
 
+function _drawClipCurve(){
+  const canvas=document.getElementById('clip-curve-canvas');
+  if(!canvas) return;
+  const W=canvas.offsetWidth||0; if(W<50) return;
+  if(canvas.width!==W) canvas.width=W;
+  const H=canvas.height||150;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#ffffff10'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){ const x=i/4*W, y=i/4*H;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+  ctx.strokeStyle='#ffffff22'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,0); ctx.stroke(); ctx.setLineDash([]);
+  const on=document.getElementById('clip-toggle')?.checked && !clipBypassed;
+  const drive=Math.pow(10,(clipDriveDb||0)/20);
+  const ceil=Math.pow(10,(clipCeilingDb||0)/20);
+  const mode=clipMode||'modern';
+  ctx.strokeStyle = on ? '#ffd23c' : '#555';
+  ctx.lineWidth=2.5; ctx.beginPath();
+  for(let px=0;px<=W;px++){
+    let x=((px/W)*2-1)*(on?drive:1);
+    let y;
+    if(!on){ y=((px/W)*2-1); }
+    else if(mode==='hard') y=Math.max(-ceil,Math.min(ceil,x));
+    else if(mode==='classic'){ const k=1.6,t=x/ceil; y=ceil*Math.tanh(t*k)/Math.tanh(k); }
+    else if(mode==='off') y=x;
+    else { const t=x/ceil; y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2)); }
+    y=Math.max(-1,Math.min(1,y));
+    const py=H-((y+1)/2*H);
+    px===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  // ceiling lines
+  if(on){
+    ctx.strokeStyle='#ff3ab555'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+    const cy=H-((ceil+1)/2*H), cy2=H-((-ceil+1)/2*H);
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,cy2);ctx.lineTo(W,cy2);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.fillStyle='#ffffff55'; ctx.font='9px monospace'; ctx.textAlign='left';
+  ctx.fillText('IN →',6,H-6);
+}
+
+function _OLD_makeShapeCurveStub(){}
 function makeShapeCurve(mode, drive, mix) {  const n=2048, curve=new Float32Array(n);
   const k=Math.max(0, drive);
   const m=(mix==null)?1:Math.max(0,Math.min(1,mix)); // dry/wet baked in
@@ -906,6 +1031,200 @@ function analyseAndDisplayRef(name){
   setStatus('Referência carregada: '+name.replace(/\.[^.]+$/,''));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ANÁLISES SONORAS — professional before/after analysis
+// ═══════════════════════════════════════════════════════════════════════════
+let _analysisData=null;
+
+function _measureBuffer(buf){
+  const nCh=buf.numberOfChannels, len=buf.length, sr=buf.sampleRate;
+  let peak=0, sumSq=0, n=0;
+  const chans=[]; for(let c=0;c<nCh;c++) chans.push(buf.getChannelData(c));
+  const win=Math.floor(sr*0.4), hop=Math.floor(sr*0.1);
+  const stLoud=[];
+  for(let i=0;i+win<=len;i+=hop){
+    let s=0;
+    for(let c=0;c<nCh;c++){ const d=chans[c]; for(let j=0;j<win;j+=4){ s+=d[i+j]*d[i+j]; } }
+    const rms=Math.sqrt(s/((win/4)*nCh));
+    stLoud.push(rms>0?20*Math.log10(rms)-0.691:-70);
+  }
+  for(let c=0;c<nCh;c++){ const d=chans[c]; for(let i=0;i<len;i+=2){ const a=Math.abs(d[i]); if(a>peak)peak=a; sumSq+=d[i]*d[i]; n++; } }
+  const rmsAll=Math.sqrt(sumSq/n);
+  const rmsDb=rmsAll>0?20*Math.log10(rmsAll):-70;
+  const peakDb=peak>0?20*Math.log10(peak):-70;
+  const gated=stLoud.filter(v=>v>-50);
+  const lufsInt=gated.length?gated.reduce((a,b)=>a+b,0)/gated.length-0.691:-70;
+  const sorted=[...gated].sort((a,b)=>a-b);
+  const pct=p=>sorted.length?sorted[Math.floor(p*(sorted.length-1))]:-70;
+  const lra=sorted.length?(pct(0.95)-pct(0.10)):0;
+  let tp=peak;
+  for(let c=0;c<nCh;c++){ const d=chans[c]; for(let i=1;i<len;i++){ const mid=(d[i-1]+d[i])/2; if(Math.abs(mid)>tp)tp=Math.abs(mid); } }
+  const tpDb=tp>0?20*Math.log10(tp):-70;
+  const crest=peakDb-rmsDb, plr=peakDb-lufsInt;
+  const N=8192, slice=Math.min(len,N), start=Math.floor(len/2-slice/2);
+  const re=new Float32Array(N);
+  for(let i=0;i<slice;i++){ let s=0; for(let c=0;c<nCh;c++)s+=chans[c][start+i]; re[i]=(s/nCh)*0.5*(1-Math.cos(2*Math.PI*i/(slice-1))); }
+  const NB=64, spec=new Float32Array(NB);
+  for(let b=0;b<NB;b++){
+    const f=20*Math.pow(20000/20,b/(NB-1)), k=f/sr*N, w=2*Math.PI*k/N;
+    let sr2=0,si2=0; for(let m=0;m<N;m+=8){ sr2+=re[m]*Math.cos(w*m); si2-=re[m]*Math.sin(w*m); }
+    spec[b]=Math.sqrt(sr2*sr2+si2*si2);
+  }
+  let mx=1e-9; for(let b=0;b<NB;b++)mx=Math.max(mx,spec[b]);
+  for(let b=0;b<NB;b++){ const db=20*Math.log10(spec[b]/mx+1e-6); spec[b]=Math.max(0,Math.min(1,(db+72)/72)); }
+  let lowE=0,midE=0,highE=0;
+  for(let b=0;b<NB;b++){ const f=20*Math.pow(20000/20,b/(NB-1)); const e=spec[b]; if(f<300)lowE+=e; else if(f<4000)midE+=e; else highE+=e; }
+  const tt=lowE+midE+highE||1;
+  let corr=1;
+  if(nCh>=2){ let lr=0,ll=0,rr=0; const L=chans[0],R=chans[1]; for(let i=0;i<len;i+=8){lr+=L[i]*R[i];ll+=L[i]*L[i];rr+=R[i]*R[i];} corr=(ll&&rr)?lr/Math.sqrt(ll*rr):1; }
+  return {lufs:lufsInt,peak:peakDb,tp:tpDb,rms:rmsDb,crest,plr,lra,spec,low:lowE/tt*100,mid:midE/tt*100,high:highE/tt*100,corr,timeline:stLoud};
+}
+
+async function _renderProcessedForAnalysis(){
+  const nCh=audioBuffer.numberOfChannels, sr=audioBuffer.sampleRate, len=audioBuffer.length;
+  const off=new OfflineAudioContext(nCh,len,sr);
+  const mk=(t,f,g,Q)=>{const x=off.createBiquadFilter();x.type=t;x.frequency.value=f;x.gain.value=g||0;if(Q)x.Q.value=Q;return x;};
+  const oSub=mk('lowshelf',60,eqSub.gain.value),oBass=mk('peaking',150,eqBass.gain.value,0.8),
+        oLow=mk('peaking',500,eqLowNode.gain.value,1.0),oMid=mk('peaking',1200,eqMid.gain.value,0.9),
+        oHigh=mk('peaking',4000,eqHigh.gain.value,1.0),oAir=mk('highshelf',12000,eqAir.gain.value);
+  const oComp=off.createDynamicsCompressor();
+  oComp.threshold.value=compNode.threshold.value;oComp.ratio.value=compNode.ratio.value;
+  oComp.attack.value=compNode.attack.value;oComp.release.value=compNode.release.value;oComp.knee.value=6;
+  const oLim=off.createDynamicsCompressor();
+  oLim.threshold.value=limiterNode.threshold.value;oLim.ratio.value=20;oLim.attack.value=0.001;oLim.release.value=0.05;oLim.knee.value=0;
+  const oShape=off.createWaveShaper();
+  const drive=parseFloat(document.getElementById('shape-drive')?.value||0)/100;
+  const mix=parseFloat(document.getElementById('shape-mix')?.value||0)/100;
+  oShape.curve=makeShapeCurve(shapeMode,drive,mix);oShape.oversample='4x';
+  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value;
+  oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
+  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(off.destination);
+  const src=off.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
+  return await off.startRendering();
+}
+
+async function runFullAnalysis(){
+  if(!audioBuffer){ setStatus('Carrega uma música primeiro'); return; }
+  setStatus('A analisar antes/depois...');
+  try{
+    const before=_measureBuffer(audioBuffer);
+    const procBuf=await _renderProcessedForAnalysis();
+    const after=_measureBuffer(procBuf);
+    _analysisData={before,after};
+    _renderAnalysisMetrics(before,after);
+    _drawAnalysisSpectrum(before,after);
+    _drawAnalysisTonal(before,after);
+    _drawAnalysisTimeline(before,after);
+    _renderAnalysisVerdict(after);
+    setStatus('✓ Análise completa — antes vs depois');
+  }catch(e){ setStatus('Erro na análise: '+e.message); }
+}
+
+function _renderAnalysisMetrics(b,a){
+  const host=document.getElementById('analysis-metrics'); if(!host) return;
+  while(host.children.length>4) host.removeChild(host.lastChild);
+  const rows=[
+    ['LUFS Integrado', b.lufs, a.lufs, 'LUFS', 1],
+    ['True Peak', b.tp, a.tp, 'dBTP', 1],
+    ['Peak', b.peak, a.peak, 'dBFS', 1],
+    ['RMS', b.rms, a.rms, 'dB', 1],
+    ['LRA (Loudness Range)', b.lra, a.lra, 'LU', 1],
+    ['PLR (Peak-to-Loudness)', b.plr, a.plr, 'dB', 1],
+    ['Crest Factor', b.crest, a.crest, 'dB', 1],
+    ['Correlação de Fase', b.corr, a.corr, '', 2],
+  ];
+  rows.forEach(([name,bv,av,unit,dec])=>{
+    const delta=av-bv;
+    const cell=(txt,col,align)=>{const d=document.createElement('div');d.style.cssText='background:var(--bg2);padding:7px 10px;font-size:11px;color:'+col+';text-align:'+(align||'left')+';';d.textContent=txt;return d;};
+    host.appendChild(cell(name,'var(--text)'));
+    host.appendChild(cell(bv.toFixed(dec)+(unit?' '+unit:''),'var(--c6)','right'));
+    host.appendChild(cell(av.toFixed(dec)+(unit?' '+unit:''),'var(--c4)','right'));
+    const dCol=Math.abs(delta)<0.05?'var(--muted2)':(delta>0?'#2dff8a':'#ff6b6b');
+    host.appendChild(cell((delta>=0?'+':'')+delta.toFixed(dec),dCol,'right'));
+  });
+}
+
+function _logFx(f,W){ return Math.log10(f/20)/Math.log10(20000/20)*W; }
+
+function _drawAnalysisSpectrum(b,a){
+  const cv=document.getElementById('analysis-spectrum-canvas'); if(!cv)return;
+  const W=cv.offsetWidth||600; if(W<50)return; if(cv.width!==W)cv.width=W;
+  const H=cv.height||180, ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#ffffff0e';ctx.lineWidth=1;
+  [60,250,1000,4000,16000].forEach((f,i)=>{const x=_logFx(f,W);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H-12);ctx.stroke();
+    ctx.fillStyle='#ffffff44';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText(['60','250','1k','4k','16k'][i],x,H-2);});
+  const drawCurve=(spec,col,fillA)=>{
+    const NB=spec.length;
+    ctx.beginPath();
+    for(let i=0;i<NB;i++){const f=20*Math.pow(20000/20,i/(NB-1));const x=_logFx(f,W);const y=(H-12)-spec[i]*(H-20);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+    if(fillA){ctx.lineTo(W,H-12);ctx.lineTo(0,H-12);ctx.closePath();ctx.fillStyle=fillA;ctx.fill();}
+  };
+  drawCurve(b.spec,'#b855f7','rgba(184,85,247,0.10)');
+  drawCurve(a.spec,'#2dff8a','rgba(45,255,138,0.12)');
+}
+
+function _drawAnalysisTonal(b,a){
+  const cv=document.getElementById('analysis-tonal-canvas'); if(!cv)return;
+  const W=cv.offsetWidth||600; if(W<50)return; if(cv.width!==W)cv.width=W;
+  const H=cv.height||130, ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
+  const bands=[['LOW',b.low,a.low,[184,85,247]],['MID',b.mid,a.mid,[45,212,255]],['HIGH',b.high,a.high,[45,255,138]]];
+  const groupW=W/3, barW=groupW*0.28, gap=groupW*0.08;
+  const maxPct=Math.max(...bands.map(x=>Math.max(x[1],x[2])),40);
+  bands.forEach(([lbl,bv,av,rgb],i)=>{
+    const cx=i*groupW+groupW/2, baseY=H-24, maxH=H-44;
+    const bh=(bv/maxPct)*maxH, ah=(av/maxPct)*maxH;
+    ctx.fillStyle='rgba(184,85,247,0.85)';ctx.fillRect(cx-barW-gap/2, baseY-bh, barW, bh);
+    ctx.fillStyle='rgba(45,255,138,0.9)';ctx.fillRect(cx+gap/2, baseY-ah, barW, ah);
+    ctx.fillStyle='rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',1)';ctx.font='bold 10px Rajdhani';ctx.textAlign='center';ctx.fillText(lbl,cx,H-8);
+    ctx.fillStyle='#b855f7';ctx.font='9px monospace';ctx.fillText(bv.toFixed(0)+'%',cx-barW/2-gap/2,baseY-bh-4);
+    ctx.fillStyle='#2dff8a';ctx.fillText(av.toFixed(0)+'%',cx+barW/2+gap/2,baseY-ah-4);
+  });
+  ctx.fillStyle='#b855f7';ctx.font='8px Rajdhani';ctx.textAlign='left';ctx.fillText('antes',6,12);
+  ctx.fillStyle='#2dff8a';ctx.fillText('depois',46,12);
+}
+
+function _drawAnalysisTimeline(b,a){
+  const cv=document.getElementById('analysis-timeline-canvas'); if(!cv)return;
+  const W=cv.offsetWidth||600; if(W<50)return; if(cv.width!==W)cv.width=W;
+  const H=cv.height||120, ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
+  const y=v=>{const c=Math.max(-40,Math.min(0,v));return H-((c+40)/40)*(H-10)-5;};
+  [-9,-14,-23].forEach(t=>{const yy=y(t);ctx.strokeStyle='#ffffff14';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#ffffff44';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText(t+' LUFS',4,yy-2);});
+  const drawLine=(arr,col)=>{if(!arr||!arr.length)return;ctx.beginPath();arr.forEach((v,i)=>{const x=i/(arr.length-1)*W;const yy=y(v);i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);});ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();};
+  drawLine(b.timeline,'#b855f7');
+  drawLine(a.timeline,'#2dff8a');
+}
+
+function _renderAnalysisVerdict(a){
+  const host=document.getElementById('analysis-verdict'); if(!host)return;
+  host.innerHTML='';
+  const targets=[
+    ['Spotify / Apple Music', -14, 1.0],
+    ['YouTube', -14, 1.0],
+    ['Club / DJ (Angola)', -9, 1.5],
+    ['Tidal', -14, 1.0],
+    ['Streaming geral', -14, 1.0],
+  ];
+  targets.forEach(([name,tgt,tol])=>{
+    const diff=a.lufs-tgt;
+    const ok=Math.abs(diff)<=tol, near=Math.abs(diff)<=tol*2.5;
+    const col=ok?'#2dff8a':near?'#ffe135':'#ff6b6b';
+    const icon=ok?'✓':near?'~':'✕';
+    const msg=ok?'no alvo':(diff>0?(diff.toFixed(1)+' dB acima'):(Math.abs(diff).toFixed(1)+' dB abaixo'));
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border-radius:6px;border-left:3px solid '+col+';';
+    row.innerHTML='<span style="color:'+col+';font-weight:700;font-family:monospace;">'+icon+'</span>'+
+      '<span style="font-size:11px;color:var(--text);font-family:Rajdhani;flex:1;">'+name+'</span>'+
+      '<span style="font-size:9px;color:var(--muted2);font-family:Rajdhani;">alvo '+tgt+' LUFS</span>'+
+      '<span style="font-size:11px;color:'+col+';font-family:Rajdhani;font-weight:700;min-width:90px;text-align:right;">'+msg+'</span>';
+    host.appendChild(row);
+  });
+}
+
 function applyRefToPreset(){
   if(!refStats){setStatus('Carrega uma referência primeiro');return;}
   initAudio();
@@ -1185,11 +1504,23 @@ function dbToY(db,H,padT,padB){
 function drawSpectrum(){
   const canvas=document.getElementById('spec'); if(!canvas)return;
   const ctx=canvas.getContext('2d');
-  const ow=canvas.offsetWidth||300, oh=canvas.offsetHeight||160;
-  // Only resize when the change is meaningful (>2px) — prevents per-frame
-  // tremble while the layout settles on first load.
-  if(Math.abs(canvas.width-ow)>2) canvas.width=ow;
-  if(Math.abs(canvas.height-oh)>2) canvas.height=oh;
+  // Set internal resolution ONCE via a ResizeObserver — never per frame.
+  // This is the key fix for the spectrum "tremble" on playback start: the
+  // canvas bitmap size no longer changes every animation frame.
+  if(!canvas._sizeBound){
+    canvas._sizeBound=true;
+    const applySize=()=>{
+      const ow=Math.round(canvas.offsetWidth||300), oh=Math.round(canvas.offsetHeight||160);
+      if(ow>0 && canvas.width!==ow) canvas.width=ow;
+      if(oh>0 && canvas.height!==oh) canvas.height=oh;
+    };
+    applySize();
+    if(window.ResizeObserver){
+      let raf=null;
+      new ResizeObserver(()=>{ if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(applySize); }).observe(canvas);
+    }
+  }
+  if(!canvas.width||!canvas.height) return;
   const W=canvas.width, H=canvas.height;
   const padL=28,padR=6,padT=6,padB=18;
 
@@ -1649,24 +1980,52 @@ async function _originalExport(){
     oAir.connect(oShape);oShape.connect(oSWet);oSWet.connect(oSMix);
     oSMix.connect(oSTrim);
     oSTrim.connect(oComp);oComp.connect(oTrans);
-    // Clipper (mirror live) — only if engaged
+    // Clipper (mirror live full Gold-Clip chain) — only if engaged
     const clipOn=document.getElementById('clip-toggle')?.checked && !clipBypassed;
     if(clipOn){
-      const oClipIn=offCtx.createGain();oClipIn.gain.value=1;
-      const oClipWS=offCtx.createWaveShaper();oClipWS.oversample='4x';
       const dDb=parseFloat(document.getElementById('clip-drive')?.value||0);
       const cDb=parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
-      const mode=document.getElementById('clip-mode')?.value||'soft';
-      const n=4096,curve=new Float32Array(n),drive=Math.pow(10,dDb/20);
-      for(let i=0;i<n;i++){let x=((i*2/(n-1))-1)*drive;let y;
-        if(mode==='hard')y=Math.max(-1,Math.min(1,x));
-        else if(mode==='softpro'){const k=2.5;y=Math.sign(x)*(1-Math.exp(-k*Math.abs(x)))/(1-Math.exp(-k));}
-        else if(mode==='sine')y=Math.abs(x)<1?Math.sin(x*Math.PI/2):Math.sign(x);
-        else y=Math.tanh(x);
-        curve[i]=Math.max(-1,Math.min(1,y));}
-      oClipWS.curve=curve;
-      const oClipOut=offCtx.createGain();oClipOut.gain.value=Math.pow(10,cDb/20);
-      oTrans.connect(oClipIn);oClipIn.connect(oClipWS);oClipWS.connect(oClipOut);oClipOut.connect(oLim);
+      const mode=document.getElementById('clip-mode')?.value||'modern';
+      const gold=parseFloat(document.getElementById('clip-gold')?.value||0);
+      const goldMode=document.getElementById('clip-gold-mode')?.value||'smooth';
+      const alch=parseFloat(document.getElementById('clip-alchemy')?.value||0);
+      const box=parseFloat(document.getElementById('clip-boxtone')?.value||0);
+      const mix=parseFloat(document.getElementById('clip-mix')?.value||100);
+      const out=parseFloat(document.getElementById('clip-out')?.value||0);
+      const unity=document.getElementById('clip-unity')?.checked;
+      const ceil=Math.pow(10,cDb/20);
+      const n=8192;
+      // clip curve
+      const oIn=offCtx.createGain();oIn.gain.value=Math.pow(10,dDb/20);
+      const oWS=offCtx.createWaveShaper();oWS.oversample='4x';
+      const cc=new Float32Array(n);
+      for(let i=0;i<n;i++){let x=((i*2/(n-1))-1);let y;
+        if(mode==='hard')y=Math.max(-ceil,Math.min(ceil,x));
+        else if(mode==='classic'){const k=1.6,t=x/ceil;y=ceil*Math.tanh(t*k)/Math.tanh(k);}
+        else if(mode==='off')y=x;
+        else {const t=x/ceil;y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2));}
+        cc[i]=Math.max(-1,Math.min(1,y));}
+      oWS.curve=cc;
+      // gold curve
+      const oGold=offCtx.createWaveShaper();oGold.oversample='4x';
+      const gc=new Float32Array(n);const a=Math.max(0,Math.min(1,gold/100));
+      if(a<0.001){for(let i=0;i<n;i++)gc[i]=(i*2/(n-1))-1;}
+      else{const dr=1+a*(goldMode==='aggressive'?2.0:1.0);
+        for(let i=0;i<n;i++){const x=((i*2/(n-1))-1);let y=Math.sign(x)*Math.pow(Math.abs(x),1/(1+a*0.6));y=Math.tanh(y*dr)/Math.tanh(dr);gc[i]=Math.max(-1,Math.min(1,(1-a)*x+a*y));}}
+      oGold.curve=gc;
+      // alchemy + boxtone
+      const oAlch=offCtx.createBiquadFilter();oAlch.type='highshelf';oAlch.frequency.value=8000;oAlch.gain.value=-(alch/100)*4;
+      const oBox=offCtx.createBiquadFilter();oBox.type='peaking';oBox.frequency.value=3000;oBox.Q.value=0.7;oBox.gain.value=(box/100)*4;
+      // parallel mix + output
+      const oWet=offCtx.createGain();oWet.gain.value=mix/100;
+      const oDry=offCtx.createGain();oDry.gain.value=1-(mix/100);
+      const oSum=offCtx.createGain();oSum.gain.value=1;
+      let outG=Math.pow(10,out/20); if(unity) outG*=Math.pow(10,-dDb/20);
+      const oOut=offCtx.createGain();oOut.gain.value=outG;
+      oTrans.connect(oIn);
+      oIn.connect(oWS);oWS.connect(oGold);oGold.connect(oAlch);oAlch.connect(oBox);oBox.connect(oWet);oWet.connect(oSum);
+      oIn.connect(oDry);oDry.connect(oSum);
+      oSum.connect(oOut);oOut.connect(oLim);
     } else {
       oTrans.connect(oLim);
     }

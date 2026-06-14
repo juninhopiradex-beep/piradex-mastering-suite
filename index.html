@@ -155,6 +155,7 @@
       <div class="tab" onclick="openTab('mband',this)">MBAND</div>
     <div class="tab tab-divider">|</div>
     <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
+    <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -186,15 +187,24 @@
               <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">FASE</div>
               <div style="font-size:13px;font-weight:700;color:#2dff8a;font-family:'Rajdhani';" id="sug-phase">+0.82</div>
             </div>
-            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);grid-column:span 2;">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;margin-bottom:3px;">BALANCE LOW / MID / HIGH</div>
-              <div style="display:flex;gap:3px;align-items:center;">
-                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-low-bar" style="height:100%;width:52%;background:#b855f7;border-radius:2px;"></div></div>
-                <span style="font-size:8px;color:#b855f7;min-width:24px;" id="sug-low-pct">52%</span>
-                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-mid-bar" style="height:100%;width:30%;background:#2dd4ff;border-radius:2px;"></div></div>
-                <span style="font-size:8px;color:#2dd4ff;min-width:24px;" id="sug-mid-pct">30%</span>
-                <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden;"><div id="sug-high-bar" style="height:100%;width:18%;background:#2dff8a;border-radius:2px;"></div></div>
-                <span style="font-size:8px;color:#2dff8a;min-width:24px;" id="sug-high-pct">18%</span>
+            <div style="background:var(--bg2);border-radius:4px;padding:7px 9px;border:1px solid var(--border);grid-column:span 2;">
+              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;margin-bottom:6px;">BALANCE LOW / MID / HIGH</div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span style="font-size:8px;color:#b855f7;min-width:30px;letter-spacing:.5px;">LOW</span>
+                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-low-bar" style="height:100%;width:52%;background:#b855f7;border-radius:3px;transition:width .2s;"></div></div>
+                  <span style="font-size:9px;font-weight:700;color:#b855f7;min-width:30px;text-align:right;" id="sug-low-pct">52%</span>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span style="font-size:8px;color:#2dd4ff;min-width:30px;letter-spacing:.5px;">MID</span>
+                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-mid-bar" style="height:100%;width:30%;background:#2dd4ff;border-radius:3px;transition:width .2s;"></div></div>
+                  <span style="font-size:9px;font-weight:700;color:#2dd4ff;min-width:30px;text-align:right;" id="sug-mid-pct">30%</span>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span style="font-size:8px;color:#2dff8a;min-width:30px;letter-spacing:.5px;">HIGH</span>
+                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-high-bar" style="height:100%;width:18%;background:#2dff8a;border-radius:3px;transition:width .2s;"></div></div>
+                  <span style="font-size:9px;font-weight:700;color:#2dff8a;min-width:30px;text-align:right;" id="sug-high-pct">18%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -464,35 +474,78 @@
         <div class="lim-h-marks"><span>0 dBFS</span><span>-6</span><span>-12</span><span>-24</span></div>
       </div>
     </div>
+  </div>
 
-    <!-- CLIPPER MODULE (StandardCLIP-style) -->
+  <!-- CLIPPER TAB (Gold Clip / StandardCLIP-style) -->
+  <div class="tab-panel" id="tab-clip">
     <div class="module-panel">
-      <div class="module-title-row"><div class="module-title">CLIPPER — StandardCLIP Style</div><button class="module-bypass-btn" id="bypass-clip" onclick="toggleModuleBypass('clip')" title="Bypass Clipper">BYPASS</button></div>
-      <div class="mb-toggle-row" style="margin-bottom:12px;">
+      <div class="module-title-row"><div class="module-title">CLIPPER — Loudness · Saturação · Peak Contour</div><button class="module-bypass-btn" id="bypass-clip" onclick="toggleModuleBypass('clip')" title="Bypass Clipper">BYPASS</button></div>
+      <div class="mb-toggle-row" style="margin-bottom:14px;">
         <input type="checkbox" id="clip-toggle" onchange="updateClipper()" style="width:16px;height:16px;accent-color:var(--c4);">
         <span class="mb-toggle-label">ACTIVAR CLIPPER</span>
+        <span id="clip-clock" style="margin-left:auto;font-size:9px;color:var(--c3);font-family:'Rajdhani';letter-spacing:1px;">CLIP CLOCK: --:--</span>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">
-        Up-sampling → Input Gain → Clipping → Output Gain → Down-sampling → Ceiling.<br>
-        Aumenta loudness percebido cortando os picos antes do limiter, com oversampling para evitar aliasing.
-      </div>
-      <div class="module-controls">
-        <div class="mod-ctrl"><label>INPUT DRIVE</label><input type="range" min="0" max="18" value="0" step="0.5" id="clip-drive" oninput="updateClipper()"><span id="clip-drive-v">+0.0 dB</span></div>
-        <div class="mod-ctrl"><label>CEILING</label><input type="range" min="-6" max="-0.1" value="-0.1" step="0.1" id="clip-ceiling" oninput="updateClipper()"><span id="clip-ceiling-v">-0.1 dB</span></div>
+
+      <!-- Curve display -->
+      <canvas id="clip-curve-canvas" height="150" style="width:100%;height:150px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:16px;"></canvas>
+
+      <!-- SECTION 1: CLIPPER -->
+      <div style="font-size:10px;color:var(--c4);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">① CLIPPER</div>
+      <div class="module-controls" style="margin-bottom:16px;">
+        <div class="mod-ctrl"><label>INPUT TRIM</label><input type="range" min="0" max="18" value="0" step="0.5" id="clip-drive" oninput="updateClipper()"><span id="clip-drive-v">+0.0 dB</span></div>
+        <div class="mod-ctrl"><label>CLIP CEILING</label><input type="range" min="-12" max="0" value="-0.1" step="0.1" id="clip-ceiling" oninput="updateClipper()"><span id="clip-ceiling-v">-0.1 dB</span></div>
         <div class="mod-ctrl"><label>MODO</label>
           <select id="clip-mode" onchange="updateClipper()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
-            <option value="soft" selected>Soft Clip</option>
-            <option value="softpro">Soft Clip Pro</option>
-            <option value="hard">Hard Clip</option>
-            <option value="sine">Sine Clip</option>
+            <option value="modern" selected>Modern</option>
+            <option value="classic">Classic</option>
+            <option value="hard">Hard</option>
+            <option value="off">Clipper Off</option>
           </select><span></span>
         </div>
         <div class="mod-ctrl"><label>OVERSAMPLING</label>
           <select id="clip-os" onchange="updateClipper()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
-            <option value="4x" selected>x16 | x64</option>
-            <option value="2x">x4 | x16</option>
+            <option value="4x" selected>Pristine (x16/x64)</option>
+            <option value="2x">High (x4/x16)</option>
           </select><span></span>
         </div>
+      </div>
+
+      <!-- SECTION 2: GOLD (loudness saturation up to +6dB) -->
+      <div style="font-size:10px;color:var(--c7);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">② GOLD — Loudness Saturator</div>
+      <div class="module-controls" style="margin-bottom:16px;">
+        <div class="mod-ctrl"><label>GOLD AMOUNT</label><input type="range" min="0" max="100" value="0" step="1" id="clip-gold" oninput="updateClipper()"><span id="clip-gold-v">0%</span></div>
+        <div class="mod-ctrl"><label>GOLD CHAR.</label>
+          <select id="clip-gold-mode" onchange="updateClipper()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:4px 8px;font-family:'Rajdhani';">
+            <option value="smooth" selected>Smooth</option>
+            <option value="aggressive">Aggressive</option>
+          </select><span></span>
+        </div>
+      </div>
+
+      <!-- SECTION 3: ALCHEMY (mid/high peak contour) -->
+      <div style="font-size:10px;color:var(--c1);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">③ ALCHEMY — Mid/High Peak Contour</div>
+      <div class="module-controls" style="margin-bottom:16px;">
+        <div class="mod-ctrl"><label>ALCHEMY</label><input type="range" min="0" max="100" value="0" step="1" id="clip-alchemy" oninput="updateClipper()"><span id="clip-alchemy-v">0%</span></div>
+        <div class="mod-ctrl"><label>BOX TONE</label><input type="range" min="0" max="100" value="0" step="1" id="clip-boxtone" oninput="updateClipper()"><span id="clip-boxtone-v">0%</span></div>
+      </div>
+
+      <!-- SECTION 4: PARALLEL MIX + OUTPUT -->
+      <div style="font-size:10px;color:var(--c2);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">④ TRUE PARALLEL MIX + OUTPUT</div>
+      <div class="module-controls">
+        <div class="mod-ctrl"><label>DRY / WET</label><input type="range" min="0" max="100" value="100" step="1" id="clip-mix" oninput="updateClipper()"><span id="clip-mix-v">100%</span></div>
+        <div class="mod-ctrl"><label>OUTPUT TRIM</label><input type="range" min="-12" max="6" value="0" step="0.5" id="clip-out" oninput="updateClipper()"><span id="clip-out-v">+0.0 dB</span></div>
+        <div class="mod-ctrl" style="align-items:center;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="clip-unity" onchange="updateClipper()" style="width:14px;height:14px;accent-color:var(--c4);">
+            UNITY GAIN (auto-compensar)
+          </label><span></span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:14px;line-height:1.6;">
+        <b style="color:var(--c4);">CLIPPER</b> corta os picos (Modern/Classic = joelho analógico suave, Hard = corte limpo até ao ceiling).
+        <b style="color:var(--c7);">GOLD</b> adiciona até +6 dB de saturação de loudness sem alterar o carácter dos picos.
+        <b style="color:var(--c1);">ALCHEMY</b> suaviza médios/agudos perto do clip (tipo fita).
+        <b style="color:var(--c2);">PARALLEL</b> mistura o sinal processado com o dry independente.
       </div>
     </div>
   </div>
@@ -564,6 +617,51 @@
         <div class="ref-compare" id="ref-compare" style="display:none"></div>
         <button class="paywall-cta" onclick="applyRefToPreset()" style="margin-top:12px;font-size:12px;padding:10px;animation:none;background:linear-gradient(90deg,var(--c6),var(--c1));">APLICAR CONFIGURAÇÃO DA REFERÊNCIA</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ANÁLISES SONORAS TAB -->
+  <div class="tab-panel" id="tab-analysis">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">ANÁLISES SONORAS — Antes vs Depois</div>
+        <button onclick="runFullAnalysis()" style="padding:6px 14px;border-radius:5px;border:1px solid var(--c4);background:rgba(45,255,138,0.12);color:var(--c4);font-family:'Rajdhani';font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;">
+          <i class="ti ti-refresh"></i> ANALISAR
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5;">
+        Compara a faixa <b style="color:var(--c6);">IMPORTADA (antes)</b> com o resultado <b style="color:var(--c4);">PROCESSADO (depois)</b>. Carrega uma música, aplica o teu mastering e clica ANALISAR.
+      </div>
+
+      <!-- Métricas de loudness lado a lado -->
+      <div style="font-size:10px;color:var(--c4);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">MÉTRICAS DE LOUDNESS &amp; DINÂMICA</div>
+      <div id="analysis-metrics" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:1px;background:var(--border);border-radius:6px;overflow:hidden;margin-bottom:18px;font-family:'Rajdhani';">
+        <div style="background:var(--bg3);padding:8px 10px;font-size:9px;color:var(--muted2);letter-spacing:1px;">MÉTRICA</div>
+        <div style="background:var(--bg3);padding:8px 10px;font-size:9px;color:var(--c6);letter-spacing:1px;text-align:right;">ANTES</div>
+        <div style="background:var(--bg3);padding:8px 10px;font-size:9px;color:var(--c4);letter-spacing:1px;text-align:right;">DEPOIS</div>
+        <div style="background:var(--bg3);padding:8px 10px;font-size:9px;color:var(--muted2);letter-spacing:1px;text-align:right;">Δ</div>
+        <!-- rows injected by JS -->
+      </div>
+
+      <!-- Espectro antes vs depois -->
+      <div style="font-size:10px;color:var(--c5);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">CURVA ESPECTRAL — ANTES vs DEPOIS</div>
+      <canvas id="analysis-spectrum-canvas" height="180" style="width:100%;height:180px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:6px;"></canvas>
+      <div style="display:flex;gap:14px;margin-bottom:18px;font-size:9px;color:var(--muted2);">
+        <span><span style="display:inline-block;width:12px;height:2px;background:var(--c6);vertical-align:middle;margin-right:4px;"></span>Antes (importado)</span>
+        <span><span style="display:inline-block;width:12px;height:2px;background:var(--c4);vertical-align:middle;margin-right:4px;"></span>Depois (processado)</span>
+      </div>
+
+      <!-- Balanço tonal -->
+      <div style="font-size:10px;color:var(--c3);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">BALANÇO TONAL (LOW / MID / HIGH)</div>
+      <canvas id="analysis-tonal-canvas" height="130" style="width:100%;height:130px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:18px;"></canvas>
+
+      <!-- Loudness no tempo -->
+      <div style="font-size:10px;color:var(--c1);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">LOUDNESS AO LONGO DO TEMPO</div>
+      <canvas id="analysis-timeline-canvas" height="120" style="width:100%;height:120px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:18px;"></canvas>
+
+      <!-- Veredito por mercado -->
+      <div style="font-size:10px;color:var(--c4);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">VEREDITO — ALVOS POR PLATAFORMA</div>
+      <div id="analysis-verdict" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
   </div>
 

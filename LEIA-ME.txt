@@ -3,40 +3,42 @@
   BeatFreak Studio · beatfreakstudio.com/mastersuite
 ═══════════════════════════════════════════════════════════
 
-CORREÇÕES E NOVIDADES NESTA VERSÃO:
+NESTA VERSÃO:
 
-CADEIA DE ÁUDIO (revista de raiz):
-• Harmonic Shaper — eliminado o ruído tipo "rádio / duas
-  músicas ao mesmo tempo". Oversampling 4x, curva serial
-  limpa, bypass real (curva identidade).
-• Mid/Side — agora é um estágio opcional que só liga quando
-  mexes nos controlos. Em repouso é 100% transparente (sem
-  ruído). Bypass força passagem directa.
-• Multiband — crossfade limpo entre directo e 3 bandas.
-• Transient Shaper — efeito audível + bypass a funcionar.
-• Todos os módulos têm BYPASS igual aos restantes.
+TREMOR ELIMINADO (Spectrum + I/O):
+• Colunas do grid com largura fixa + isolamento de layout
+  (contain:strict) para nada reflowar quando a música começa.
+• Canvas do espectro agora dimensionado UMA vez (ResizeObserver),
+  já não redimensiona a cada frame. Acabou o tremor.
+• LUFS e números com dígitos de largura fixa (tabular-nums).
 
-NOVO MÓDULO:
-• CLIPPER (estilo StandardCLIP) — Up-sampling → Input Gain →
-  Clipping → Output Gain → Down-sampling → Ceiling.
-  Modos: Soft, Soft Pro, Hard, Sine. Oversampling x16/x64.
-  Aumenta loudness percebido antes do limiter.
+NOVA ABA "ANÁLISES" (ao lado de REFERÊNCIA):
+Comparação profissional ANTES (importado) vs DEPOIS (processado).
+Renderiza o resultado em offline e mede ambos. Inclui:
 
-INTERFACE:
-• EQ — corrigido o "nó gigante" ao abrir pela primeira vez.
-• Tremor no arranque — eliminado (dígitos de largura fixa).
-• Balance Espectral — agora bem visível (barras com gradiente,
-  percentagens a branco, linha de target tracejada).
-• Limiter — oversampling até 64x.
-• Presets de EQ (Flat, Warm, Bright, V-Shape, Bass, Vocal,
-  Kuduro, Kizomba, Afro-House, Club, Air).
+  • MÉTRICAS lado a lado com Δ (diferença):
+    LUFS Integrado, True Peak, Peak, RMS, LRA (Loudness Range),
+    PLR (Peak-to-Loudness), Crest Factor, Correlação de Fase.
+  • CURVA ESPECTRAL sobreposta (antes roxo / depois verde).
+  • BALANÇO TONAL Low/Mid/High em barras antes vs depois.
+  • LOUDNESS AO LONGO DO TEMPO (com linhas de alvo -9/-14/-23).
+  • VEREDITO por plataforma (Spotify/Apple -14, Club Angola -9,
+    YouTube, Tidal...) com semáforo: ✓ no alvo / ~ perto / ✕ fora.
 
-FLUXO RECOMENDADO:
-1. Abre "index.html" no Chrome
-2. Importa a música
-3. Aplica HEADROOM -6dB (desbloqueia presets)
-4. Escolhe preset / ajusta módulos / activa o Clipper
-5. Exporta WAV ou MP3
+  Como usar: importa a música → PROCESSADO → aplica o mastering
+  → abre ANÁLISES (analisa automaticamente, ou clica ANALISAR).
+
+CLIPPER COMPLETO (estilo Gold Clip) no separador "CLIP":
+  ① Clipper (Modern/Classic/Hard/Off + ceiling + input trim + oversampling)
+  ② Gold (saturação de loudness até +6 dB)
+  ③ Alchemy (peak contour médios/agudos + box tone)
+  ④ True Parallel mix + output trim + unity gain + curva ao vivo.
+
+Restantes módulos (EQ, Comp, Shape, M/S, Multiband, Transient,
+Limiter) com bypass e cadeia revista — sem ruído nem efeitos presos.
+
+NOTA: os efeitos só actuam em modo PROCESSADO.
+Fluxo: importar → PROCESSADO → HEADROOM -6dB → ajustes → exportar.
 
 ATALHOS: J=play · K=stop · E=EQ · C=Comp · H=Diagnóstico
          ← →=seek · Ctrl+Z/Y=Undo/Redo
