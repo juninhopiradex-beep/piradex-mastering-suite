@@ -109,7 +109,21 @@ function openTab(name, el) {
   if(name==='balance') setTimeout(()=>{ if(typeof drawBalanceBars==='function') drawBalanceBars(); },60);
   if(name==='clip')    setTimeout(()=>{ if(typeof _drawClipCurve==='function') _drawClipCurve(); },60);
   if(name==='analysis')setTimeout(()=>{ if(audioBuffer && typeof runFullAnalysis==='function') runFullAnalysis(); },80);
-  if(name==='studiopro')setTimeout(()=>{ if(typeof fxRenderHub==='function') fxRenderHub(); },60);
+  if(name==='studiopro')setTimeout(()=>{
+    if(typeof isFullVersion!=='undefined' && !isFullVersion){
+      const c=document.getElementById('fx-content');
+      const bk=document.getElementById('fx-back'); if(bk) bk.style.display='none';
+      if(c) c.innerHTML='<div style="text-align:center;padding:40px 20px;">'+
+        '<div style="font-family:\'Orbitron\',monospace;font-weight:900;font-size:20px;background:linear-gradient(90deg,var(--c3),var(--c1));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">STUDIO PRO</div>'+
+        '<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">As 15 ferramentas avançadas (Codec Social, Monitor Local, Blind Shootout, Reverse Mastering, Source Forensics e mais) estão disponíveis apenas na <b style="color:var(--c4)">versão completa</b>.</div>'+
+        '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;">'+
+        '<button onclick="openLicenseModal()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.12);color:var(--c4);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;">DESBLOQUEAR VERSÃO FULL</button>'+
+        '<a href="https://www.beatfreakstudio.com" target="_blank" style="padding:10px 20px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;text-decoration:none;">SABER MAIS</a>'+
+        '</div></div>';
+      return;
+    }
+    if(typeof fxRenderHub==='function') fxRenderHub();
+  },60);
   if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
 }
 
@@ -3190,7 +3204,8 @@ const LICENSES=['PRDX-XAJI-0Y6D-PBHS','PRDX-AHXT-HV3A-3ZMF','PRDX-8MDD-4V30-T9NT
 let isFullVersion=false;
 function checkLicense(){
   const saved=sessionStorage.getItem('piradex_license');
-  if(saved&&LICENSES.includes(saved)){isFullVersion=true;updateLicenseBadge();}
+  if(saved&&LICENSES.includes(saved)){isFullVersion=true;}
+  updateLicenseBadge();
 }
 function activateLicense(){
   const input=document.getElementById('license-input'),err=document.getElementById('license-error');
@@ -3210,6 +3225,13 @@ function activateLicense(){
 function updateLicenseBadge(){
   const b=document.getElementById('license-badge');
   if(b){b.textContent=isFullVersion?'✓ FULL':'DEMO';b.style.color=isFullVersion?'var(--c4)':'var(--muted)';b.style.borderColor=isFullVersion?'var(--c4)':'var(--border2)';}
+  // STUDIO PRO tab shows a lock in demo
+  const sp=document.querySelector('.tab[onclick*="studiopro"]');
+  if(sp){
+    const base='STUDIO PRO';
+    sp.textContent = isFullVersion ? base : (base+' 🔒');
+    sp.style.opacity = isFullVersion ? '1' : '0.6';
+  }
 }
 function openLicenseModal(){document.getElementById('license-modal').style.display='flex';}
 function closeLicenseModal(){document.getElementById('license-modal').style.display='none';}

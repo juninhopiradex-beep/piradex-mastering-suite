@@ -3,49 +3,32 @@
   BeatFreak Studio · beatfreakstudio.com/mastersuite
 ═══════════════════════════════════════════════════════════
 
-NOVO: SEPARADOR "STUDIO PRO" — 15 ferramentas avançadas
-(barra de cima, ao lado de ANÁLISES). Abre o hub e clica
-numa ferramenta:
+STUDIO PRO agora com 25 FERRAMENTAS (15 + 10 novas moonshot):
 
-  1.  Codec Social      — ouve como soa no WhatsApp/TikTok
-  2.  Monitor Local     — candongueiro, festa, telemóvel...
-  3.  Calibração Sala   — compensa o quarto via microfone
-  4.  Stems por Bandas  — ajusta sub/médios/agudos do stereo
-  5.  Comando por Texto — "mais quente tipo Semba antigo"
-  6.  Snippet Viral     — deteta o refrão e exporta p/ TikTok
-  7.  Certificado       — relatório partilhável do master
-  8.  Piradex Print     — guarda a tua assinatura de mastering
-  9.  Modo Mentor       — explica o porquê de cada ajuste
-  10. Loudness Dinâmico — realça os drops/refrões
-  11. Reverse Mastering — notas para o eng. de mistura
-  12. Source Forensics  — raio-X do ficheiro importado
-  13. Album Cohesion    — coesão de loudness no álbum
-  14. Blind Shootout    — teste cego com loudness igualado
-  15. Client Review Room— versões + comentários do cliente
+FERRAMENTAS BASE (15):
+  Codec Social · Monitor Local · Calibração de Sala · Stems ·
+  Comando por Texto · Snippet Viral · Certificado · Piradex
+  Print · Modo Mentor · Loudness Dinâmico · Reverse Mastering ·
+  Source Forensics · Album Cohesion · Blind Shootout · Client Room
 
-NOTAS HONESTAS:
-• Stems: separação por bandas de frequência (proxy). A
-  separação real por IA (vocal/bateria/baixo) corre no
-  servidor da BeatFreak Studio.
-• Comando por Texto: interpretador local offline (sem IA
-  na nuvem). Reconhece: quente, punch, brilho, vocal,
-  largo, alto, limpo, suave...
-• Calibração de Sala: precisa de permissão do microfone.
-• Client Review Room: guardado localmente; a sincronização
-  entre dispositivos requer o servidor.
+NOVAS — MOONSHOT (10), marcadas com ✦:
+  • Copiloto — parceiro de estúdio que conversa e sugere
+  • Heat Map Emocional — forma sentimental da música no tempo
+  • O Teu Eu de 1 Ano — A/B com a tua evolução prevista
+  • Intenção Cultural — "kizombada às 2h" → decisões técnicas
+  • Skip-Risk Score — risco de skip nos primeiros 8s
+  • Gémeo do Ouvinte — ouve como personas reais (earbuds, DJ...)
+  • Time Capsule — guarda snapshots e vê a tua evolução
+  • Co-Master ao Vivo — sessão partilhável a dois (estrutura local)
+  • Porque o Hit é Hit — compara a tua faixa a um hit de referência
+  • Auto-Adaptação — exporta versões p/ Spotify/Club/WhatsApp/Vinil
 
-Tudo o resto (Codec, Monitor, Snippet, Reverse, Forensics,
-Album, Blind Shootout, Loudness Dinâmico) corre 100% local
-no browser com a Web Audio API.
+DSP/análise real no browser. Funções que precisam de IA na
+nuvem, ML pesado ou sync entre dispositivos correm em versão
+local e estão assinaladas dentro de cada ferramenta.
 
-Como aceder: importa música → carrega em PROCESSADO →
-abre STUDIO PRO. (O hub também abre em modo ORIGINAL.)
-
-═══════════════════════════════════════════════════════════
-ALÉM DISTO, JÁ INCLUÍDO NAS VERSÕES ANTERIORES:
-Clipper completo (Gold Clip style) no separador CLIP,
-aba ANÁLISES (antes/depois), tremor eliminado, cadeia
-de áudio revista sem ruído, e todos os módulos com bypass.
+STUDIO PRO está bloqueado na versão DEMO (só FULL).
+Acesso: importar → PROCESSADO → STUDIO PRO.
 
 © 2026 Juninho Piradex · BeatFreak Studio
 ═══════════════════════════════════════════════════════════

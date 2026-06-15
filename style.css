@@ -51,6 +51,10 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 120px 70px;gap:8px;padding:8px 12px;height:268px;box-sizing:border-box;}
 .panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden;min-height:0;contain:strict;}
 .panel-spectrum{padding:6px;contain:strict;}
+/* AI suggestions panel: allow internal scroll so the Balance section is never clipped */
+.panel-suggest{overflow-y:auto;contain:layout;}
+.panel-suggest::-webkit-scrollbar{width:5px;}
+.panel-suggest::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 .plabel{font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
 .sugs{display:flex;flex-direction:column;gap:4px;}
 .sug{display:flex;align-items:center;gap:7px;font-size:10px;padding:5px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);}
@@ -251,8 +255,8 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .login-screen{position:fixed;inset:0;z-index:2000;background:var(--bg);display:flex;align-items:center;justify-content:center;}
 .login-box{background:var(--bg2);border:1px solid rgba(255,58,181,0.3);border-radius:16px;width:90%;max-width:400px;overflow:hidden;box-shadow:0 0 80px rgba(255,58,181,0.15);}
 .login-header{background:linear-gradient(135deg,#ff3ab5,#b855f7);padding:28px 24px;text-align:center;}
-.login-logo{font-family:'Orbitron',monospace;font-weight:900;font-size:26px;letter-spacing:4px;color:#fff;display:block;margin-bottom:4px;}
-.login-sub{font-size:9px;letter-spacing:4px;color:rgba(255,255,255,0.7);}
+.login-logo{font-family:'Orbitron',monospace;font-weight:900;font-size:22px;letter-spacing:2px;color:#fff;display:block;margin-bottom:5px;}
+.login-sub{font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.55);}
 .login-body{padding:26px 24px;}
 .login-label{font-size:9px;letter-spacing:2px;color:var(--muted2);text-transform:uppercase;display:block;margin-bottom:6px;font-weight:600;}
 .login-input{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:'Rajdhani';font-size:14px;margin-bottom:16px;outline:none;transition:border-color 0.15s;}

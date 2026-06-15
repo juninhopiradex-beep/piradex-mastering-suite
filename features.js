@@ -28,6 +28,17 @@ const FX = [
   {id:'album',    name:'Album Cohesion',      sub:'Coesão de loudness no álbum', c:'var(--c4)'},
   {id:'shootout', name:'Blind Shootout',      sub:'Teste cego com loudness igualado', c:'var(--c3)'},
   {id:'client',   name:'Client Review Room',  sub:'Aprovação do cliente ao vivo', c:'var(--c6)'},
+  // ── MOONSHOT (visão de produto) ──
+  {id:'copilot',  name:'Copiloto ✦',          sub:'O teu parceiro de estúdio (conversa)', c:'var(--c5)'},
+  {id:'heatmap',  name:'Heat Map Emocional ✦',sub:'A forma sentimental da música', c:'var(--c1)'},
+  {id:'future',   name:'O Teu Eu de 1 Ano ✦', sub:'A/B com a tua evolução prevista', c:'var(--c6)'},
+  {id:'vibe',     name:'Intenção Cultural ✦', sub:'"kizombada em Luanda às 2h"', c:'var(--c3)'},
+  {id:'skiprisk', name:'Skip-Risk Score ✦',   sub:'Prende o ouvinte nos 1ºs 8s', c:'var(--c2)'},
+  {id:'twin',     name:'Gémeo do Ouvinte ✦',  sub:'Como personas reais te ouvem', c:'var(--c6)'},
+  {id:'capsule',  name:'Time Capsule ✦',      sub:'A tua evolução guardada', c:'var(--c4)'},
+  {id:'comaster', name:'Co-Master ao Vivo ✦', sub:'Dois produtores, tempo real', c:'var(--c5)'},
+  {id:'hitdna',   name:'Porque o Hit é Hit ✦',sub:'Engenharia reversa do viral', c:'var(--c3)'},
+  {id:'adaptive', name:'Auto-Adaptação ✦',    sub:'1 ficheiro, infinitos destinos', c:'var(--c2)'},
 ];
 
 window.fxRenderHub = function(){
@@ -735,5 +746,306 @@ function fxClientRender(){
   const ch=$('fx-client-comments');
   if(ch)ch.innerHTML=d.comments.length?d.comments.map(c=>`<div style="display:flex;gap:10px;align-items:center;background:var(--bg3);border-radius:6px;padding:7px 10px;margin-bottom:4px;"><span style="background:color-mix(in srgb,var(--c5) 18%,transparent);color:var(--c5);border-radius:5px;padding:3px 8px;font-family:monospace;font-size:11px;">${c.tm}</span><span style="color:var(--text);font-size:12px;">${c.msg}</span></div>`).join(''):'<div style="color:var(--muted);font-size:11px;">Sem comentários.</div>';
 }
+
+})();
+
+/* ═══════════ STUDIO PRO — MOONSHOT VIEWS (10) ═══════════ */
+(function(){
+'use strict';
+const {btn,card,chipRow,canvasEl,measure,renderProcessed,drawSpec,gridFreq}=window.__fx;
+const $=window.__fx.$, status=window.__fx.status, hasAudio=window.__fx.hasAudio;
+const LS='piradex_';
+
+function bufToWav(buf){
+  const nCh=buf.numberOfChannels,len=buf.length,sr=buf.sampleRate;
+  const ab=new ArrayBuffer(44+len*nCh*2),v=new DataView(ab);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF');v.setUint32(4,36+len*nCh*2,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,nCh,true);v.setUint32(24,sr,true);
+  v.setUint32(28,sr*nCh*2,true);v.setUint16(32,nCh*2,true);v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,len*nCh*2,true);
+  let o=44;for(let i=0;i<len;i++)for(let c=0;c<nCh;c++){let s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));v.setInt16(o,s<0?s*0x8000:s*0x7FFF,true);o+=2;}
+  return new Blob([ab],{type:'audio/wav'});
+}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+function playBuf(buf,gain){ if(typeof audioCtx==='undefined'||!audioCtx)return; try{if(window._fxPrev)window._fxPrev.stop();}catch(e){} const s=audioCtx.createBufferSource();s.buffer=buf;const g=audioCtx.createGain();g.gain.value=gain||1;s.connect(g);g.connect(audioCtx.destination);s.start();window._fxPrev=s; }
+function fmt(s){const m=Math.floor(s/60),ss=Math.floor(s%60);return m+':'+(ss<10?'0':'')+ss;}
+
+// energy+centroid timeline (shared by heatmap/skiprisk/copilot)
+function analyseTimeline(buf){
+  const d=buf.getChannelData(0),sr=buf.sampleRate,win=Math.floor(sr*0.5),hop=Math.floor(sr*0.25);
+  const out=[];
+  for(let i=0;i+win<=d.length;i+=hop){
+    let e=0,zc=0,prev=0;
+    for(let j=0;j<win;j+=50){const x=d[i+j];e+=x*x;if((x>0)!==(prev>0))zc++;prev=x;}
+    out.push({e:Math.sqrt(e/(win/50)),bright:zc/(win/50)});
+  }
+  const mx=Math.max(...out.map(o=>o.e))||1;
+  out.forEach(o=>{o.e/=mx;});
+  return out;
+}
+
+// ════════ COPILOTO ════════
+let _copilotMsgs=[];
+window.fxView_copilot=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Ouve a tua faixa e conversa contigo. Aceitas ou recusas cada sugestão. <b>Versão local</b> (a IA na nuvem fica no servidor).</div>
+  <div id="fx-cop-feed" style="min-height:120px;"></div>
+  <div style="display:flex;gap:8px;margin-top:8px;">${btn('ANALISAR & SUGERIR','var(--c5)','fxCopilotAnalyse()')}</div>`;
+  _copilotMsgs=[]; fxCopFeed();
+};
+function fxCopFeed(){
+  const f=$('fx-cop-feed');if(!f)return;
+  f.innerHTML=_copilotMsgs.map(m=>{
+    if(m.me) return `<div style="text-align:right;margin:6px 0;"><span style="display:inline-block;background:color-mix(in srgb,var(--c4) 12%,transparent);border:1px solid color-mix(in srgb,var(--c4) 40%,transparent);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);max-width:70%;">${m.t}</span></div>`;
+    return `<div style="margin:6px 0;"><div style="font-size:8px;color:var(--c5);margin-bottom:2px;">COPILOTO</div><span style="display:inline-block;background:color-mix(in srgb,var(--c5) 9%,transparent);border:1px solid color-mix(in srgb,var(--c5) 35%,transparent);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);max-width:80%;">${m.t}</span>${m.action?` <button onclick="fxCopApply('${m.action}')" style="border:1px solid var(--c4);background:color-mix(in srgb,var(--c4) 14%,transparent);color:var(--c4);border-radius:6px;font-size:10px;padding:5px 12px;cursor:pointer;font-family:'Rajdhani';font-weight:700;margin-left:6px;">APLICAR</button>`:''}</div>`;
+  }).join('');
+}
+window.fxCopilotAnalyse=function(){
+  if(!hasAudio())return;
+  const m=measure(audioBuffer), tl=analyseTimeline(audioBuffer);
+  _copilotMsgs=[];
+  _copilotMsgs.push({me:false,t:'Analisei a tua faixa. Aqui está o que noto:'});
+  if(m.low>45){_copilotMsgs.push({me:false,t:'Os graves estão pesados ('+m.low.toFixed(0)+'% do balanço) — sente-se "lama". Queres que limpe a zona 200–350 Hz?',action:'cleanlow'});}
+  if(m.high<14){_copilotMsgs.push({me:false,t:'Falta brilho ('+m.high.toFixed(0)+'%). Posso abrir um pouco de ar acima de 10 kHz.',action:'addair'});}
+  if(m.crest<8){_copilotMsgs.push({me:false,t:'A faixa está bastante esmagada (crest '+m.crest.toFixed(1)+' dB). Cuidado em empurrar mais loudness.'});}
+  // find weak drop
+  let minE=2,minI=0;tl.forEach((o,i)=>{if(i>tl.length*0.2&&i<tl.length*0.8&&o.e<minE){minE=o.e;minI=i;}});
+  _copilotMsgs.push({me:false,t:'A energia cai por volta de '+fmt(minI*0.25)+' — confere se a música não "morre" aí.'});
+  if(m.lufs<-12){_copilotMsgs.push({me:false,t:'Estás a '+m.lufs.toFixed(1)+' LUFS — abaixo do alvo de club (-9). Queres que empurre o loudness?',action:'louder'});}
+  if(_copilotMsgs.length<3)_copilotMsgs.push({me:false,t:'No geral está equilibrada. Boa base!'});
+  fxCopFeed();
+};
+window.fxCopApply=function(action){
+  const acts={
+    cleanlow:()=>{if(typeof eqBass!=='undefined'&&eqBass)eqBass.gain.value-=2.5;},
+    addair:()=>{if(typeof eqAir!=='undefined'&&eqAir)eqAir.gain.value+=2.5;},
+    louder:()=>{if(typeof kvals!=='undefined'&&kvals){kvals.LOUD=Math.min(100,(kvals.LOUD||50)+18);if(typeof refreshKnobs==='function')refreshKnobs();if(typeof applyDSP==='function')applyDSP();}},
+  };
+  if(acts[action])acts[action]();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  _copilotMsgs.push({me:true,t:'Sim, aplica.'});
+  _copilotMsgs.push({me:false,t:'Feito ✓'});
+  fxCopFeed();status('Copiloto aplicou a sugestão');
+};
+
+// ════════ HEAT MAP EMOCIONAL ════════
+window.fxView_heatmap=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Tensão, energia e clímax ao longo do tempo. Vê onde a música "morre".</div>
+  ${canvasEl('fx-heat-cv',90)}
+  <div style="display:flex;gap:14px;font-size:9px;color:var(--muted2);margin-top:6px;"><span><span style="display:inline-block;width:12px;height:8px;background:var(--c5);"></span> calma</span><span><span style="display:inline-block;width:12px;height:8px;background:var(--c4);"></span> energia</span><span><span style="display:inline-block;width:12px;height:8px;background:var(--c7);"></span> clímax</span></div>
+  <div id="fx-heat-info" style="margin-top:8px;"></div>
+  ${btn('ANALISAR EMOÇÃO','var(--c1)','fxHeatmap()')}`;
+  window.fxHeatmap();
+};
+window.fxHeatmap=function(){
+  if(!hasAudio())return;
+  const tl=analyseTimeline(audioBuffer);
+  const cv=$('fx-heat-cv');if(cv){const W=cv.offsetWidth||600;cv.width=W;const H=cv.height;const ctx=cv.getContext('2d');ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);
+    tl.forEach((o,i)=>{const x=i/tl.length*W;const v=Math.min(1,o.e*(0.7+o.bright*0.5));let col;
+      if(v<0.4)col=[45,212,255];else if(v<0.7)col=[45,255,138];else col=[255,90,90];
+      ctx.fillStyle='rgb('+col[0]+','+col[1]+','+col[2]+')';ctx.fillRect(x,0,W/tl.length+1,H);});
+  }
+  // find climax + dead zone
+  let mxE=0,mxI=0,mnE=2,mnI=0;tl.forEach((o,i)=>{if(o.e>mxE){mxE=o.e;mxI=i;}if(i>tl.length*0.2&&i<tl.length*0.85&&o.e<mnE){mnE=o.e;mnI=i;}});
+  const info=$('fx-heat-info');
+  if(info)info.innerHTML=card('<b style="color:var(--c3)">INSIGHT</b><br><span style="font-size:12px;color:var(--text)">Clímax em '+fmt(mxI*0.25)+'. Zona de menor energia perto de '+fmt(mnI*0.25)+' — confirma que não perde o ouvinte aí.</span>','var(--c3)');
+};
+
+// ════════ O TEU EU DE 1 ANO ════════
+window.fxView_future=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Projeção da tua evolução (heurística): mais dinâmica, menos saturação, agudos mais abertos. Compara às cegas.</div>
+  ${btn('GERAR AGORA vs FUTURO','var(--c6)','fxFutureGen()','')}
+  <div id="fx-future-out" style="margin-top:10px;"></div>`;
+};
+window.fxFutureGen=async function(){
+  if(!hasAudio())return;status('A projetar o teu eu futuro...');
+  const now=await renderProcessed();
+  // "future": more dynamic (less loud), brighter, cleaner
+  const nCh=audioBuffer.numberOfChannels,sr=audioBuffer.sampleRate,len=audioBuffer.length;
+  const off=new OfflineAudioContext(nCh,len,sr);
+  const air=off.createBiquadFilter();air.type='highshelf';air.frequency.value=11000;air.gain.value=2;
+  const lowcut=off.createBiquadFilter();lowcut.type='peaking';lowcut.frequency.value=280;lowcut.Q.value=1;lowcut.gain.value=-1.5;
+  const comp=off.createDynamicsCompressor();comp.threshold.value=-14;comp.ratio.value=1.8;comp.attack.value=0.01;comp.release.value=0.12;
+  const src=off.createBufferSource();src.buffer=now;src.connect(lowcut);lowcut.connect(air);air.connect(comp);comp.connect(off.destination);src.start();
+  const fut=await off.startRendering();
+  window._fxFut={now,fut};
+  $('fx-future-out').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    ${card('<div style="text-align:center;"><b style="color:var(--c5)">AGORA</b><br><span style="font-size:11px;color:var(--muted)">o teu gosto atual</span><br><button onclick="fxFuturePlay(0)" style="margin-top:8px;border:1px solid var(--c5);background:transparent;color:var(--c5);border-radius:50%;width:38px;height:38px;cursor:pointer;font-size:14px;">▶</button></div>','var(--c5)')}
+    ${card('<div style="text-align:center;"><b style="color:var(--c6)">DAQUI A 1 ANO</b><br><span style="font-size:11px;color:var(--muted)">previsão da tua evolução</span><br><button onclick="fxFuturePlay(1)" style="margin-top:8px;border:1px solid var(--c6);background:transparent;color:var(--c6);border-radius:50%;width:38px;height:38px;cursor:pointer;font-size:14px;">▶</button></div>','var(--c6)')}
+  </div>`+card('<span style="font-size:12px;color:var(--text)">A tua evolução prevista: +2 dB de dinâmica, menos lama nos graves, agudos mais abertos.</span>','var(--c6)');
+  status('Comparação pronta');
+};
+window.fxFuturePlay=function(w){if(!window._fxFut){return;}playBuf(w?window._fxFut.fut:window._fxFut.now);status(w?'A tocar o teu eu de 1 ano':'A tocar agora');};
+
+// ════════ INTENÇÃO CULTURAL ════════
+window.fxView_vibe=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Descreve uma vibe cultural. A suite traduz em decisões técnicas.</div>
+  <div style="display:flex;gap:8px;"><input id="fx-vibe-in" type="text" placeholder='ex: kizombada em Luanda às 2h da manhã' style="flex:1;padding:10px 12px;border-radius:6px;border:1px solid var(--c3);background:var(--bg3);color:var(--text);font-family:'Rajdhani';font-size:13px;">
+  <button onclick="fxVibeApply()" style="padding:0 18px;border-radius:6px;border:1px solid var(--c3);background:color-mix(in srgb,var(--c3) 16%,transparent);color:var(--c3);font-family:'Rajdhani';font-weight:700;cursor:pointer;">TRADUZIR</button></div>
+  <div style="font-size:10px;color:var(--muted2);margin-top:8px;">Sugestões: kizombada · festa de kuduro · semba de domingo · zouk romântico · club às 3h · rádio da manhã</div>
+  <div id="fx-vibe-out" style="margin-top:10px;"></div>`;
+};
+const VIBES={
+  kizomb:[['var(--c6)','Graves quentes e redondos','low-shelf +2.5 dB @ 90 Hz + saturação analógica',{eqBass:2.5}],['var(--c5)','Médios intimistas','vocal colado, presença suave',{eqMid:1}],['var(--c2)','Dinâmica de dança lenta','compressão suave, groove preservado, -9 LUFS',{LOUD:8}]],
+  kuduro:[['var(--c7)','Punch agressivo','transientes fortes no kick',{PUNCH:25}],['var(--c6)','Sub potente','graves de club',{eqBass:2}],['var(--c2)','Alto e energético','-8 LUFS, compressão rápida',{LOUD:20}]],
+  semba:[['var(--c6)','Calor analógico','saturação tipo fita, médios cheios',{SAT:18}],['var(--c3)','Brilho natural','agudos abertos mas suaves',{eqAir:1.5}],['var(--c5)','Dinâmica viva','menos compressão, respira',{LOUD:-8}]],
+  zouk:[['var(--c5)','Suavidade','médios doces, sem agressividade',{eqMid:1}],['var(--c6)','Graves redondos','baixo presente mas controlado',{eqBass:1.5}],['var(--c4)','Espaço romântico','stereo amplo, reverb-friendly',{WIDE:12}]],
+  club:[['var(--c1)','Loudness de club','-9 LUFS, clipper ativo',{LOUD:22}],['var(--c6)','Sub para sistema grande','graves sólidos em mono',{eqBass:2}],['var(--c2)','Impacto físico','transientes fortes',{PUNCH:18}]],
+  radio:[['var(--c3)','Brilho e clareza','médios e agudos à frente',{eqAir:2,eqMid:1}],['var(--c5)','Consistente','compressão controlada, -14 LUFS',{LOUD:5}]],
+};
+window.fxVibeApply=function(){
+  const t=($('fx-vibe-in').value||'').toLowerCase();
+  let key=null;
+  if(/kizomb/.test(t))key='kizomb';else if(/kuduro/.test(t))key='kuduro';else if(/semba/.test(t))key='semba';else if(/zouk/.test(t))key='zouk';else if(/club|festa|3h|2h|noite/.test(t))key='club';else if(/rádio|radio|manhã|manha/.test(t))key='radio';
+  const out=$('fx-vibe-out');
+  if(!key){out.innerHTML=card('<span style="color:var(--muted)">Não reconheci a vibe. Tenta: kizombada, kuduro, semba, zouk, club, rádio.</span>');return;}
+  const rows=VIBES[key];
+  // apply
+  rows.forEach(([c,t2,sub,adj])=>{Object.keys(adj).forEach(k=>{
+    if(k.startsWith('eq')&&typeof window[k]!=='undefined'&&window[k])window[k].gain.value+=adj[k];
+    else if(typeof kvals!=='undefined'&&kvals&&k in kvals)kvals[k]=Math.max(0,Math.min(100,(kvals[k]||50)+adj[k]));
+  });});
+  if(typeof refreshKnobs==='function')refreshKnobs();if(typeof applyDSP==='function')applyDSP();if(typeof syncEQSliders==='function')syncEQSliders();
+  out.innerHTML='<div style="font-size:10px;color:var(--muted2);margin-bottom:4px;">TRADUÇÃO TÉCNICA APLICADA:</div>'+rows.map(([c,t2,sub])=>card(`<b style="color:${c}">${t2}</b><br><span style="font-size:11px;color:var(--muted)">${sub}</span>`,c)).join('');
+  status('Vibe "'+key+'" traduzida e aplicada');
+};
+
+// ════════ SKIP-RISK SCORE ════════
+window.fxView_skiprisk=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Estima o risco de skip nos primeiros 8 s. <b>Heurístico, indicativo.</b></div>
+  ${btn('CALCULAR SKIP-RISK','var(--c2)','fxSkipRisk()','')}
+  <div id="fx-skip-out" style="margin-top:10px;"></div>`;
+  window.fxSkipRisk();
+};
+window.fxSkipRisk=function(){
+  if(!hasAudio())return;
+  const d=audioBuffer.getChannelData(0),sr=audioBuffer.sampleRate;
+  const intro=Math.min(d.length,sr*8);
+  // time to reach 60% of intro peak energy
+  let peak=0;for(let i=0;i<intro;i+=100)peak=Math.max(peak,Math.abs(d[i]));
+  let openT=8;const winE=Math.floor(sr*0.25);
+  for(let i=0;i+winE<intro;i+=winE){let e=0;for(let j=0;j<winE;j+=50)e+=Math.abs(d[i+j]);e/=(winE/50);if(e>peak*0.5){openT=i/sr;break;}}
+  let risk=Math.min(95,Math.round(openT/8*70 + (peak<0.2?20:0)));
+  const col=risk<30?'var(--c4)':risk<55?'var(--c3)':'var(--c7)';
+  const out=$('fx-skip-out');
+  let h=card(`<div style="font-size:10px;color:var(--muted2)">RISCO DE SKIP (primeiros 8s)</div><div style="font-size:28px;font-weight:700;color:${col};font-family:'Orbitron',monospace;">${risk}%</div><div style="height:10px;background:var(--bg4,#1c1c2a);border-radius:5px;margin-top:6px;"><div style="width:${risk}%;height:100%;background:${col};border-radius:5px;"></div></div>`,col);
+  h+=card(`<span style="font-size:12px;color:var(--text)">A intro demora <b>${openT.toFixed(1)}s</b> a "abrir". ${openT>3?'Risco de perder o ouvinte — começa com o gancho ou um impacto nos 1ºs 2s.':'Boa — prende cedo.'}</span>`, openT>3?'var(--c2)':'var(--c4)');
+  out.innerHTML=h;
+};
+
+// ════════ GÉMEO DO OUVINTE ════════
+const TWINS={
+  earbuds:{label:'Miúdo · earbuds furados',bands:[[120,-14,1],[2500,4,1.2],[7000,5,1],[11000,-10,0.9]],mono:true},
+  djclub:{label:'DJ · club PA',bands:[[50,4,0.8],[120,3,1],[8000,2,1]],mono:false},
+  tia:{label:'Tia · telemóvel na cozinha',bands:[[250,-18,1],[1000,4,1.2],[3000,5,1.3],[8000,-8,0.9]],mono:true},
+  audiofilo:{label:'Audiófilo · headphones',bands:[],mono:false},
+};
+let _twinSel='earbuds',_twinNode=null,_twinOn=false;
+window.fxView_twin=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Não é a coluna — é o ser humano e o contexto. Escolhe a persona e ouve.</div>
+  ${chipRow(Object.keys(TWINS).map(k=>({v:k,label:TWINS[k].label,active:k===_twinSel})),'fxTwinSel','var(--c6)')}
+  ${canvasEl('fx-twin-cv',120)}
+  <div id="fx-twin-state" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>
+  ${btn('OUVIR COMO ESTA PERSONA','var(--c6)','fxTwinToggle()','')}`;
+  fxTwinDraw();$('fx-twin-state').textContent=_twinOn?('A ouvir como: '+TWINS[_twinSel].label):'Desligado';
+};
+window.fxTwinSel=function(v){_twinSel=v;if(_twinOn)fxTwinBuild();fxOpen('twin');};
+function fxTwinDraw(){const cv=$('fx-twin-cv');if(!cv)return;const W=cv.offsetWidth||600;cv.width=W;const H=cv.height;const ctx=cv.getContext('2d');ctx.fillStyle='#07070e';ctx.fillRect(0,0,W,H);gridFreq(ctx,W,H);
+  const sp=TWINS[_twinSel];ctx.beginPath();for(let px=0;px<=W;px++){const f=20*Math.pow(1000,px/W);let g=0;sp.bands.forEach(([fc,gn,q])=>{const dd=Math.log2(f/fc);g+=gn*Math.exp(-(dd*dd)/(2/q));});ctx.lineTo(px,H/2-g*3);}ctx.strokeStyle='#b855f7';ctx.lineWidth=2;ctx.stroke();if(sp.mono){ctx.fillStyle='#b855f7';ctx.font='9px monospace';ctx.fillText('MONO',W-46,16);}}
+function fxTwinBuild(){if(typeof audioCtx==='undefined'||!audioCtx||typeof masterGain==='undefined')return;if(_twinNode){try{masterGain.disconnect(_twinNode.input);}catch(e){}try{_twinNode.output.disconnect();}catch(e){}_twinNode=null;}
+  const sp=TWINS[_twinSel];const input=audioCtx.createGain(),output=audioCtx.createGain();let last=input;sp.bands.forEach(([fc,gn,q])=>{const f=audioCtx.createBiquadFilter();f.type='peaking';f.frequency.value=fc;f.gain.value=gn;f.Q.value=q;last.connect(f);last=f;});last.connect(output);_twinNode={input,output};masterGain.connect(input);output.connect(audioCtx.destination);}
+window.fxTwinToggle=function(){if(!_twinOn){fxTwinBuild();_twinOn=true;status('A ouvir como '+TWINS[_twinSel].label);}else{if(_twinNode){try{masterGain.disconnect(_twinNode.input);}catch(e){}try{_twinNode.output.disconnect();}catch(e){}_twinNode=null;}_twinOn=false;status('Gémeo desligado');}const st=$('fx-twin-state');if(st)st.textContent=_twinOn?('A ouvir como: '+TWINS[_twinSel].label):'Desligado';};
+
+// ════════ TIME CAPSULE ════════
+window.fxView_capsule=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Cada master fica um snapshot vivo. Reabre no futuro e ouve a tua evolução.</div>
+  <div style="display:flex;gap:8px;"><input id="fx-cap-name" placeholder="nome do snapshot (ex: Kuduro Fogo)" style="flex:1;padding:9px 12px;border-radius:6px;border:1px solid var(--c4);background:var(--bg3);color:var(--text);font-family:'Rajdhani';">
+  <button onclick="fxCapSave()" style="padding:0 16px;border-radius:6px;border:1px solid var(--c4);background:color-mix(in srgb,var(--c4) 16%,transparent);color:var(--c4);font-family:'Rajdhani';font-weight:700;cursor:pointer;">GUARDAR SNAPSHOT</button></div>
+  <div id="fx-cap-list" style="margin-top:10px;"></div>`;
+  fxCapList();
+};
+function fxCapData(){try{return JSON.parse(localStorage.getItem(LS+'capsule')||'[]');}catch(e){return [];}}
+window.fxCapSave=function(){
+  if(!hasAudio())return;
+  const name=($('fx-cap-name').value||'').trim();if(!name){status('Dá um nome');return;}
+  const m=measure(audioBuffer);
+  const d=fxCapData();d.push({name,t:Date.now(),lufs:m.lufs,crest:m.crest,low:m.low,high:m.high});
+  localStorage.setItem(LS+'capsule',JSON.stringify(d));fxCapList();status('Snapshot "'+name+'" guardado');
+};
+function fxCapList(){
+  const d=fxCapData(),host=$('fx-cap-list');if(!host)return;
+  if(!d.length){host.innerHTML='<div style="color:var(--muted);font-size:11px;">Sem snapshots. Guarda o teu primeiro.</div>';return;}
+  let h='<div style="font-size:10px;color:var(--muted2);margin-bottom:6px;">LINHA DO TEMPO</div>';
+  d.forEach((s,i)=>{h+=card(`<b style="color:var(--c4)">${s.name}</b> <span style="color:var(--muted2);font-size:10px;">${new Date(s.t).toLocaleDateString('pt-PT')}</span><br><span style="font-size:11px;color:var(--muted)">LUFS ${s.lufs.toFixed(1)} · crest ${s.crest.toFixed(1)} dB · graves ${s.low.toFixed(0)}%</span> <button onclick="fxCapDel(${i})" style="float:right;border:1px solid var(--c7);background:transparent;color:var(--c7);border-radius:4px;font-size:10px;padding:2px 7px;cursor:pointer;">×</button>`,'var(--c4)');});
+  if(d.length>=2){const a=d[0],z=d[d.length-1];
+    const obs=[];if(z.crest>a.crest+0.5)obs.push('usas mais dinâmica');if(z.crest<a.crest-0.5)obs.push('comprimes mais');if(z.low<a.low-2)obs.push('graves mais limpos');if(z.high>a.high+2)obs.push('mais brilho');
+    h+=card('<b style="color:var(--c4)">A IA COMENTA A TUA EVOLUÇÃO</b><br><span style="font-size:12px;color:var(--text)">De "'+a.name+'" para "'+z.name+'": '+(obs.length?obs.join(', '):'estilo consistente')+'.</span>','var(--c4)');
+  }
+  host.innerHTML=h;
+}
+window.fxCapDel=function(i){const d=fxCapData();d.splice(i,1);localStorage.setItem(LS+'capsule',JSON.stringify(d));fxCapList();};
+
+// ════════ CO-MASTER AO VIVO ════════
+window.fxView_comaster=function(b){
+  const room='live-'+Math.random().toString(36).slice(2,7);
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Dois produtores no mesmo master, em tempo real. <b>Nota:</b> a sincronização ao vivo entre dispositivos requer o servidor da BeatFreak; aqui é a estrutura local.</div>
+  <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+    <span style="flex:1;font-family:monospace;font-size:12px;color:var(--c5);">beatfreakstudio.com/live/${room}</span>
+    <button onclick="fxCoCopy('beatfreakstudio.com/live/${room}')" style="border:1px solid var(--c5);background:color-mix(in srgb,var(--c5) 16%,transparent);color:var(--c5);border-radius:6px;padding:6px 12px;font-family:'Rajdhani';font-weight:700;font-size:10px;cursor:pointer;">CONVIDAR</button>
+  </div>
+  ${card('<div style="text-align:center;font-size:12px;color:var(--muted);padding:14px;">Partilha o link com outro produtor. Quando ambos estiverem na sala, cada edição aparece em tempo real para os dois.<br><br><span style="color:var(--c4)">● à espera de um segundo produtor...</span></div>','var(--c5)')}`;
+};
+window.fxCoCopy=function(t){navigator.clipboard&&navigator.clipboard.writeText(t);status('Link de sessão copiado');};
+
+// ════════ PORQUE O HIT É HIT ════════
+window.fxView_hitdna=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Carrega um hit de referência. A suite mede-o e mostra a distância até à tua faixa.</div>
+  <label style="display:inline-block;padding:9px 16px;border-radius:6px;border:1px solid var(--c3);background:color-mix(in srgb,var(--c3) 14%,transparent);color:var(--c3);font-family:'Rajdhani';font-weight:700;font-size:11px;cursor:pointer;">CARREGAR HIT DE REFERÊNCIA<input type="file" accept="audio/*" onchange="fxHitLoad(this.files[0])" style="display:none;"></label>
+  <div id="fx-hit-out" style="margin-top:10px;"></div>`;
+};
+window.fxHitLoad=async function(file){
+  if(!file)return;if(!hasAudio()){status('Carrega primeiro a TUA faixa na app');return;}
+  status('A analisar o hit...');
+  try{
+    const ac=(typeof audioCtx!=='undefined'&&audioCtx)?audioCtx:new(window.AudioContext||window.webkitAudioContext)();
+    const buf=await ac.decodeAudioData(await file.arrayBuffer());
+    const ref=measure(buf), me=measure(audioBuffer);
+    const cmp=(a,b2,tol)=>Math.max(0,Math.round(100-Math.abs(a-b2)/tol*100));
+    const factors=[
+      ['var(--c4)','Loudness de impacto',`hit ${ref.lufs.toFixed(1)} LUFS · tu ${me.lufs.toFixed(1)}`,cmp(me.lufs,ref.lufs,6)],
+      ['var(--c5)','Controlo de graves',`hit ${ref.low.toFixed(0)}% · tu ${me.low.toFixed(0)}%`,cmp(me.low,ref.low,15)],
+      ['var(--c2)','Energia de agudos',`hit ${ref.high.toFixed(0)}% · tu ${me.high.toFixed(0)}%`,cmp(me.high,ref.high,12)],
+      ['var(--c6)','Dinâmica (crest)',`hit ${ref.crest.toFixed(1)} · tu ${me.crest.toFixed(1)} dB`,cmp(me.crest,ref.crest,6)],
+    ];
+    let h=card('<span style="font-size:12px;color:var(--text)">Referência analisada. Barras = quão perto a tua faixa está do padrão do hit.</span>','var(--c3)');
+    h+=factors.map(([c,t,sub,pct])=>card(`<b style="color:${c}">${t}</b> <span style="float:right;color:${c};font-family:monospace;">${pct}%</span><br><span style="font-size:11px;color:var(--muted)">${sub}</span><div style="height:6px;background:var(--bg4,#1c1c2a);border-radius:3px;margin-top:5px;"><div style="width:${pct}%;height:100%;background:${c};border-radius:3px;"></div></div>`,c)).join('');
+    $('fx-hit-out').innerHTML=h;status('Hit analisado');
+  }catch(e){status('Erro ao ler o ficheiro: '+e.message);}
+};
+
+// ════════ AUTO-ADAPTAÇÃO AO DESTINO ════════
+const DESTS={
+  spotify:{label:'Spotify / Apple',lufs:-14,hp:20,lp:20000},
+  club:{label:'Club / DJ',lufs:-9,hp:25,lp:20000},
+  whatsapp:{label:'WhatsApp',lufs:-14,hp:120,lp:9000},
+  vinil:{label:'Vinil (RIAA-safe)',lufs:-16,hp:30,lp:16000},
+};
+window.fxView_adaptive=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Gera versões otimizadas para cada destino a partir do teu master, num clique.</div>
+  <div id="fx-adapt-list">`+Object.keys(DESTS).map(k=>`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;"><span style="flex:1;font-family:'Rajdhani';font-weight:700;color:var(--text);">${DESTS[k].label}</span><span style="font-family:monospace;font-size:11px;color:var(--muted);">${DESTS[k].lufs} LUFS</span><button onclick="fxAdaptExport('${k}')" style="border:1px solid var(--c2);background:color-mix(in srgb,var(--c2) 14%,transparent);color:var(--c2);border-radius:6px;padding:6px 12px;font-family:'Rajdhani';font-weight:700;font-size:10px;cursor:pointer;">EXPORTAR</button></div>`).join('')+`</div>
+  ${btn('EXPORTAR TODOS OS DESTINOS','var(--c2)','fxAdaptAll()','')}`;
+};
+async function fxRenderDest(k){
+  const dst=DESTS[k];const proc=await renderProcessed();
+  const off=new OfflineAudioContext(proc.numberOfChannels,proc.length,proc.sampleRate);
+  const src=off.createBufferSource();src.buffer=proc;
+  const hp=off.createBiquadFilter();hp.type='highpass';hp.frequency.value=dst.hp;
+  const lp=off.createBiquadFilter();lp.type='lowpass';lp.frequency.value=dst.lp;
+  const m=measure(proc);const g=off.createGain();g.gain.value=Math.pow(10,(dst.lufs-m.lufs)/20);
+  const lim=off.createDynamicsCompressor();lim.threshold.value=-1;lim.ratio.value=20;lim.attack.value=0.001;lim.release.value=0.05;
+  src.connect(hp);hp.connect(lp);lp.connect(g);g.connect(lim);lim.connect(off.destination);src.start();
+  return await off.startRendering();
+}
+window.fxAdaptExport=async function(k){if(!hasAudio())return;status('A gerar versão '+DESTS[k].label+'...');const buf=await fxRenderDest(k);dl(bufToWav(buf),'master_'+k+'.wav');status(DESTS[k].label+' exportado');};
+window.fxAdaptAll=async function(){if(!hasAudio())return;for(const k of Object.keys(DESTS)){status('A gerar '+DESTS[k].label+'...');const buf=await fxRenderDest(k);dl(bufToWav(buf),'master_'+k+'.wav');await new Promise(r=>setTimeout(r,400));}status('Todos os destinos exportados');};
 
 })();
