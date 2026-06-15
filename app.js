@@ -95,7 +95,7 @@ let loudTarget=-9;
 
 // ===== TABS =====
 function openTab(name, el) {
-  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis'){
+  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis' && name!=='studiopro'){
     setStatus('Muda para PROCESSADO para aceder aos efeitos');
     return;
   }
@@ -109,6 +109,7 @@ function openTab(name, el) {
   if(name==='balance') setTimeout(()=>{ if(typeof drawBalanceBars==='function') drawBalanceBars(); },60);
   if(name==='clip')    setTimeout(()=>{ if(typeof _drawClipCurve==='function') _drawClipCurve(); },60);
   if(name==='analysis')setTimeout(()=>{ if(audioBuffer && typeof runFullAnalysis==='function') runFullAnalysis(); },80);
+  if(name==='studiopro')setTimeout(()=>{ if(typeof fxRenderHub==='function') fxRenderHub(); },60);
   if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
 }
 
@@ -309,6 +310,12 @@ function buildChain() {
   analyserNode.connect(audioCtx.destination);
 
   applyShapeCurve();
+
+  // ── Bridge for STUDIO PRO (features.js) — expose live node/var references ──
+  window.audioCtx=audioCtx; window.masterGain=masterGain; window.analyserNode=analyserNode;
+  window.eqSub=eqSub; window.eqBass=eqBass; window.eqLowNode=eqLowNode;
+  window.eqMid=eqMid; window.eqHigh=eqHigh; window.eqAir=eqAir;
+  window.kvals=kvals;
 }
 
 // ===== SHAPE DSP =====

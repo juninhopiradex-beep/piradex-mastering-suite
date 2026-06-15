@@ -156,6 +156,7 @@
     <div class="tab tab-divider">|</div>
     <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
     <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
+    <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -756,6 +757,17 @@
     </div>
   </div>
 
+  <!-- STUDIO PRO HUB — 15 features -->
+  <div class="tab-panel" id="tab-studiopro">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">STUDIO PRO — Ferramentas avançadas</div>
+        <button id="fx-back" onclick="fxRenderHub()" style="display:none;padding:6px 14px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:'Rajdhani';font-size:11px;letter-spacing:1px;cursor:pointer;">◂ VOLTAR</button>
+      </div>
+      <div id="fx-content"></div>
+    </div>
+  </div>
+
   <!-- tab AUTO — Parameter automation -->
   <div class="tab-panel" id="tab-auto">
     <div class="module-panel">
@@ -1194,5 +1206,6 @@
   }
 </script>
 <script src="app.js"></script>
+<script src="features.js"></script>
 </body>
 </html>

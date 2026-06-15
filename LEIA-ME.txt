@@ -3,45 +3,49 @@
   BeatFreak Studio · beatfreakstudio.com/mastersuite
 ═══════════════════════════════════════════════════════════
 
-NESTA VERSÃO:
+NOVO: SEPARADOR "STUDIO PRO" — 15 ferramentas avançadas
+(barra de cima, ao lado de ANÁLISES). Abre o hub e clica
+numa ferramenta:
 
-TREMOR ELIMINADO (Spectrum + I/O):
-• Colunas do grid com largura fixa + isolamento de layout
-  (contain:strict) para nada reflowar quando a música começa.
-• Canvas do espectro agora dimensionado UMA vez (ResizeObserver),
-  já não redimensiona a cada frame. Acabou o tremor.
-• LUFS e números com dígitos de largura fixa (tabular-nums).
+  1.  Codec Social      — ouve como soa no WhatsApp/TikTok
+  2.  Monitor Local     — candongueiro, festa, telemóvel...
+  3.  Calibração Sala   — compensa o quarto via microfone
+  4.  Stems por Bandas  — ajusta sub/médios/agudos do stereo
+  5.  Comando por Texto — "mais quente tipo Semba antigo"
+  6.  Snippet Viral     — deteta o refrão e exporta p/ TikTok
+  7.  Certificado       — relatório partilhável do master
+  8.  Piradex Print     — guarda a tua assinatura de mastering
+  9.  Modo Mentor       — explica o porquê de cada ajuste
+  10. Loudness Dinâmico — realça os drops/refrões
+  11. Reverse Mastering — notas para o eng. de mistura
+  12. Source Forensics  — raio-X do ficheiro importado
+  13. Album Cohesion    — coesão de loudness no álbum
+  14. Blind Shootout    — teste cego com loudness igualado
+  15. Client Review Room— versões + comentários do cliente
 
-NOVA ABA "ANÁLISES" (ao lado de REFERÊNCIA):
-Comparação profissional ANTES (importado) vs DEPOIS (processado).
-Renderiza o resultado em offline e mede ambos. Inclui:
+NOTAS HONESTAS:
+• Stems: separação por bandas de frequência (proxy). A
+  separação real por IA (vocal/bateria/baixo) corre no
+  servidor da BeatFreak Studio.
+• Comando por Texto: interpretador local offline (sem IA
+  na nuvem). Reconhece: quente, punch, brilho, vocal,
+  largo, alto, limpo, suave...
+• Calibração de Sala: precisa de permissão do microfone.
+• Client Review Room: guardado localmente; a sincronização
+  entre dispositivos requer o servidor.
 
-  • MÉTRICAS lado a lado com Δ (diferença):
-    LUFS Integrado, True Peak, Peak, RMS, LRA (Loudness Range),
-    PLR (Peak-to-Loudness), Crest Factor, Correlação de Fase.
-  • CURVA ESPECTRAL sobreposta (antes roxo / depois verde).
-  • BALANÇO TONAL Low/Mid/High em barras antes vs depois.
-  • LOUDNESS AO LONGO DO TEMPO (com linhas de alvo -9/-14/-23).
-  • VEREDITO por plataforma (Spotify/Apple -14, Club Angola -9,
-    YouTube, Tidal...) com semáforo: ✓ no alvo / ~ perto / ✕ fora.
+Tudo o resto (Codec, Monitor, Snippet, Reverse, Forensics,
+Album, Blind Shootout, Loudness Dinâmico) corre 100% local
+no browser com a Web Audio API.
 
-  Como usar: importa a música → PROCESSADO → aplica o mastering
-  → abre ANÁLISES (analisa automaticamente, ou clica ANALISAR).
+Como aceder: importa música → carrega em PROCESSADO →
+abre STUDIO PRO. (O hub também abre em modo ORIGINAL.)
 
-CLIPPER COMPLETO (estilo Gold Clip) no separador "CLIP":
-  ① Clipper (Modern/Classic/Hard/Off + ceiling + input trim + oversampling)
-  ② Gold (saturação de loudness até +6 dB)
-  ③ Alchemy (peak contour médios/agudos + box tone)
-  ④ True Parallel mix + output trim + unity gain + curva ao vivo.
-
-Restantes módulos (EQ, Comp, Shape, M/S, Multiband, Transient,
-Limiter) com bypass e cadeia revista — sem ruído nem efeitos presos.
-
-NOTA: os efeitos só actuam em modo PROCESSADO.
-Fluxo: importar → PROCESSADO → HEADROOM -6dB → ajustes → exportar.
-
-ATALHOS: J=play · K=stop · E=EQ · C=Comp · H=Diagnóstico
-         ← →=seek · Ctrl+Z/Y=Undo/Redo
+═══════════════════════════════════════════════════════════
+ALÉM DISTO, JÁ INCLUÍDO NAS VERSÕES ANTERIORES:
+Clipper completo (Gold Clip style) no separador CLIP,
+aba ANÁLISES (antes/depois), tremor eliminado, cadeia
+de áudio revista sem ruído, e todos os módulos com bypass.
 
 © 2026 Juninho Piradex · BeatFreak Studio
 ═══════════════════════════════════════════════════════════
