@@ -985,20 +985,97 @@
 
   <!-- LICENSE MODAL -->
   <div class="paywall-modal" id="license-modal" style="display:none">
-    <div class="paywall-box license-box" style="border-color:rgba(45,255,138,0.4);box-shadow:0 0 60px rgba(45,255,138,0.15);">
+    <div class="paywall-box license-box" style="border-color:rgba(45,255,138,0.4);box-shadow:0 0 60px rgba(45,255,138,0.15);max-width:520px;max-height:90vh;overflow-y:auto;">
       <div class="paywall-header" style="background:linear-gradient(90deg,#2dff8a,#2dd4ff);">
-        <div class="paywall-title">🔑 ACTIVAR LICENÇA FULL</div>
+        <div class="paywall-title">DESBLOQUEAR VERSÃO FULL</div>
         <button class="pm-close" onclick="closeLicenseModal()" style="background:rgba(0,0,0,0.15)">✕</button>
       </div>
       <div class="paywall-body">
-        <div class="paywall-desc">Introduz o teu código de licença para desbloquear a <strong>versão completa</strong> com exportações ilimitadas.</div>
-        <label class="login-label" style="text-align:center;display:block;margin-bottom:8px;">CÓDIGO DE LICENÇA</label>
-        <input class="login-input" id="license-input" type="text" placeholder="PRDX-XXXX-XXXX-XXXX" maxlength="19"
-          style="text-align:center;font-family:Orbitron,monospace;letter-spacing:3px;font-size:15px;"
-          oninput="formatLicenseInput(this)" onkeydown="if(event.key==='Enter')activateLicense()">
-        <div class="login-error" id="license-error" style="text-align:center;"></div>
-        <button class="paywall-cta" onclick="activateLicense()" style="margin-top:14px;background:linear-gradient(90deg,#2dff8a,#2dd4ff);animation:none;">ACTIVAR LICENÇA</button>
-        <div class="paywall-skip" style="margin-top:10px;">Não tens licença? <a href="https://www.beatfreakstudio.com" target="_blank" style="color:var(--c5);">Compra em beatfreakstudio.com</a></div>
+
+        <!-- STEP TABS -->
+        <div style="display:flex;gap:6px;margin-bottom:16px;">
+          <button id="lic-tab-buy" class="lic-tab lic-tab-active" onclick="licTab('buy')">1 · COMPRAR</button>
+          <button id="lic-tab-key" class="lic-tab" onclick="licTab('key')">2 · ATIVAR CÓDIGO</button>
+        </div>
+
+        <!-- ===== BUY PANEL ===== -->
+        <div id="lic-panel-buy">
+          <div class="paywall-desc" style="margin-bottom:14px;">Acesso vitalício à versão completa: <strong style="color:var(--c4)">25 ferramentas STUDIO PRO</strong>, exportações ilimitadas, todos os módulos.</div>
+
+          <div class="paywall-desc" style="margin-bottom:12px;">Escolhe o teu plano. <b style="color:var(--c5)">Básica</b> = todos os módulos de masterização. <b style="color:var(--c4)">Avançada</b> = inclui as 25 ferramentas STUDIO PRO.</div>
+
+          <!-- PLAN SELECTOR -->
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">VITALÍCIA — pagamento único</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div class="plan-card" data-plan="lifetime-basic" onclick="selectPlan('lifetime-basic')">
+              <div class="plan-name">Vitalícia Básica</div><div class="plan-price">30 USD</div>
+              <div class="plan-note">sem STUDIO PRO · para sempre</div></div>
+            <div class="plan-card" data-plan="lifetime-advanced" onclick="selectPlan('lifetime-advanced')">
+              <div class="plan-name" style="color:var(--c4)">Vitalícia Avançada</div><div class="plan-price">50 USD</div>
+              <div class="plan-note">+ STUDIO PRO · para sempre</div></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">ALUGUER — mensal (30 dias)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+            <div class="plan-card" data-plan="monthly-basic" onclick="selectPlan('monthly-basic')">
+              <div class="plan-name">Mensal Básica</div><div class="plan-price">15 USD<span style="font-size:10px;color:var(--muted)">/mês</span></div>
+              <div class="plan-note">sem STUDIO PRO · 30 dias</div></div>
+            <div class="plan-card" data-plan="monthly-advanced" onclick="selectPlan('monthly-advanced')">
+              <div class="plan-name" style="color:var(--c4)">Mensal Avançada</div><div class="plan-price">25 USD<span style="font-size:10px;color:var(--muted)">/mês</span></div>
+              <div class="plan-note">+ STUDIO PRO · 30 dias</div></div>
+          </div>
+
+          <!-- selected summary -->
+          <div id="plan-selected" style="text-align:center;background:var(--bg3);border:1px solid var(--c4);border-radius:8px;padding:10px;margin-bottom:14px;display:none;">
+            <span style="font-size:11px;color:var(--muted);">Plano selecionado: </span><b id="plan-selected-txt" style="color:var(--c4);"></b>
+          </div>
+
+          <!-- PAYMENT METHODS -->
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">COMO PAGAR</div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+            <div style="font-size:11px;color:var(--c5);font-weight:700;margin-bottom:4px;">PayPal</div>
+            <div style="font-size:12px;color:var(--text);margin-bottom:8px;">Para: <b style="color:var(--c5);font-family:monospace;">juninhopiradex@hotmail.com</b></div>
+            <a href="https://paypal.me/juninhopiradex" target="_blank" class="pay-btn" style="background:#0070ba;color:#fff;border:none;">Abrir PayPal →</a>
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text);line-height:1.7;">
+            <div style="font-size:11px;color:var(--c3);font-weight:700;margin-bottom:4px;">Transferência Bancária</div>
+            <div>Titular: <b>Ricardo Amorim (Juninho Piradex)</b></div>
+            <div style="margin-top:6px;color:var(--muted2);font-size:10px;letter-spacing:1px;">ANGOLA (Kz)</div>
+            <div>IBAN: <b id="bank-iban" style="font-family:monospace;">AO06 0051 0000 0051 5052 1316 6</b>
+              <button onclick="licCopy('AO06005100000051505213166')" style="border:1px solid var(--border2);background:transparent;color:var(--c5);border-radius:4px;font-size:9px;padding:2px 7px;cursor:pointer;margin-left:6px;">copiar</button></div>
+            <div style="margin-top:6px;color:var(--muted2);font-size:10px;letter-spacing:1px;">PORTUGAL (€)</div>
+            <div>IBAN: <b id="bank-iban-pt" style="font-family:monospace;">PT50 0033 0000 4550 2673 5200</b>
+              <button onclick="licCopy('PT5000330000455026735200')" style="border:1px solid var(--border2);background:transparent;color:var(--c5);border-radius:4px;font-size:9px;padding:2px 7px;cursor:pointer;margin-left:6px;">copiar</button></div>
+          </div>
+
+          <!-- PAYMENT FORM -->
+          <div style="font-size:10px;color:var(--c4);letter-spacing:1.5px;margin-bottom:6px;">DEPOIS DE PAGAR — ENVIA-ME OS DADOS</div>
+          <div style="background:rgba(45,255,138,0.05);border:1px solid rgba(45,255,138,0.3);border-radius:8px;padding:14px;">
+            <input class="login-input" id="pay-name" type="text" placeholder="Nome completo (para receber a licença)" style="margin-bottom:8px;">
+            <input class="login-input" id="pay-email" type="email" placeholder="O teu email" style="margin-bottom:8px;">
+            <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;">Anexa o comprovativo de pagamento:</label>
+            <input id="pay-proof" type="file" accept="image/*,application/pdf" onchange="payProofChanged(this)" style="width:100%;font-size:11px;color:var(--muted);margin-bottom:6px;">
+            <div id="pay-proof-name" style="font-size:10px;color:var(--c4);margin-bottom:10px;"></div>
+            <button class="pay-btn" onclick="submitPayment()" style="background:linear-gradient(90deg,#2dff8a,#2dd4ff);color:#062;border:none;">ENVIAR POR EMAIL</button>
+            <a id="pay-wa-btn" href="#" target="_blank" class="pay-btn" onclick="return submitPaymentWA()" style="background:#25D366;color:#073;border:none;margin-top:8px;">ENVIAR POR WHATSAPP</a>
+            <div id="pay-form-msg" style="font-size:11px;color:var(--c4);margin-top:8px;text-align:center;"></div>
+          </div>
+          <div class="paywall-skip" style="margin-top:12px;">Já tens código? <a onclick="licTab('key')" style="color:var(--c5);cursor:pointer;">Ativa aqui →</a></div>
+        </div>
+
+        <!-- ===== KEY PANEL ===== -->
+        <div id="lic-panel-key" style="display:none;">
+          <div class="paywall-desc">Introduz o código de licença que recebeste após o pagamento.</div>
+          <label class="login-label" style="text-align:center;display:block;margin-bottom:8px;">CÓDIGO DE LICENÇA</label>
+          <input class="login-input" id="license-input" type="text" placeholder="PRDX-XXXX-XXXX-XXXX" maxlength="19"
+            style="text-align:center;font-family:Orbitron,monospace;letter-spacing:3px;font-size:15px;"
+            oninput="formatLicenseInput(this)" onkeydown="if(event.key==='Enter')activateLicense()">
+          <div class="login-error" id="license-error" style="text-align:center;"></div>
+          <button class="paywall-cta" onclick="activateLicense()" style="margin-top:14px;background:linear-gradient(90deg,#2dff8a,#2dd4ff);animation:none;">ATIVAR LICENÇA</button>
+          <div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px 0;"><div style="flex:1;height:1px;background:var(--border2);"></div><span style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;">OU</span><div style="flex:1;height:1px;background:var(--border2);"></div></div>
+          <button class="pay-btn" onclick="licLogin()" style="background:var(--bg3);color:var(--c5);border:1px solid var(--c5);">LOGIN COM CONTA (MASTER / FULL)</button>
+          <div class="paywall-skip" style="margin-top:10px;">Ainda não compraste? <a onclick="licTab('buy')" style="color:var(--c5);cursor:pointer;">Ver planos →</a></div>
+        </div>
+
       </div>
     </div>
   </div>

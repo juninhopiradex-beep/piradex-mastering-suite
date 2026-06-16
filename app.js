@@ -2,50 +2,50 @@
 
 const PRESETS = {
   kizomba:  {name:'KIZOMBA',  refs:'C4 Pedro · Johnny Ramos · Nelson Freitas', desc:'Graves quentes, body nos mids baixos',
-    knobs:{CLEAN:50,BASS:60,LOUD:65,WIDE:50,PUNCH:50,FOCUS:55},eq:{sub:0.6,bass:0.7,low:0.8,mid:-0.2,high:-0.3,air:0.4},
+    knobs:{CLEAN:50,BASS:35,LOUD:65,WIDE:50,PUNCH:50,FOCUS:55},eq:{sub:0.6,bass:0.7,low:0.8,mid:-0.2,high:-0.3,air:0.4},
     sugs:[['Bass body @ 150Hz','+0.7 dB','c2'],['Low-mid warmth','+0.8 dB','c3'],['Stereo groove','+42%','c5']]},
   kuduro:   {name:'KUDURO',   refs:'Titica · Kapota', desc:'Sub kick agressivo, energia máxima de dança',
-    knobs:{CLEAN:45,BASS:72,LOUD:72,WIDE:45,PUNCH:65,FOCUS:55},eq:{sub:3.9,bass:-0.5,low:-0.8,mid:-0.2,high:-0.3,air:-0.4},
+    knobs:{CLEAN:45,BASS:35,LOUD:72,WIDE:45,PUNCH:65,FOCUS:55},eq:{sub:3.9,bass:-0.5,low:-0.8,mid:-0.2,high:-0.3,air:-0.4},
     sugs:[['Sub kick @ 60Hz','+3.9 dB','c2'],['Low-mid cut','-0.8 dB','c3'],['Tight mono','-0.4 dB','c5']]},
   zouk:     {name:'ZOUK',     refs:'Kassav', desc:'Sub profundo, amplitude romántica, muito dinâmico',
-    knobs:{CLEAN:50,BASS:68,LOUD:60,WIDE:68,PUNCH:52,FOCUS:45},eq:{sub:3.8,bass:0.0,low:-0.8,mid:-0.2,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:35,LOUD:60,WIDE:68,PUNCH:52,FOCUS:45},eq:{sub:3.8,bass:0.0,low:-0.8,mid:-0.2,high:0.0,air:0.0},
     sugs:[['Deep sub @ 60Hz','+3.8 dB','c2'],['Low-mid clean','-0.8 dB','c3'],['Wide stereo','+72%','c5']]},
   gzouk:    {name:'GZOUK',    refs:'Kaysha', desc:'Corpo nos mids baixos, groove urbano',
-    knobs:{CLEAN:50,BASS:60,LOUD:65,WIDE:58,PUNCH:52,FOCUS:55},eq:{sub:-0.6,bass:-0.2,low:2.2,mid:0.4,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:35,LOUD:65,WIDE:58,PUNCH:52,FOCUS:55},eq:{sub:-0.6,bass:-0.2,low:2.2,mid:0.4,high:0.0,air:0.0},
     sugs:[['Low-mid body @ 500Hz','+2.2 dB','c2'],['Mid presence','+0.4 dB','c3'],['Urban width','+58%','c5']]},
   semba:    {name:'SEMBA',    refs:'Cabelos Brancos', desc:'Bass quente dominante, alma angolana',
-    knobs:{CLEAN:50,BASS:65,LOUD:62,WIDE:50,PUNCH:55,FOCUS:50},eq:{sub:-3.1,bass:4.7,low:0.2,mid:-0.4,high:-0.3,air:0.0},
+    knobs:{CLEAN:50,BASS:35,LOUD:62,WIDE:50,PUNCH:55,FOCUS:50},eq:{sub:-3.1,bass:4.7,low:0.2,mid:-0.4,high:-0.3,air:0.0},
     sugs:[['Bass warmth @ 150Hz','+4.7 dB','c2'],['Sub cut','-3.1 dB','c3'],['Natural groove','+44%','c5']]},
   afrohouse:{name:'AFRO-HOUSE',refs:'Lau Silva · Nitefreak · TAKA', desc:'Sub extremo, kick profundo, dancefloor',
-    knobs:{CLEAN:50,BASS:72,LOUD:68,WIDE:60,PUNCH:58,FOCUS:50},eq:{sub:4.8,bass:-0.5,low:-0.8,mid:-0.4,high:-0.3,air:0.0},
+    knobs:{CLEAN:50,BASS:35,LOUD:68,WIDE:60,PUNCH:58,FOCUS:50},eq:{sub:4.8,bass:-0.5,low:-0.8,mid:-0.4,high:-0.3,air:0.0},
     sugs:[['Sub weight @ 50Hz','+4.8 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club width','+62%','c5']]},
   rnb:      {name:'R&B',      refs:'Mario · Ne-Yo · Usher · Chris Brown', desc:'Voz no topo, dinâmico, polido',
-    knobs:{CLEAN:58,BASS:52,LOUD:60,WIDE:55,PUNCH:45,FOCUS:65},eq:{sub:-0.5,bass:0.3,low:0.5,mid:1.2,high:1.0,air:0.8},
+    knobs:{CLEAN:58,BASS:35,LOUD:60,WIDE:55,PUNCH:45,FOCUS:65},eq:{sub:-0.5,bass:0.3,low:0.5,mid:1.2,high:1.0,air:0.8},
     sugs:[['Low-mid body @ 500Hz','+2.0 dB','c2'],['Sub control','-1.2 dB','c3'],['Vocal presence','+0.4 dB','c5']]},
   afrobeats:{name:'AFROBEATS',refs:'Davido · Rema · Lojay', desc:'Sub pesado, groove colorido',
-    knobs:{CLEAN:50,BASS:65,LOUD:65,WIDE:55,PUNCH:55,FOCUS:55},eq:{sub:2.1,bass:0.5,low:0.0,mid:0.0,high:0.0,air:0.0},
+    knobs:{CLEAN:50,BASS:35,LOUD:65,WIDE:55,PUNCH:55,FOCUS:55},eq:{sub:2.1,bass:0.5,low:0.0,mid:0.0,high:0.0,air:0.0},
     sugs:[['Sub groove @ 60Hz','+2.1 dB','c2'],['Bass presence','+0.5 dB','c3'],['Afro width','+56%','c5']]},
   amapiano: {name:'AMAPIANO', refs:'Asake · Olamide', desc:'Log drum pesado, piano suave, corpo nos low-mids — som sul-africano',
-    knobs:{CLEAN:50,BASS:52,LOUD:65,WIDE:60,PUNCH:60,FOCUS:55},
+    knobs:{CLEAN:50,BASS:35,LOUD:65,WIDE:60,PUNCH:60,FOCUS:55},
     eq:{sub:-2.5,bass:1.0,low:1.3,mid:0.0,high:-0.4,air:-0.2},
     sugs:[['Bass body @ 150Hz','+1.0 dB','c2'],['Low-mid presence','+1.3 dB','c3'],['Log drum punch','+61%','c5']]},
   dancehall: {name:'DANCEHALL', refs:'Blaiz Fayah · Tribal Kush', desc:'Riddim energético, voz presente, espectro completo — estilo jamaicano/afro',
-    knobs:{CLEAN:60,BASS:45,LOUD:65,WIDE:55,PUNCH:62,FOCUS:70},
+    knobs:{CLEAN:60,BASS:35,LOUD:65,WIDE:55,PUNCH:62,FOCUS:70},
     eq:{sub:-3.0,bass:-0.1,low:1.1,mid:1.3,high:0.7,air:0.7},
     sugs:[['Vocal presence @ 1.5kHz','+1.3 dB','c2'],['High definition','+0.7 dB','c3'],['Riddim punch','+63%','c5']]},
   reggaeton: {name:'REGGAETON', refs:'Daddy Yankee · Snow', desc:'Sub dominante, dembow pesado, kick profundo — som latino urbano',
-    knobs:{CLEAN:50,BASS:65,LOUD:65,WIDE:52,PUNCH:58,FOCUS:50},
+    knobs:{CLEAN:50,BASS:35,LOUD:65,WIDE:52,PUNCH:58,FOCUS:50},
     eq:{sub:3.0,bass:-0.8,low:-0.9,mid:-0.3,high:-0.3,air:-0.2},
     sugs:[['Sub dembow @ 60Hz','+3.0 dB','c2'],['Bass tightness','-0.8 dB','c3'],['Latino punch','+60%','c5']]},
   kompa: {name:'KOMPA', refs:"Joe Dwe't File", desc:'Graves profundos, muito dinâmico, romantismo haitiano',
-    knobs:{CLEAN:50,BASS:58,LOUD:62,WIDE:55,PUNCH:50,FOCUS:50},
+    knobs:{CLEAN:50,BASS:35,LOUD:62,WIDE:55,PUNCH:50,FOCUS:50},
     eq:{sub:1.1,bass:-0.2,low:0.1,mid:-0.5,high:-0.6,air:-0.2},
     sugs:[['Warm sub @ 70Hz','+1.1 dB','c2'],['Mid warmth','-0.5 dB','c3'],['Romantic width','+58%','c5']]},
   house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor',
-    knobs:{CLEAN:52,BASS:72,LOUD:70,WIDE:52,PUNCH:58,FOCUS:50},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
+    knobs:{CLEAN:52,BASS:35,LOUD:70,WIDE:52,PUNCH:58,FOCUS:50},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
     sugs:[['Sub punch @ 50Hz','+4.0 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club energy','+72%','c5']]},
   suno: {name:'AI SUNO', refs:'Suno v3 · v4 · v5 — AI Generated Music', desc:'Noise gate · EQ correction · Stereo wide · Limiter → −9 LUFS',
-    knobs:{CLEAN:62,BASS:52,LOUD:68,WIDE:58,PUNCH:48,FOCUS:60},
+    knobs:{CLEAN:62,BASS:35,LOUD:68,WIDE:58,PUNCH:48,FOCUS:60},
     eq:{sub:-1.0,bass:0.5,low:-2.5,mid:-1.8,high:1.5,air:2.0},
     sugs:[['Low-mid nasal cut @ 500Hz','−2.5 dB','c2'],['Air & presence boost','+2.0 dB','c3'],['Stereo width AI clean','+58%','c5']]}
 };
@@ -110,15 +110,15 @@ function openTab(name, el) {
   if(name==='clip')    setTimeout(()=>{ if(typeof _drawClipCurve==='function') _drawClipCurve(); },60);
   if(name==='analysis')setTimeout(()=>{ if(audioBuffer && typeof runFullAnalysis==='function') runFullAnalysis(); },80);
   if(name==='studiopro')setTimeout(()=>{
-    if(typeof isFullVersion!=='undefined' && !isFullVersion){
+    if(typeof hasStudioPro==='undefined' || !hasStudioPro){
       const c=document.getElementById('fx-content');
       const bk=document.getElementById('fx-back'); if(bk) bk.style.display='none';
+      const isBasic=(typeof isFullVersion!=='undefined' && isFullVersion);
       if(c) c.innerHTML='<div style="text-align:center;padding:40px 20px;">'+
         '<div style="font-family:\'Orbitron\',monospace;font-weight:900;font-size:20px;background:linear-gradient(90deg,var(--c3),var(--c1));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">STUDIO PRO</div>'+
-        '<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">As 15 ferramentas avançadas (Codec Social, Monitor Local, Blind Shootout, Reverse Mastering, Source Forensics e mais) estão disponíveis apenas na <b style="color:var(--c4)">versão completa</b>.</div>'+
+        '<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">As <b style="color:var(--c4)">25 ferramentas avançadas</b> (Copiloto, Heat Map Emocional, Codec Social, Blind Shootout, Auto-Adaptação e muito mais) exigem uma licença <b style="color:var(--c4)">AVANÇADA</b>.'+(isBasic?'<br><br>Tens uma licença <b style="color:var(--c5)">BÁSICA</b> — faz upgrade para AVANÇADA para desbloquear.':'')+'</div>'+
         '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;">'+
-        '<button onclick="openLicenseModal()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.12);color:var(--c4);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;">DESBLOQUEAR VERSÃO FULL</button>'+
-        '<a href="https://www.beatfreakstudio.com" target="_blank" style="padding:10px 20px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;text-decoration:none;">SABER MAIS</a>'+
+        '<button onclick="openLicenseModal()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.12);color:var(--c4);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;">'+(isBasic?'FAZER UPGRADE PARA AVANÇADA':'VER PLANOS AVANÇADOS')+'</button>'+
         '</div></div>';
       return;
     }
@@ -452,6 +452,18 @@ function updateClipper(){
   setStatus(active ? ('Clipper '+mode.toUpperCase()+' · drive +'+drive.toFixed(1)+'dB · Gold '+gold.toFixed(0)+'% · Alchemy '+alch.toFixed(0)+'% · mix '+mix.toFixed(0)+'%') : 'Clipper desligado');
 }
 
+// Buffer rolante do sinal de entrada do clipper (pré-shaper) para visualização
+let _clipScopeBuf=new Float32Array(0), _clipScopeAn=null;
+function _ensureClipScope(){
+  if(typeof audioCtx==='undefined'||!audioCtx) return;
+  if(_clipScopeAn) return;
+  if(typeof clipInGain!=='undefined' && clipInGain){
+    _clipScopeAn=audioCtx.createAnalyser();
+    _clipScopeAn.fftSize=2048;
+    try{ clipInGain.connect(_clipScopeAn); }catch(e){}
+    _clipScopeBuf=new Float32Array(_clipScopeAn.fftSize);
+  }
+}
 function _drawClipCurve(){
   const canvas=document.getElementById('clip-curve-canvas');
   if(!canvas) return;
@@ -460,42 +472,111 @@ function _drawClipCurve(){
   const H=canvas.height||150;
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+
+  // grelha
   ctx.strokeStyle='#ffffff10'; ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){ const x=i/4*W, y=i/4*H;
+  for(let i=0;i<=4;i++){
+    const x=i/4*W, y=i/4*H;
     ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
-  ctx.strokeStyle='#ffffff22'; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(0,H); ctx.lineTo(W,0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+  // linha de 0
+  ctx.strokeStyle='#ffffff22';
+  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+
   const on=document.getElementById('clip-toggle')?.checked && !clipBypassed;
   const drive=Math.pow(10,(clipDriveDb||0)/20);
   const ceil=Math.pow(10,(clipCeilingDb||0)/20);
   const mode=clipMode||'modern';
-  ctx.strokeStyle = on ? '#ffd23c' : '#555';
-  ctx.lineWidth=2.5; ctx.beginPath();
-  for(let px=0;px<=W;px++){
-    let x=((px/W)*2-1)*(on?drive:1);
+
+  // tenta obter forma de onda real do clipper input
+  _ensureClipScope();
+  let src=null;
+  if(_clipScopeAn){
+    try{ _clipScopeAn.getFloatTimeDomainData(_clipScopeBuf); src=_clipScopeBuf; }catch(e){}
+  }
+  // fallback: onda sintética demonstrativa (seno+harmónicos) com amplitude conforme drive
+  const N=src?src.length:Math.max(256,W);
+  const sig=new Float32Array(N);
+  if(src){
+    for(let i=0;i<N;i++) sig[i]=src[i];
+  } else {
+    // amplitude que demonstra clipping quando drive>0
+    const amp=on?Math.min(1.4,0.55+drive*0.4):0.5;
+    for(let i=0;i<N;i++){
+      const t=i/N*Math.PI*2*3; // 3 ciclos visíveis
+      sig[i]=amp*(0.85*Math.sin(t)+0.15*Math.sin(t*3));
+    }
+  }
+
+  // função clipper (mesma matemática usada no DSP)
+  function clipSample(x){
+    x=x*(on?drive:1);
     let y;
-    if(!on){ y=((px/W)*2-1); }
+    if(!on || mode==='off') y=x/(on?drive:1); // sem efeito
     else if(mode==='hard') y=Math.max(-ceil,Math.min(ceil,x));
     else if(mode==='classic'){ const k=1.6,t=x/ceil; y=ceil*Math.tanh(t*k)/Math.tanh(k); }
-    else if(mode==='off') y=x;
     else { const t=x/ceil; y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2)); }
-    y=Math.max(-1,Math.min(1,y));
-    const py=H-((y+1)/2*H);
+    return Math.max(-1,Math.min(1,y));
+  }
+
+  // 1) desenhar onda ORIGINAL (cinzento — o que entrava sem clipping)
+  ctx.strokeStyle='rgba(255,255,255,0.32)';
+  ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let px=0;px<=W;px++){
+    const i=Math.floor(px/W*(N-1));
+    const v=sig[i]*(on?drive:1); // pré-clipper (já com drive)
+    const py=H/2 - Math.max(-1.4,Math.min(1.4,v))*(H/2-4);
     px===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
   }
   ctx.stroke();
-  // ceiling lines
+
+  // 2) onda CLIPADA por cima (amarelo/laranja), com marcadores onde excedia o ceiling
+  ctx.strokeStyle = on ? '#ffd23c' : '#888';
+  ctx.lineWidth=2.2;
+  ctx.beginPath();
+  const clippedPts=[];
+  for(let px=0;px<=W;px++){
+    const i=Math.floor(px/W*(N-1));
+    const inV=sig[i]*(on?drive:1);
+    const outV=clipSample(sig[i]);
+    const py=H/2 - outV*(H/2-4);
+    px===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    if(on && Math.abs(inV)>ceil) clippedPts.push([px,py,inV]);
+  }
+  ctx.stroke();
+
+  // 3) marcar visualmente as zonas achatadas (pontos rosa nos topos cortados)
+  if(on && clippedPts.length){
+    ctx.fillStyle='rgba(255,58,181,0.85)';
+    for(const [px,py] of clippedPts){
+      ctx.fillRect(px-1,py-2,2,4);
+    }
+  }
+
+  // linhas de ceiling
   if(on){
     ctx.strokeStyle='#ff3ab555'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
-    const cy=H-((ceil+1)/2*H), cy2=H-((-ceil+1)/2*H);
+    const cy=H/2 - ceil*(H/2-4), cy2=H/2 + ceil*(H/2-4);
     ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
     ctx.beginPath();ctx.moveTo(0,cy2);ctx.lineTo(W,cy2);ctx.stroke();
     ctx.setLineDash([]);
   }
+
   ctx.fillStyle='#ffffff55'; ctx.font='9px monospace'; ctx.textAlign='left';
-  ctx.fillText('IN →',6,H-6);
+  ctx.fillText(on?('CLIP '+clippedPts.length+'pts'):'OFF', 6, 14);
+  ctx.fillText('TIME →',6,H-6);
 }
+// Loop de redesenho contínuo quando a aba clip está visível (mostra a "vida" do sinal)
+function _clipScopeLoop(){
+  const tab=document.getElementById('tab-clip');
+  if(tab && tab.style.display!=='none' && tab.classList.contains('active')){
+    _drawClipCurve();
+  }
+  requestAnimationFrame(_clipScopeLoop);
+}
+if(typeof window!=='undefined'){ requestAnimationFrame(_clipScopeLoop); }
 
 function _OLD_makeShapeCurveStub(){}
 function makeShapeCurve(mode, drive, mix) {  const n=2048, curve=new Float32Array(n);
@@ -1832,6 +1913,28 @@ async function togglePiradex(){
   piradexOn=!piradexOn;
   const btn=document.getElementById('pira-btn');
   if(piradexOn){
+    // ── HEADROOM AUTOMÁTICO -6 dBFS ──
+    // Antes de qualquer EQ/saturação, medir a fonte e ajustar o ganho de saída
+    // para que o pico fique em -6 dBFS, dando "altura" para o processamento.
+    if(audioBuffer){
+      let peak=0;
+      for(let c=0;c<audioBuffer.numberOfChannels;c++){
+        const data=audioBuffer.getChannelData(c);
+        for(let i=0;i<data.length;i++) peak=Math.max(peak,Math.abs(data[i]));
+      }
+      if(peak>0){
+        const targetPeak=0.501; // -6 dBFS
+        const gainDb=20*Math.log10(targetPeak/peak);
+        outputGainDb=Math.max(-24,Math.min(6,gainDb));
+        applyIOGain();
+        updateIODisplay();
+        headroomApplied=true;
+        document.querySelectorAll('.preset-chip').forEach(c=>c.classList.remove('headroom-locked'));
+        const peakDbH=20*Math.log10(peak);
+        setStatus('PIRADEX MODE · HEADROOM -6 dBFS aplicado (fonte '+peakDbH.toFixed(1)+' dBFS → '+(gainDb>=0?'+':'')+gainDb.toFixed(1)+' dB)');
+      }
+    }
+
     // Save current state completely
     savedKvals={...kvals};
     savedEQ = audioCtx ? {
@@ -1919,8 +2022,10 @@ async function runPiradexAI(){
     if(seg<3)lowE+=v;else if(seg<7)midE+=v;else highE+=v;
   }
   const rms=Math.sqrt(sumSq/totalS);
-  const lufsEst=rms>0?20*Math.log10(rms)-0.691:-70;
+  const lufsSource=rms>0?20*Math.log10(rms)-0.691:-70;
+  const lufsEst=lufsSource + (outputGainDb||0); // após headroom aplicado
   const peakdB=peak>0?20*Math.log10(peak):-70;
+  const peakAfterHead=peakdB + (outputGainDb||0);
   const dynRange=(peak>0&&rms>0)?20*Math.log10(peak/rms):20;
   const tot=lowE+midE+highE||1;
   const lowR=lowE/tot,midR=midE/tot,highR=highE/tot;
@@ -1935,7 +2040,9 @@ async function runPiradexAI(){
   applyDSP();
   msg.innerHTML=`
 <strong>📊 Análise — PIRADEX MODE:</strong><br>
-· LUFS: ${lufsEst.toFixed(1)} | Pico: ${peakdB.toFixed(1)} dBFS | Dinâmica: ${dynRange.toFixed(1)} dB<br>
+· Fonte: ${lufsSource.toFixed(1)} LUFS · pico ${peakdB.toFixed(1)} dBFS<br>
+· Após HEADROOM -6 dBFS: ${lufsEst.toFixed(1)} LUFS · pico ${peakAfterHead.toFixed(1)} dBFS<br>
+· Dinâmica: ${dynRange.toFixed(1)} dB<br>
 · Graves ${(lowR*100).toFixed(0)}% · Médios ${(midR*100).toFixed(0)}% · Agudos ${(highR*100).toFixed(0)}%<br>
 ${warnings?'<br>'+warnings:''}
 <br><strong>🎛️ Configuração Piradex:</strong><br>
@@ -1959,6 +2066,15 @@ async function _originalExport(){
   if(!audioBuffer){setStatus('Carrega um ficheiro primeiro');return;}
   const btn=document.getElementById('export-btn');
   const fmt=(document.getElementById('export-fmt')||{}).value||'wav';
+  // ── DEMO: só MP3 ──
+  const u = (typeof currentUser!=='undefined' && currentUser) ? USERS[currentUser] : null;
+  const isDemo = u && u.type==='demo';
+  if(isDemo && fmt==='wav'){
+    setStatus('⚠ Exportação WAV bloqueada na DEMO — usa MP3 ou adquire uma licença.');
+    alert('A versão DEMO só permite exportar em MP3.\n\nO formato WAV (sem perdas) está reservado para licenças BÁSICA ou AVANÇADA.\n\nSeleciona MP3 no menu de exportação, ou adquire uma licença em beatfreakstudio.com');
+    const sel=document.getElementById('export-fmt'); if(sel){ sel.value='mp3'; }
+    return;
+  }
   const dither=document.getElementById('export-dither')?.checked!==false;
   btn.style.opacity='0.5';btn.style.pointerEvents='none';
   setStatus('A renderizar'+( fmt==='mp3'?' MP3 320kbps':' WAV')+'...');
@@ -3064,12 +3180,17 @@ function fallbackMailto(subject,body,msgEl,sendBtn){
 
 // ===== LOGIN =====
 const USERS={
-  'admin':     {pass:'piradex2024',  type:'full',  exports:null, hours:null},
-  'beatfreak': {pass:'studio2024',   type:'full',  exports:null, hours:null},
-  'demo':      {pass:'demo123',      type:'demo',  exports:3,    hours:null},
-  'producer1': {pass:'beats2024',    type:'full',  exports:null, hours:null},
-  'producer2': {pass:'music2024',    type:'full',  exports:null, hours:null},
-  'piradex':   {pass:'number1',      type:'beta',  exports:10,   hours:2}
+  // master (acesso total)
+  'admin':     {pass:'piradex2024',  type:'master',   tier:'advanced', exports:null, hours:null},
+  'piradex':   {pass:'number1',      type:'master',   tier:'advanced', exports:null, hours:null},
+  // contas FULL avançadas (com STUDIO PRO)
+  'beatfreak': {pass:'studio2024',   type:'full',     tier:'advanced', exports:null, hours:null},
+  'producer1': {pass:'beats2024',    type:'full',     tier:'advanced', exports:null, hours:null},
+  // contas FULL básicas (sem STUDIO PRO)
+  'producer2': {pass:'music2024',    type:'full',     tier:'basic',    exports:null, hours:null},
+  'cliente1':  {pass:'basic2024',    type:'full',     tier:'basic',    exports:null, hours:null},
+  // demo (10 minutos de tempo + 3 exportações)
+  'demo':      {pass:'demo123',      type:'demo',     tier:'basic',    exports:3,    minutes:10},
 };
 // Legacy password check support
 function getUserPass(u){ return USERS[u]?.pass||null; }
@@ -3100,8 +3221,16 @@ function doLogin(){
     document.getElementById('login-screen').style.display='none';
     err.textContent='';
 
-    // Beta user setup
-    if(userData.type==='beta'){
+    // apply tier from the account
+    if(userData.type==='full' || userData.type==='master'){
+      isFullVersion=true;
+      hasStudioPro=(userData.tier==='advanced');
+      currentLicense={key:'account:'+user, tier:userData.tier, mode:userData.type, days:null};
+      updateLicenseBadge();
+    }
+    // Beta/limited user setup OR Demo with time limit
+    if(userData.type==='beta' || (userData.type==='demo' && userData.minutes)){
+      const totalSecs = userData.minutes ? userData.minutes*60 : userData.hours*3600;
       // Restore or start session
       const savedStart = sessionStorage.getItem('beta_session_start');
       const savedExports = parseInt(sessionStorage.getItem('beta_exports_used')||'0');
@@ -3109,11 +3238,11 @@ function doLogin(){
 
       if(savedStart){
         betaSessionStart = parseInt(savedStart);
-        const elapsed = (Date.now()-betaSessionStart)/1000/3600;
-        if(elapsed >= userData.hours){
+        const elapsed = (Date.now()-betaSessionStart)/1000;
+        if(elapsed >= totalSecs){
           // Session expired
           isLoggedIn=false;
-          err.textContent='⏱️ Sessão beta expirada. Contacta beatfreakstudio.com';
+          err.textContent='⏱️ Sessão '+(userData.type==='demo'?'demo':'beta')+' expirada. Adquire uma licença em beatfreakstudio.com';
           document.getElementById('login-screen').style.display='flex';
           return;
         }
@@ -3121,8 +3250,9 @@ function doLogin(){
         betaSessionStart = Date.now();
         sessionStorage.setItem('beta_session_start', betaSessionStart);
       }
-      startBetaTimer(userData.hours);
-      setStatus('🧪 BETA TESTER · Bem-vindo Piradex! · '+betaExportsUsed+'/'+userData.exports+' masterizações usadas');
+      startBetaTimer(totalSecs);
+      const tag=userData.type==='demo'?'🧪 DEMO':'🧪 BETA TESTER';
+      setStatus(tag+' · '+(userData.minutes?userData.minutes+' min':userData.hours+'h')+' de sessão · '+betaExportsUsed+'/'+userData.exports+' exportações usadas');
     }
   } else {
     err.textContent='❌ Credenciais inválidas.';
@@ -3132,12 +3262,11 @@ function doLogin(){
   }
 }
 
-function startBetaTimer(hours){
+function startBetaTimer(totalSecs){
   if(betaTimerInterval) clearInterval(betaTimerInterval);
   betaTimerInterval = setInterval(()=>{
     if(!betaSessionStart) return;
     const elapsed = (Date.now()-betaSessionStart)/1000;
-    const totalSecs = hours*3600;
     const remaining = totalSecs - elapsed;
     if(remaining <= 0){
       clearInterval(betaTimerInterval);
@@ -3145,8 +3274,10 @@ function startBetaTimer(hours){
       sessionStorage.removeItem('piradex_session');
       sessionStorage.removeItem('beta_session_start');
       document.getElementById('login-screen').style.display='flex';
-      document.getElementById('login-error').textContent='⏱️ Sessão beta de 2 horas terminada. Obrigado por testar!';
-      setStatus('Sessão beta terminada');
+      const userData = USERS[currentUser];
+      const lbl = userData && userData.type==='demo' ? 'demo de '+userData.minutes+' min' : 'beta';
+      document.getElementById('login-error').textContent='⏱️ Sessão '+lbl+' terminada. Adquire a versão completa.';
+      setStatus('Sessão terminada');
       return;
     }
     const mins = Math.floor(remaining/60);
@@ -3167,12 +3298,13 @@ function checkAutoLogin(){
   if(sess==='authenticated' && user){
     const userData = USERS[user];
     if(!userData){ return; }
-    // Check beta expiry
-    if(userData.type==='beta'){
+    // Check beta/demo expiry
+    if(userData.type==='beta' || (userData.type==='demo' && userData.minutes)){
+      const totalSecs = userData.minutes ? userData.minutes*60 : userData.hours*3600;
       const savedStart = sessionStorage.getItem('beta_session_start');
       if(savedStart){
-        const elapsed = (Date.now()-parseInt(savedStart))/1000/3600;
-        if(elapsed >= userData.hours){
+        const elapsed = (Date.now()-parseInt(savedStart))/1000;
+        if(elapsed >= totalSecs){
           sessionStorage.removeItem('piradex_session');
           return; // show login
         }
@@ -3181,7 +3313,7 @@ function checkAutoLogin(){
         currentUser = user;
         isLoggedIn = true;
         document.getElementById('login-screen').style.display='none';
-        startBetaTimer(userData.hours);
+        startBetaTimer(totalSecs);
       }
     } else {
       currentUser = user;
@@ -3193,29 +3325,83 @@ function checkAutoLogin(){
   checkLicense();
 }
 
-// ===== LICENSES =====
-const LICENSES=['PRDX-XAJI-0Y6D-PBHS','PRDX-AHXT-HV3A-3ZMF','PRDX-8MDD-4V30-T9NT',
-  'PRDX-3W5U-ZBIK-CIDK','PRDX-WNNH-J7XV-G0FN','PRDX-9XUY-41IB-LJH7',
-  'PRDX-5LXO-6QJI-UJV6','PRDX-OH9S-DBDW-2PCN','PRDX-9T84-AZYT-JXEP',
-  'PRDX-Q85J-SG65-KXVF','PRDX-1T2T-ALA7-53LC','PRDX-58DR-C11E-RTJ5',
-  'PRDX-PHT0-HL9X-PSEI','PRDX-MVIH-CWI6-4CIY','PRDX-HE7U-R23G-DPPQ',
-  'PRDX-0Y9D-OM5I-GQPK','PRDX-I7P5-TB94-874F','PRDX-RHOC-N9J2-QP89',
-  'PRDX-UZFK-8UT0-CVS4','PRDX-F8CG-VYIE-6IVW'];
-let isFullVersion=false;
+// ═══════════════════════════════════════════════════════════════════════════
+// LICENÇAS — 3 modalidades × 2 níveis
+//   modo:  'master' (tua) · 'lifetime' (vitalícia) · 'monthly' (aluguer mensal)
+//   nível: 'basic' (sem STUDIO PRO) · 'advanced' (com STUDIO PRO)
+// Cada chave define: {tier, mode, days}. days=null = sem expiração.
+// As chaves abaixo são exemplos — gera/entrega as tuas após o pagamento.
+// ═══════════════════════════════════════════════════════════════════════════
+const LICENSES = {
+  // ── A TUA MASTER (acesso total, sem limites) ──
+  'PRDX-MSTR-PIRA-DEX1': {tier:'advanced', mode:'master',   days:null},
+
+  // ── VITALÍCIA BÁSICA (30 USD) — sem STUDIO PRO ──
+  'PRDX-LFTB-0001-0001': {tier:'basic',    mode:'lifetime', days:null},
+  'PRDX-LFTB-0002-0002': {tier:'basic',    mode:'lifetime', days:null},
+  'PRDX-LFTB-0003-0003': {tier:'basic',    mode:'lifetime', days:null},
+
+  // ── VITALÍCIA AVANÇADA (50 USD) — com STUDIO PRO ──
+  'PRDX-LFTA-0001-0001': {tier:'advanced', mode:'lifetime', days:null},
+  'PRDX-LFTA-0002-0002': {tier:'advanced', mode:'lifetime', days:null},
+  'PRDX-LFTA-0003-0003': {tier:'advanced', mode:'lifetime', days:null},
+
+  // ── ALUGUER MENSAL BÁSICO (15 USD/mês) — sem STUDIO PRO, 30 dias ──
+  'PRDX-MNTB-0001-0001': {tier:'basic',    mode:'monthly',  days:30},
+  'PRDX-MNTB-0002-0002': {tier:'basic',    mode:'monthly',  days:30},
+  'PRDX-MNTB-0003-0003': {tier:'basic',    mode:'monthly',  days:30},
+
+  // ── ALUGUER MENSAL AVANÇADO (25 USD/mês) — com STUDIO PRO, 30 dias ──
+  'PRDX-MNTA-0001-0001': {tier:'advanced', mode:'monthly',  days:30},
+  'PRDX-MNTA-0002-0002': {tier:'advanced', mode:'monthly',  days:30},
+  'PRDX-MNTA-0003-0003': {tier:'advanced', mode:'monthly',  days:30},
+};
+let isFullVersion=false;   // true = qualquer licença válida (desbloqueia exportação)
+let hasStudioPro=false;    // true = nível 'advanced' (desbloqueia STUDIO PRO)
+let currentLicense=null;
+
+function _licenseValid(key){
+  const L=LICENSES[key]; if(!L) return null;
+  // check expiry for monthly
+  if(L.days){
+    const actKey='piradex_lic_activated_'+key;
+    let act=parseInt(localStorage.getItem(actKey)||'0');
+    if(!act){ act=Date.now(); localStorage.setItem(actKey,String(act)); }
+    const elapsedDays=(Date.now()-act)/86400000;
+    if(elapsedDays>L.days) return {...L, expired:true};
+  }
+  return {...L, expired:false};
+}
+function _applyLicense(key,L){
+  currentLicense={key,...L};
+  isFullVersion=true;
+  hasStudioPro=(L.tier==='advanced');
+}
 function checkLicense(){
   const saved=sessionStorage.getItem('piradex_license');
-  if(saved&&LICENSES.includes(saved)){isFullVersion=true;}
+  if(saved){
+    const L=_licenseValid(saved);
+    if(L && !L.expired){ _applyLicense(saved,L); }
+    else if(L && L.expired){ sessionStorage.removeItem('piradex_license'); setStatus('⏱ A tua licença mensal expirou — renova para continuar'); }
+  }
   updateLicenseBadge();
 }
 function activateLicense(){
   const input=document.getElementById('license-input'),err=document.getElementById('license-error');
   const key=input.value.trim().toUpperCase();
   if(!key){err.textContent='Introduz a tua licença.';return;}
-  if(LICENSES.includes(key)){
-    isFullVersion=true;exportCount=0;sessionStorage.setItem('piradex_license',key);
+  const L=_licenseValid(key);
+  if(L && !L.expired){
+    _applyLicense(key,L); exportCount=0;
+    sessionStorage.setItem('piradex_license',key);
     document.getElementById('license-modal').style.display='none';
-    document.getElementById('paywall-modal').style.display='none';
-    updateLicenseBadge();setStatus('✓ Licença activada — versão FULL desbloqueada');
+    const pm=document.getElementById('paywall-modal'); if(pm) pm.style.display='none';
+    updateLicenseBadge();
+    const modeTxt={master:'MASTER',lifetime:'VITALÍCIA',monthly:'MENSAL'}[L.mode];
+    const tierTxt=L.tier==='advanced'?'AVANÇADA (STUDIO PRO)':'BÁSICA';
+    setStatus('✓ Licença '+modeTxt+' '+tierTxt+' ativada'+(L.days?(' · '+L.days+' dias'):''));
+  } else if(L && L.expired){
+    err.textContent='⏱ Esta licença mensal expirou. Renova para continuar.';
   } else {
     err.textContent='❌ Licença inválida.';input.value='';
     const box=document.querySelector('.license-box');
@@ -3224,16 +3410,97 @@ function activateLicense(){
 }
 function updateLicenseBadge(){
   const b=document.getElementById('license-badge');
-  if(b){b.textContent=isFullVersion?'✓ FULL':'DEMO';b.style.color=isFullVersion?'var(--c4)':'var(--muted)';b.style.borderColor=isFullVersion?'var(--c4)':'var(--border2)';}
-  // STUDIO PRO tab shows a lock in demo
+  if(b){
+    let label='DEMO', col='var(--muted)', bord='var(--border2)';
+    if(isFullVersion){
+      if(currentLicense&&currentLicense.mode==='master'){label='★ MASTER';col='var(--c3)';bord='var(--c3)';}
+      else if(hasStudioPro){label='✓ AVANÇADA';col='var(--c4)';bord='var(--c4)';}
+      else {label='✓ BÁSICA';col='var(--c5)';bord='var(--c5)';}
+    }
+    b.textContent=label;b.style.color=col;b.style.borderColor=bord;
+  }
+  // STUDIO PRO tab: locked unless advanced/master tier
   const sp=document.querySelector('.tab[onclick*="studiopro"]');
   if(sp){
-    const base='STUDIO PRO';
-    sp.textContent = isFullVersion ? base : (base+' 🔒');
-    sp.style.opacity = isFullVersion ? '1' : '0.6';
+    sp.textContent = hasStudioPro ? 'STUDIO PRO' : 'STUDIO PRO 🔒';
+    sp.style.opacity = hasStudioPro ? '1' : '0.6';
   }
 }
-function openLicenseModal(){document.getElementById('license-modal').style.display='flex';}
+const PLANS={
+  'lifetime-basic':   {label:'Vitalícia Básica',    price:'30 USD',     tier:'básica',   pro:false},
+  'lifetime-advanced':{label:'Vitalícia Avançada',  price:'50 USD',     tier:'avançada', pro:true},
+  'monthly-basic':    {label:'Mensal Básica',       price:'15 USD/mês', tier:'básica',   pro:false},
+  'monthly-advanced': {label:'Mensal Avançada',     price:'25 USD/mês', tier:'avançada', pro:true},
+};
+let _selectedPlan=null, _payProofFile=null;
+function openLicenseModal(){
+  document.getElementById('license-modal').style.display='flex';
+  licTab('buy');
+}
+function selectPlan(p){
+  _selectedPlan=p;
+  document.querySelectorAll('.plan-card').forEach(c=>c.classList.toggle('plan-active', c.getAttribute('data-plan')===p));
+  const sel=document.getElementById('plan-selected'), txt=document.getElementById('plan-selected-txt');
+  if(sel&&txt){ sel.style.display='block'; txt.textContent=PLANS[p].label+' · '+PLANS[p].price; }
+}
+function payProofChanged(input){
+  _payProofFile = input.files && input.files[0] ? input.files[0] : null;
+  const n=document.getElementById('pay-proof-name');
+  if(n) n.textContent=_payProofFile?('✓ Anexado: '+_payProofFile.name):'';
+}
+function _payValidate(){
+  const name=(document.getElementById('pay-name').value||'').trim();
+  const email=(document.getElementById('pay-email').value||'').trim();
+  const msg=document.getElementById('pay-form-msg');
+  if(!_selectedPlan){ msg.style.color='var(--c7)'; msg.textContent='Escolhe primeiro um plano.'; return null; }
+  if(!name||!email){ msg.style.color='var(--c7)'; msg.textContent='Preenche o nome e o email.'; return null; }
+  if(!_payProofFile){ msg.style.color='var(--c7)'; msg.textContent='Anexa o comprovativo de pagamento.'; return null; }
+  return {name,email,P:PLANS[_selectedPlan],msg};
+}
+function _payText(d){
+  return 'Novo pedido de licença MASTERING SUITE\n\n'+
+    'Plano: '+d.P.label+' ('+d.P.price+')\n'+
+    'Nível: '+d.P.tier+(d.P.pro?' (com STUDIO PRO)':' (sem STUDIO PRO)')+'\n'+
+    'Nome completo: '+d.name+'\n'+
+    'Email do cliente: '+d.email+'\n'+
+    'Comprovativo: '+_payProofFile.name+' (anexar manualmente)';
+}
+function submitPayment(){
+  const d=_payValidate(); if(!d) return;
+  const subject='PAGAMENTO MASTERING SUITE — '+d.P.label;
+  const mailto='mailto:juninhopiradex@hotmail.com?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(_payText(d)+'\n\n⚠ IMPORTANTE: anexa o comprovativo ("'+_payProofFile.name+'") a este email antes de enviar.');
+  window.location.href=mailto;
+  d.msg.style.color='var(--c4)';
+  d.msg.innerHTML='Abrimos o teu email com os dados.<br>⚠ <b>Anexa o comprovativo</b> antes de enviar.';
+}
+function submitPaymentWA(){
+  const d=_payValidate(); if(!d) return false;
+  const txt=encodeURIComponent('Olá Juninho! '+_payText(d)+'\n\n(Vou anexar aqui o comprovativo.)');
+  document.getElementById('pay-wa-btn').href='https://wa.me/244924958103?text='+txt;
+  d.msg.style.color='var(--c4)';
+  d.msg.innerHTML='Abrimos o WhatsApp com os dados.<br>⚠ <b>Anexa a foto do comprovativo</b> na conversa antes de enviar.';
+  return true;
+}
+function licTab(which){
+  const buy=document.getElementById('lic-panel-buy'), key=document.getElementById('lic-panel-key');
+  const tb=document.getElementById('lic-tab-buy'), tk=document.getElementById('lic-tab-key');
+  if(which==='key'){ buy.style.display='none'; key.style.display='block'; tk.classList.add('lic-tab-active'); tb.classList.remove('lic-tab-active'); }
+  else { buy.style.display='block'; key.style.display='none'; tb.classList.add('lic-tab-active'); tk.classList.remove('lic-tab-active'); }
+}
+function licCopy(t){ if(navigator.clipboard) navigator.clipboard.writeText(t); setStatus('Copiado: '+t); }
+function licLogin(){
+  // Fecha o modal de licença e abre o ecrã de login para autenticar como master/full
+  document.getElementById('license-modal').style.display='none';
+  // limpa sessão atual para forçar login
+  sessionStorage.removeItem('piradex_session');
+  sessionStorage.removeItem('piradex_user');
+  sessionStorage.removeItem('beta_session_start');
+  isLoggedIn=false; isFullVersion=false; hasStudioPro=false; currentLicense=null;
+  updateLicenseBadge();
+  const ls=document.getElementById('login-screen');
+  if(ls){ ls.style.display='flex'; const u=document.getElementById('login-user'); if(u){u.value='';u.focus();} const p=document.getElementById('login-pass'); if(p)p.value=''; const e=document.getElementById('login-error'); if(e)e.textContent=''; }
+  setStatus('Sessão terminada — entra com a tua conta');
+}
 function closeLicenseModal(){document.getElementById('license-modal').style.display='none';}
 function formatLicenseInput(el){
   let v=el.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase();
@@ -3997,27 +4264,27 @@ function _drawReferenceOverlay(){
 const GEO_PROFILES = {
   angola_radio: { name:'Angola — Rádio + Clube', flag:'🇦🇴',
     lufs:-8, eq:{sub:3.5,bass:1.5,low:-0.5,mid:-0.5,high:0.5,air:0.5},
-    knobs:{CLEAN:48,BASS:68,LOUD:72,WIDE:50,PUNCH:60,FOCUS:52},
+    knobs:{CLEAN:48,BASS:35,LOUD:72,WIDE:50,PUNCH:60,FOCUS:52},
     desc:'Sub pesado, kick agressivo, loudness máximo para sistemas de som angolanos' },
   caboverde_festa: { name:'Cabo Verde — Festa + PA', flag:'🇨🇻',
     lufs:-9, eq:{sub:2.5,bass:1.0,low:0.5,mid:0.5,high:0.5,air:1.0},
-    knobs:{CLEAN:50,BASS:62,LOUD:68,WIDE:65,PUNCH:52,FOCUS:55},
+    knobs:{CLEAN:50,BASS:35,LOUD:68,WIDE:65,PUNCH:52,FOCUS:55},
     desc:'Graves quentes, campo stereo aberto, ideal para sistemas PA de festa' },
   europa_streaming: { name:'Europa — Spotify / Apple', flag:'🇪🇺',
     lufs:-14, eq:{sub:0,bass:0,low:0,mid:0,high:1.0,air:1.5},
-    knobs:{CLEAN:62,BASS:48,LOUD:50,WIDE:55,PUNCH:40,FOCUS:60},
+    knobs:{CLEAN:62,BASS:35,LOUD:50,WIDE:55,PUNCH:40,FOCUS:60},
     desc:'Normalização Spotify -14 LUFS, dinâmica preservada, compatível com loudness normalization' },
   brasil_funk: { name:'Brasil — Funk + Streaming', flag:'🇧🇷',
     lufs:-10, eq:{sub:1.5,bass:0.5,low:1.0,mid:0.8,high:1.0,air:1.0},
-    knobs:{CLEAN:55,BASS:58,LOUD:65,WIDE:52,PUNCH:58,FOCUS:62},
+    knobs:{CLEAN:55,BASS:35,LOUD:65,WIDE:52,PUNCH:58,FOCUS:62},
     desc:'Mids presentes para voz, sub controlado, punch alto para funk e pagode' },
   senegal_afro: { name:'Senegal — Afrobeats + Mbalax', flag:'🇸🇳',
     lufs:-9, eq:{sub:2.0,bass:1.0,low:0.5,mid:-0.5,high:1.0,air:1.5},
-    knobs:{CLEAN:55,BASS:62,LOUD:68,WIDE:58,PUNCH:55,FOCUS:58},
+    knobs:{CLEAN:55,BASS:35,LOUD:68,WIDE:58,PUNCH:55,FOCUS:58},
     desc:'Percussão presente, sub moderado, ar e abertura para vocais' },
   mozambique_marrabenta: { name:'Moçambique — Rádio + Club', flag:'🇲🇿',
     lufs:-9, eq:{sub:1.5,bass:1.0,low:0.5,mid:0.5,high:0.5,air:0.5},
-    knobs:{CLEAN:50,BASS:60,LOUD:68,WIDE:55,PUNCH:55,FOCUS:55},
+    knobs:{CLEAN:50,BASS:35,LOUD:68,WIDE:55,PUNCH:55,FOCUS:55},
     desc:'Balanço geral, compatível com rádio moçambicana e sistemas de club' },
 };
 

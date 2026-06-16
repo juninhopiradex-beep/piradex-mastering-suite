@@ -39,6 +39,8 @@ const FX = [
   {id:'comaster', name:'Co-Master ao Vivo ✦', sub:'Dois produtores, tempo real', c:'var(--c5)'},
   {id:'hitdna',   name:'Porque o Hit é Hit ✦',sub:'Engenharia reversa do viral', c:'var(--c3)'},
   {id:'adaptive', name:'Auto-Adaptação ✦',    sub:'1 ficheiro, infinitos destinos', c:'var(--c2)'},
+  // ── AFINAÇÃO DE VOZ ──
+  {id:'voicetune',name:'Afinação de Voz ✦',   sub:'Pitch · Tempo · Limpeza EQ (independentes)', c:'var(--c1)'},
 ];
 
 window.fxRenderHub = function(){
@@ -1047,5 +1049,294 @@ async function fxRenderDest(k){
 }
 window.fxAdaptExport=async function(k){if(!hasAudio())return;status('A gerar versão '+DESTS[k].label+'...');const buf=await fxRenderDest(k);dl(bufToWav(buf),'master_'+k+'.wav');status(DESTS[k].label+' exportado');};
 window.fxAdaptAll=async function(){if(!hasAudio())return;for(const k of Object.keys(DESTS)){status('A gerar '+DESTS[k].label+'...');const buf=await fxRenderDest(k);dl(bufToWav(buf),'master_'+k+'.wav');await new Promise(r=>setTimeout(r,400));}status('Todos os destinos exportados');};
+
+})();
+
+/* ═══════════ AFINAÇÃO DE VOZ — MÓDULO INDEPENDENTE ═══════════ */
+(function(){
+'use strict';
+const {btn,card,canvasEl}=window.__fx;
+const $=window.__fx.$, status=window.__fx.status;
+
+// estado independente para cada módulo
+let _vtFile=null, _vtBuf=null;
+const VT={pitch:true, time:false, eq:true}; // toggles independentes (defaults)
+let _vtTarget='C', _vtScale='major';
+
+const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function midiToHz(m){ return 440*Math.pow(2,(m-69)/12); }
+function hzToMidi(f){ return f>0 ? 69+12*Math.log2(f/440) : 0; }
+function nameToMidi(n,oct){ return NOTES.indexOf(n)+12*(oct+1); }
+
+// ── 1) Deteção de tom dominante via autocorrelação (Bm/cantor) ──
+function detectDominantNote(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate;
+  // amostra ~30 janelas espalhadas pela faixa
+  const winSize=Math.floor(sr*0.05); // 50 ms
+  const minHz=80, maxHz=800;
+  const minLag=Math.floor(sr/maxHz), maxLag=Math.floor(sr/minHz);
+  const notes=[];
+  const nSamples=Math.min(60, Math.max(10, Math.floor(buf.duration*2)));
+  for(let s=0;s<nSamples;s++){
+    const start=Math.floor((s+0.5)/nSamples*(ch.length-winSize));
+    // RMS check — saltar silêncio
+    let rms=0;for(let i=0;i<winSize;i++){const v=ch[start+i];rms+=v*v;}
+    rms=Math.sqrt(rms/winSize);
+    if(rms<0.01) continue;
+    // autocorrelação
+    let bestLag=0,bestC=0;
+    for(let lag=minLag;lag<=maxLag;lag++){
+      let c=0;
+      for(let i=0;i<winSize-lag;i+=2) c+=ch[start+i]*ch[start+i+lag];
+      if(c>bestC){bestC=c;bestLag=lag;}
+    }
+    if(bestLag>0){
+      const hz=sr/bestLag;
+      const midi=Math.round(hzToMidi(hz));
+      if(midi>=36 && midi<=84) notes.push(midi);
+    }
+  }
+  if(!notes.length) return null;
+  // moda (nota mais frequente)
+  const counts={};
+  notes.forEach(m=>{const k=m%12; counts[k]=(counts[k]||0)+1;});
+  let bestK=0,bestN=0;Object.keys(counts).forEach(k=>{if(counts[k]>bestN){bestN=counts[k];bestK=parseInt(k);}});
+  // oitava média
+  const avgOct=Math.round(notes.reduce((a,b)=>a+b,0)/notes.length/12)-1;
+  return {noteIdx:bestK, noteName:NOTES[bestK], octave:avgOct, samples:notes.length};
+}
+
+// ── 2) BPM rough estimate via onset envelope ──
+function estimateBPM(buf){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate;
+  const hop=Math.floor(sr*0.01); // 10 ms
+  const env=[];
+  for(let i=0;i<ch.length-hop;i+=hop){
+    let e=0;for(let j=0;j<hop;j+=4)e+=Math.abs(ch[i+j]);
+    env.push(e);
+  }
+  // autocorrelação na envelope, lags entre 60–180 BPM
+  const minLag=Math.floor(60/180*100), maxLag=Math.floor(60/60*100);
+  let bestLag=0,bestC=0;
+  for(let lag=minLag;lag<=maxLag;lag++){
+    let c=0;for(let i=0;i<env.length-lag;i++)c+=env[i]*env[i+lag];
+    if(c>bestC){bestC=c;bestLag=lag;}
+  }
+  if(bestLag>0) return 60/(bestLag*0.01);
+  return null;
+}
+
+// ── 3) Pitch shift offline (resample + retime) ──
+// método: cria um OfflineAudioContext com sampleRate alterado por semitones
+// ratio = 2^(semi/12). Tocar a velocidade ratio dá pitch shift + time shift.
+// Para preservar duração, depois esticamos/encolhemos no tempo via outro pass com playbackRate.
+// Resultado funcional para correções de até ±5 semitons; para mais usa-se phase vocoder (roadmap).
+async function pitchShiftBuffer(buf, semitones){
+  if(Math.abs(semitones)<0.01) return buf;
+  const ratio=Math.pow(2,semitones/12);
+  const sr=buf.sampleRate, nCh=buf.numberOfChannels;
+  // pass 1: render at altered sample rate (shifts pitch + duration)
+  const newSr=Math.round(sr*ratio);
+  const off1=new OfflineAudioContext(nCh, Math.ceil(buf.length/ratio), newSr);
+  const src1=off1.createBufferSource(); src1.buffer=buf; src1.connect(off1.destination); src1.start();
+  const tmp=await off1.startRendering();
+  // pass 2: render at original sample rate but use playbackRate=1 (preserves shifted pitch)
+  // já temos newSr a tocar como se fosse newSr, mas para alinhar tempo voltamos a re-amostrar
+  const off2=new OfflineAudioContext(nCh, buf.length, sr);
+  const src2=off2.createBufferSource(); 
+  // truque: criamos um buffer "fake" com newSr declarado como sr
+  const fake=off2.createBuffer(nCh, tmp.length, sr);
+  for(let c=0;c<nCh;c++) fake.copyToChannel(tmp.getChannelData(c), c);
+  src2.buffer=fake;
+  // ajusta playbackRate para restaurar duração original
+  src2.playbackRate.value=1/ratio;
+  src2.connect(off2.destination); src2.start();
+  return await off2.startRendering();
+}
+
+// ── 4) Time stretch (ajusta duração para alvo de BPM) ──
+async function timeStretchBuffer(buf, factor){
+  if(Math.abs(factor-1)<0.005) return buf;
+  const sr=buf.sampleRate, nCh=buf.numberOfChannels;
+  const newLen=Math.round(buf.length/factor);
+  const off=new OfflineAudioContext(nCh, newLen, sr);
+  const src=off.createBufferSource(); src.buffer=buf;
+  src.playbackRate.value=factor;
+  src.connect(off.destination); src.start();
+  return await off.startRendering();
+}
+
+// ── 5) EQ cleanup (high-pass, mud cut, de-ess, presence) ──
+async function eqCleanupBuffer(buf){
+  const sr=buf.sampleRate, nCh=buf.numberOfChannels;
+  const off=new OfflineAudioContext(nCh, buf.length, sr);
+  const src=off.createBufferSource(); src.buffer=buf;
+  // HP 80 Hz
+  const hp=off.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=80;
+  // dip lama 300 Hz
+  const mud=off.createBiquadFilter(); mud.type='peaking'; mud.frequency.value=300; mud.Q.value=1.2; mud.gain.value=-3;
+  // de-ess 7 kHz
+  const de=off.createBiquadFilter(); de.type='peaking'; de.frequency.value=7000; de.Q.value=3; de.gain.value=-3;
+  // presença 3 kHz
+  const pres=off.createBiquadFilter(); pres.type='peaking'; pres.frequency.value=3000; pres.Q.value=0.9; pres.gain.value=2;
+  src.connect(hp); hp.connect(mud); mud.connect(de); de.connect(pres); pres.connect(off.destination);
+  src.start();
+  return await off.startRendering();
+}
+
+// ── helpers UI ──
+function bufToWav(buf){
+  const nCh=buf.numberOfChannels,len=buf.length,sr=buf.sampleRate;
+  const ab=new ArrayBuffer(44+len*nCh*2),v=new DataView(ab);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF');v.setUint32(4,36+len*nCh*2,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,nCh,true);v.setUint32(24,sr,true);
+  v.setUint32(28,sr*nCh*2,true);v.setUint16(32,nCh*2,true);v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,len*nCh*2,true);
+  let o=44;for(let i=0;i<len;i++)for(let c=0;c<nCh;c++){let s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));v.setInt16(o,s<0?s*0x8000:s*0x7FFF,true);o+=2;}
+  return new Blob([ab],{type:'audio/wav'});
+}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+function playBuf(buf){
+  if(typeof audioCtx==='undefined'||!audioCtx)return;
+  try{if(window._vtPrev)window._vtPrev.stop();}catch(e){}
+  const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(audioCtx.destination);s.start();window._vtPrev=s;
+}
+
+// ── VIEW ──
+window.fxView_voicetune=function(b){
+  const noteOpts=NOTES.map(n=>`<option value="${n}"${n===_vtTarget?' selected':''}>${n}</option>`).join('');
+  b.innerHTML=`
+  <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Carrega a tua faixa de voz. Indica a nota do canto e ativa só os módulos que queres. Cada um corre independente.</div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+    <label style="display:inline-block;padding:8px 14px;border-radius:6px;border:1px solid var(--c1);background:color-mix(in srgb,var(--c1) 14%,transparent);color:var(--c1);font-family:'Rajdhani';font-weight:700;font-size:11px;cursor:pointer;">
+      + CARREGAR FAIXA DE VOZ<input id="vt-file" type="file" accept="audio/*" onchange="fxVtLoad(this.files[0])" style="display:none;">
+    </label>
+    <span id="vt-file-info" style="margin-left:10px;font-size:11px;color:var(--muted);"></span>
+  </div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+    <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">NOTA E TONALIDADE DO CANTO</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="vt-note" onchange="_vtSet('target',this.value)" style="padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg4,#1c1c2a);color:var(--text);font-family:'Rajdhani';font-weight:700;">${noteOpts}</select>
+      <select id="vt-scale" onchange="_vtSet('scale',this.value)" style="padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg4,#1c1c2a);color:var(--text);font-family:'Rajdhani';">
+        <option value="major"${_vtScale==='major'?' selected':''}>maior</option>
+        <option value="minor"${_vtScale==='minor'?' selected':''}>menor</option>
+      </select>
+      <span id="vt-detected" style="font-size:11px;color:var(--c5);margin-left:8px;"></span>
+    </div>
+  </div>
+
+  <!-- TOGGLES INDEPENDENTES -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+    ${_vtToggle('pitch','AFINAÇÃO (pitch)','corrige a nota para o alvo','var(--c1)')}
+    ${_vtToggle('time','TEMPO (time)','ajusta a duração ao BPM','var(--c5)')}
+    ${_vtToggle('eq','LIMPEZA EQ','HP 80Hz · -300 lama · de-ess · presença','var(--c4)')}
+  </div>
+
+  <div style="display:flex;gap:8px;">${btn('PROCESSAR VOZ','var(--c1)','fxVtRun()','')}</div>
+  <div id="vt-status" style="margin-top:10px;"></div>
+  <div id="vt-result" style="margin-top:8px;"></div>`;
+};
+function _vtToggle(key,title,sub,col){
+  const on=VT[key];
+  return `<div onclick="_vtToggleClick('${key}')" style="cursor:pointer;background:${on?'color-mix(in srgb,'+col+' 12%,transparent)':'var(--bg3)'};border:1px solid ${on?col:'var(--border2)'};border-radius:8px;padding:10px 12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-family:'Rajdhani';font-weight:700;font-size:11px;color:${on?col:'var(--muted)'};">${title}</span>
+      <span style="font-size:10px;color:${on?col:'var(--muted2)'};">${on?'● ON':'○ OFF'}</span>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px;">${sub}</div>
+  </div>`;
+}
+window._vtToggleClick=function(k){ VT[k]=!VT[k]; window.fxOpen('voicetune'); };
+window._vtSet=function(k,v){ if(k==='target')_vtTarget=v; if(k==='scale')_vtScale=v; };
+
+window.fxVtLoad=async function(file){
+  if(!file)return;
+  const info=$('vt-file-info'); if(info) info.textContent='A carregar '+file.name+'...';
+  try{
+    const ac=(typeof audioCtx!=='undefined'&&audioCtx)?audioCtx:new(window.AudioContext||window.webkitAudioContext)();
+    _vtFile=file;
+    _vtBuf=await ac.decodeAudioData(await file.arrayBuffer());
+    if(info) info.textContent='✓ '+file.name+' · '+_vtBuf.duration.toFixed(1)+'s · '+_vtBuf.sampleRate+' Hz';
+    // detetar nota
+    const det=detectDominantNote(_vtBuf);
+    const detEl=$('vt-detected');
+    if(detEl){
+      if(det) detEl.textContent='nota detetada: '+det.noteName+' (oitava '+det.octave+')';
+      else detEl.textContent='nota não detetada — verifica a faixa';
+    }
+    window._vtDetected=det;
+  }catch(e){ if(info) info.textContent='Erro: '+e.message; }
+};
+
+window.fxVtRun=async function(){
+  if(!_vtBuf){ status('Carrega primeiro a faixa de voz'); return; }
+  if(!VT.pitch && !VT.time && !VT.eq){ status('Ativa pelo menos um módulo'); return; }
+  const st=$('vt-status'); const res=$('vt-result');
+  st.innerHTML=card('<span style="color:var(--c5)">A processar voz...</span>','var(--c5)');
+  let buf=_vtBuf;
+  const log=[];
+
+  // PITCH
+  if(VT.pitch){
+    const det=window._vtDetected;
+    if(!det){ log.push(['var(--c2)','Pitch','não foi possível detetar a nota — saltado.']); }
+    else {
+      const targetMidi=nameToMidi(_vtTarget, det.octave);
+      const sourceMidi=nameToMidi(det.noteName, det.octave);
+      const diff=targetMidi-sourceMidi;
+      // limitar a ±6 semitons (para além disso o resultado degrada)
+      const semi=Math.max(-6,Math.min(6,diff));
+      if(Math.abs(semi)>=0.5){
+        st.innerHTML=card('<span style="color:var(--c1)">Afinação: deslocar '+semi+' semitons ('+det.noteName+' → '+_vtTarget+')...</span>','var(--c1)');
+        buf=await pitchShiftBuffer(buf, semi);
+        log.push(['var(--c1)','Pitch','deslocado '+semi+' semitons ('+det.noteName+' → '+_vtTarget+')']);
+      } else {
+        log.push(['var(--c4)','Pitch','já estava na nota alvo ('+det.noteName+').']);
+      }
+    }
+  }
+
+  // TIME (ajusta para 120 BPM por defeito; podes mudar isto via input no futuro)
+  if(VT.time){
+    st.innerHTML=card('<span style="color:var(--c5)">Tempo: a analisar BPM...</span>','var(--c5)');
+    const bpm=estimateBPM(buf);
+    if(bpm){
+      const targetBPM=120;
+      const factor=bpm/targetBPM; // >1 = mais rápido
+      if(Math.abs(factor-1)>0.02){
+        st.innerHTML=card('<span style="color:var(--c5)">Tempo: '+bpm.toFixed(1)+' → '+targetBPM+' BPM ('+(factor>1?'esticar':'encurtar')+')...</span>','var(--c5)');
+        buf=await timeStretchBuffer(buf, factor);
+        log.push(['var(--c5)','Tempo',bpm.toFixed(1)+' BPM ajustado para '+targetBPM+' BPM']);
+      } else {
+        log.push(['var(--c4)','Tempo','já estava perto do alvo ('+bpm.toFixed(1)+' BPM).']);
+      }
+    } else {
+      log.push(['var(--c2)','Tempo','BPM não detetado — saltado.']);
+    }
+  }
+
+  // EQ CLEANUP
+  if(VT.eq){
+    st.innerHTML=card('<span style="color:var(--c4)">Limpeza EQ: HP 80Hz · -3 dB @ 300 · de-ess 7k · presença 3k...</span>','var(--c4)');
+    buf=await eqCleanupBuffer(buf);
+    log.push(['var(--c4)','Limpeza EQ','HP 80 Hz, -3 dB em 300 Hz, de-ess em 7 kHz, +2 dB em 3 kHz aplicados.']);
+  }
+
+  window._vtOut=buf;
+  st.innerHTML=card('<b style="color:var(--c4)">✓ Processamento concluído</b>','var(--c4)');
+  let h=log.map(([c,t,why])=>card(`<b style="color:${c}">${t}</b> <span style="color:var(--text)">${why}</span>`,c)).join('');
+  h+=`<div style="display:flex;gap:8px;margin-top:10px;">
+    <button onclick="fxVtPlay(0)" style="flex:1;padding:9px;border-radius:6px;border:1px solid var(--c5);background:transparent;color:var(--c5);font-family:'Rajdhani';font-weight:700;cursor:pointer;">▶ ORIGINAL</button>
+    <button onclick="fxVtPlay(1)" style="flex:1;padding:9px;border-radius:6px;border:1px solid var(--c4);background:color-mix(in srgb,var(--c4) 14%,transparent);color:var(--c4);font-family:'Rajdhani';font-weight:700;cursor:pointer;">▶ PROCESSADO</button>
+    <button onclick="fxVtExport()" style="flex:1;padding:9px;border-radius:6px;border:1px solid var(--c1);background:color-mix(in srgb,var(--c1) 14%,transparent);color:var(--c1);font-family:'Rajdhani';font-weight:700;cursor:pointer;">⬇ EXPORTAR WAV</button>
+  </div>
+  <div style="font-size:10px;color:var(--muted2);margin-top:8px;line-height:1.5;">Nota: para correções de pitch superiores a ±6 semitons, ou auto-tune nota-a-nota, recomenda-se um phase vocoder (em desenvolvimento). Este módulo faz correção global da nota dominante.</div>`;
+  res.innerHTML=h;
+  status('Voz processada');
+};
+window.fxVtPlay=function(w){ playBuf(w?window._vtOut:_vtBuf); status(w?'A tocar processado':'A tocar original'); };
+window.fxVtExport=function(){ if(!window._vtOut)return; dl(bufToWav(window._vtOut),'voz_processada.wav'); status('WAV exportado'); };
 
 })();

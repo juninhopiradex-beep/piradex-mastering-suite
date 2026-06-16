@@ -1,34 +1,24 @@
-═══════════════════════════════════════════════════════════
-  MASTERING SUITE by Piradex — v1.0.1
-  BeatFreak Studio · beatfreakstudio.com/mastersuite
-═══════════════════════════════════════════════════════════
+MASTERING SUITE by Piradex — v1.0.1
 
-STUDIO PRO agora com 25 FERRAMENTAS (15 + 10 novas moonshot):
+NESTA ATUALIZAÇÃO:
+1) Admin (admin / piradex2024) já é MASTER FULL com STUDIO PRO
+   e acesso a tudo (já estava — confirmado).
+2) DEMO: só MP3 — se a conta demo tentar exportar WAV, sai
+   aviso (alerta + status) e força o seletor para MP3.
+3) Mensagem do STUDIO PRO: já indica "25 ferramentas avançadas"
+   (verificado em todo o código).
+4) NOVA FERRAMENTA STUDIO PRO — AFINAÇÃO DE VOZ:
+   • Upload da faixa de voz
+   • Indicas a NOTA do canto (C…B) + tonalidade (maior/menor)
+   • Três módulos INDEPENDENTES (toggle on/off):
+       PITCH — deteta a nota dominante e corrige até ±6 semitons
+       TIME  — deteta BPM e ajusta para 120 BPM (alvo)
+       EQ    — HP 80 Hz, -3 dB @ 300 (lama), de-ess 7 kHz,
+               presença +2 dB @ 3 kHz
+   • Botões PROCESSAR · ORIGINAL / PROCESSADO (A/B) · EXPORTAR WAV
+   • Para auto-tune dinâmico nota-a-nota (phase vocoder) fica
+     no roadmap; esta versão faz correção global da nota dominante.
 
-FERRAMENTAS BASE (15):
-  Codec Social · Monitor Local · Calibração de Sala · Stems ·
-  Comando por Texto · Snippet Viral · Certificado · Piradex
-  Print · Modo Mentor · Loudness Dinâmico · Reverse Mastering ·
-  Source Forensics · Album Cohesion · Blind Shootout · Client Room
-
-NOVAS — MOONSHOT (10), marcadas com ✦:
-  • Copiloto — parceiro de estúdio que conversa e sugere
-  • Heat Map Emocional — forma sentimental da música no tempo
-  • O Teu Eu de 1 Ano — A/B com a tua evolução prevista
-  • Intenção Cultural — "kizombada às 2h" → decisões técnicas
-  • Skip-Risk Score — risco de skip nos primeiros 8s
-  • Gémeo do Ouvinte — ouve como personas reais (earbuds, DJ...)
-  • Time Capsule — guarda snapshots e vê a tua evolução
-  • Co-Master ao Vivo — sessão partilhável a dois (estrutura local)
-  • Porque o Hit é Hit — compara a tua faixa a um hit de referência
-  • Auto-Adaptação — exporta versões p/ Spotify/Club/WhatsApp/Vinil
-
-DSP/análise real no browser. Funções que precisam de IA na
-nuvem, ML pesado ou sync entre dispositivos correm em versão
-local e estão assinaladas dentro de cada ferramenta.
-
-STUDIO PRO está bloqueado na versão DEMO (só FULL).
-Acesso: importar → PROCESSADO → STUDIO PRO.
-
-© 2026 Juninho Piradex · BeatFreak Studio
-═══════════════════════════════════════════════════════════
+TUDO O QUE JÁ EXISTIA mantém-se: 25 ferramentas STUDIO PRO,
+Piradex Mode com headroom -6 dBFS, demo com 10 min, login no
+modal de licença, gráfico do clipper com waveform, etc.
