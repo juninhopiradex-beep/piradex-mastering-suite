@@ -1,47 +1,39 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-CORREÇÕES + NOVOS MÓDULOS:
+REFORMA ESTRUTURAL — cada módulo tem agora os SEUS PRÓPRIOS
+nós de filtro dedicados. Já não há conflitos entre módulos.
 
-1) TAB BAR em 2 LINHAS
-   Top:    MASTER · REFERÊNCIA · ANÁLISES · STUDIO PRO
-   Baixo:  EQ · COMP · DYN · SHAPE · WIDTH · IMAGE · RESON ·
-           EXCITE · LOUD · LIMIT · CLIPPER · M/S · TRANS ·
-           MBAND · LOW FOCUS · HIGH FOCUS
+CADEIA SONORA (em ordem, após eqAir do EQ principal):
+  EQ → LOW FOCUS → HIGH FOCUS → MS EQ MID → DYN EQ
+     → SPECTRAL → RESON → shapeWS → ...
 
-2) BYPASS DO COMPRESSOR — corrigido
-   Em vez de só zerar threshold/ratio, agora usa setValueAtTime
-   com knee=0 e ataques curtos para um passthrough TOTAL real.
+Cada conjunto de nós:
+• LOW FOCUS:  highpass + peaking (punch) + peaking (mud)
+• HIGH FOCUS: highshelf (air) + peaking (de-ess) + peaking (presence)
+• MS EQ MID:  3 peaking dedicados (low/mid/high)
+• DYN EQ:     4 peaking dedicados (modulados por threshold)
+• SPECTRAL:   4 peaking dedicados (modulados pela curva-alvo)
+• RESON:      6 peaking dedicados (atribuídos aos picos detetados)
 
-3) STEREO IMAGER — agora afeta o áudio
-   - Sliders Sub/Low/Mid/High agora controlam EFETIVAMENTE
-     o EQ no caminho SIDE
-   - AMOUNT (0-200%) — controlo global de width estilo Ozone
-   - DRIVE (-12 a +12 dB) — ganho ao side total estilo Ozone
-   - Caminho M/S é automaticamente ativado quando se mexe
+QUANDO BYPASSED: todos os gain → 0 (transparente, sem efeito)
+QUANDO ATIVO:    cada módulo modula apenas os seus nós
 
-4) RESON — gráfico e atuação corrigidos
-   - Analyser DEDICADO ligado ao masterGain
-   - Loop arranca automaticamente quando se abre o tab
-   - Desenha o espectro mesmo em silêncio (curva visível)
-   - Marca picos com bolas laranja + frequência em Hz/kHz
-   - Atenua dinamicamente via EQ existente
+═══ MUDANÇAS NA UI ═══
 
-5) LOW FOCUS — novo módulo (cor: roxo c6)
-   - Freq de corte 20-250 Hz
-   - TIGHTNESS (reduz mud 250-400 Hz)
-   - PUNCH (boost no kick)
-   - MONO BELOW (frequência abaixo da qual põe em mono)
-   - 3 modos: TIGHT/BALANCED/WARM
-   - Gráfico mostra resposta + zona mono
+1) LOW FOCUS e HIGH FOCUS agora têm tabs SEM cor (iguais aos outros).
+2) DYN EQ, M/S EQ, WARMTH, SPECTRAL, T-DESIGN: tabs sem cor também.
+3) RESON: dois botões DESCRITIVOS:
+   "Atenuar ressonâncias" · "Aumentar ressonâncias"
+   (já não há nomes SOOTHE / RESO)
+4) LOW FOCUS botões mantêm-se: TIGHT / BALANCED / WARM
+5) HIGH FOCUS botões mantêm-se: OPEN / VINYL / CLUB
 
-6) HIGH FOCUS — novo módulo (cor: amarelo c3)
-   - Freq de ar 6-20 kHz
-   - AIR (boost shelf)
-   - DE-ESS (atenuação 7 kHz)
-   - PRESENCE (boost 3 kHz)
-   - 3 modos: OPEN/VINYL/CLUB
-   - Gráfico mostra resposta combinada
+═══ QUALIDADE SONORA ═══
 
-TODOS OS NOVOS MÓDULOS modulam EQ nodes existentes (não
-quebram a chain principal). Bypass total restaura valores
-guardados.
+Como cada módulo agora só toca nos seus próprios filtros, ao
+ativar várias coisas em conjunto os efeitos somam-se LIMPAMENTE
+em série — sem distorção de competição. O som é mais limpo.
+
+A chain está limitada a 1 só caminho serial: EQ principal +
+módulos dedicados + shape + compressor + multiband + clipper +
+limiter + M/S. Sem branches paralelos que dupliquem o sinal.

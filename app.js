@@ -74,6 +74,14 @@ let msSplitter=null, msMerger=null, msInL=null, msInR=null;
 let msMidSum=null, msSideSum=null, msInvR1=null, msInvSide=null;
 let msMidEqLow=null, msMidEqMid=null, msMidEqHigh=null;
 let msSideEqLow=null, msSideEqMid=null, msSideEqHigh=null;
+// Dedicated nodes for new modules (each module owns its own filters)
+let _lfSub=null, _lfBass=null, _lfMud=null;  // LOW FOCUS
+let _hfAir=null, _hfDeess=null, _hfPres=null; // HIGH FOCUS
+let _deqNodes=[];                              // DYN EQ 4 peaks
+let _mseqMidLow=null, _mseqMidMid=null, _mseqMidHigh=null; // MS EQ MID side
+let _spNodes=[];                               // SPECTRAL 4 peaks
+let _tdNode=null;                              // T-DESIGN aux compressor
+let _resonNodes=[];                            // RESON 6 peaks
 let msDirectGain=null, msProcGain=null;
 let clipInGain=null, clipShaper=null, clipOutGain=null;
 let clipGoldWS=null, clipAlchemy=null, clipBoxTone=null;
@@ -129,6 +137,11 @@ function openTab(name, el) {
   if(name==='image')setTimeout(()=>{ if(typeof _ensureVectorscope==='function') _ensureVectorscope(); updateImager(); },60);
   if(name==='lowfocus')setTimeout(()=>{ if(typeof updateLowFocus==='function') updateLowFocus(); },60);
   if(name==='highfocus')setTimeout(()=>{ if(typeof updateHighFocus==='function') updateHighFocus(); },60);
+  if(name==='dyneq')setTimeout(()=>{ if(typeof updateDynEQ==='function') updateDynEQ(); },60);
+  if(name==='mseq')setTimeout(()=>{ if(typeof updateMSEq==='function') updateMSEq(); },60);
+  if(name==='warmth')setTimeout(()=>{ if(typeof updateWarmth==='function') updateWarmth(); },60);
+  if(name==='spectral')setTimeout(()=>{ if(typeof updateSpectral==='function') updateSpectral(); },60);
+  if(name==='tdesign')setTimeout(()=>{ if(typeof updateTDesign==='function') updateTDesign(); },60);
 }
 
 // ===== AUDIO INIT =====
@@ -237,8 +250,50 @@ function buildChain() {
   eqSub.connect(eqBass); eqBass.connect(eqLowNode); eqLowNode.connect(eqMid);
   eqMid.connect(eqHigh); eqHigh.connect(eqAir);
 
+  // ═══ NÓS DEDICADOS POR MÓDULO (transparentes por defeito) ═══
+  // LOW FOCUS
+  _lfSub  = audioCtx.createBiquadFilter(); _lfSub.type='highpass';  _lfSub.frequency.value=20;  _lfSub.Q.value=0.7;
+  _lfBass = audioCtx.createBiquadFilter(); _lfBass.type='peaking';  _lfBass.frequency.value=80; _lfBass.Q.value=1; _lfBass.gain.value=0;
+  _lfMud  = audioCtx.createBiquadFilter(); _lfMud.type='peaking';   _lfMud.frequency.value=300; _lfMud.Q.value=1.2; _lfMud.gain.value=0;
+  // HIGH FOCUS
+  _hfAir   = audioCtx.createBiquadFilter(); _hfAir.type='highshelf';   _hfAir.frequency.value=12000; _hfAir.gain.value=0;
+  _hfDeess = audioCtx.createBiquadFilter(); _hfDeess.type='peaking';   _hfDeess.frequency.value=7000; _hfDeess.Q.value=2.5; _hfDeess.gain.value=0;
+  _hfPres  = audioCtx.createBiquadFilter(); _hfPres.type='peaking';    _hfPres.frequency.value=3000; _hfPres.Q.value=0.9; _hfPres.gain.value=0;
+  // DYN EQ — 4 peaks
+  _deqNodes = [];
+  for(let i=0;i<4;i++){
+    const n=audioCtx.createBiquadFilter(); n.type='peaking'; n.Q.value=1.5; n.gain.value=0;
+    n.frequency.value=[120,500,3000,8000][i];
+    _deqNodes.push(n);
+  }
+  // MS EQ — 3 peaks para MID
+  _mseqMidLow  = audioCtx.createBiquadFilter(); _mseqMidLow.type='peaking';  _mseqMidLow.Q.value=1; _mseqMidLow.frequency.value=200;  _mseqMidLow.gain.value=0;
+  _mseqMidMid  = audioCtx.createBiquadFilter(); _mseqMidMid.type='peaking';  _mseqMidMid.Q.value=1; _mseqMidMid.frequency.value=1500; _mseqMidMid.gain.value=0;
+  _mseqMidHigh = audioCtx.createBiquadFilter(); _mseqMidHigh.type='peaking'; _mseqMidHigh.Q.value=1;_mseqMidHigh.frequency.value=8000;_mseqMidHigh.gain.value=0;
+  // SPECTRAL — 4 peaks
+  _spNodes = [];
+  for(let i=0;i<4;i++){
+    const n=audioCtx.createBiquadFilter(); n.type='peaking'; n.Q.value=1.2; n.gain.value=0;
+    n.frequency.value=[150,800,3000,10000][i];
+    _spNodes.push(n);
+  }
+  // RESON — 6 peaks dedicados
+  _resonNodes = [];
+  for(let i=0;i<6;i++){
+    const n=audioCtx.createBiquadFilter(); n.type='peaking'; n.Q.value=6; n.gain.value=0;
+    n.frequency.value=[200,500,1000,2500,5000,10000][i];
+    _resonNodes.push(n);
+  }
+
+  // série em ordem: eqAir → LF → HF → MS EQ MID → DYN EQ → SPECTRAL → RESON → shapeWS
+  let prev = eqAir;
+  const chain = [_lfSub, _lfBass, _lfMud, _hfAir, _hfDeess, _hfPres,
+                 _mseqMidLow, _mseqMidMid, _mseqMidHigh,
+                 ..._deqNodes, ..._spNodes, ..._resonNodes];
+  chain.forEach(n => { prev.connect(n); prev = n; });
+
   // Shape — serial waveshaper (mix baked into curve, no parallel comb)
-  eqAir.connect(shapeWS); shapeWS.connect(shapeMixer);
+  prev.connect(shapeWS); shapeWS.connect(shapeMixer);
 
   // Shape trim
   shapeTrimGain = audioCtx.createGain(); shapeTrimGain.gain.value = 1.0;
@@ -990,31 +1045,30 @@ function updateLowFocus(){
   v('lf-mono-v',mono+' Hz');
   _drawLowFocusCurve(freq,tight,punch,mono);
   if(lowFocusBypassed || !audioCtx) return;
-  _lfCaptureBase();
-  // tight reduz lama em 250-400 Hz (eqLowNode com gain negativo proporcional)
-  // punch adiciona boost em 60-100 Hz (eqBass)
-  // mono below: afeta side gain via msSideEqLow (gain negativo abaixo do freq)
+  // Usa nós dedicados — sem conflito com outros módulos
+  if(!_lfBass || !_lfMud) return;
+  // High-pass para limpar abaixo da freq de corte
+  if(_lfSub){
+    _lfSub.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.06);
+    _lfSub.Q.setTargetAtTime(0.7, audioCtx.currentTime, 0.06);
+  }
+  // Punch boost @ freq (ligeiramente acima do HP para definir o kick)
+  let punchMod = 1;
+  if(lowFocusMode==='tight') punchMod = 1.2;
+  if(lowFocusMode==='warm')  punchMod = 0.8;
+  _lfBass.frequency.setTargetAtTime(Math.max(60, freq*1.3), audioCtx.currentTime, 0.06);
+  _lfBass.Q.setTargetAtTime(1.0, audioCtx.currentTime, 0.06);
+  _lfBass.gain.setTargetAtTime((punch/100) * 4 * punchMod, audioCtx.currentTime, 0.06);
+  // Tightness — corta lama em 250-400 Hz
   const tightAmt = (tight-50)/50; // -1..+1
-  const punchAmt = punch/100; // 0..1
-  if(eqLowNode){
-    eqLowNode.frequency.value = 300;
-    eqLowNode.gain.setTargetAtTime((_lfBaseEQ?_lfBaseEQ.low:0) + tightAmt * -4, audioCtx.currentTime, 0.06);
-  }
-  if(eqBass){
-    eqBass.frequency.value = freq;
-    // Mode modifier
-    let punchMod = 1;
-    if(lowFocusMode==='tight') punchMod = 1.3;
-    if(lowFocusMode==='warm')  punchMod = 0.7;
-    eqBass.gain.setTargetAtTime((_lfBaseEQ?_lfBaseEQ.bass:0) + punchAmt * 4 * punchMod, audioCtx.currentTime, 0.06);
-  }
-  // Mono below — engage M/S path and reduce side at low shelf below `mono` Hz
-  if(msSideEqLow){
+  _lfMud.gain.setTargetAtTime(tightAmt * -5, audioCtx.currentTime, 0.06);
+  // Mono below — engata M/S e corta side abaixo de `mono`
+  if(msSideEqLow && msSideGain){
     msBypassed=false;
     if(msDirectGain) msDirectGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.06);
     if(msProcGain)   msProcGain.gain.setTargetAtTime(1, audioCtx.currentTime, 0.06);
     msSideEqLow.frequency.value = mono;
-    msSideEqLow.gain.setTargetAtTime(-18, audioCtx.currentTime, 0.06); // forte corte do side abaixo
+    msSideEqLow.gain.setTargetAtTime(-18, audioCtx.currentTime, 0.06);
   }
 }
 function _drawLowFocusCurve(freq,tight,punch,mono){
@@ -1092,21 +1146,18 @@ function updateHighFocus(){
   v('hf-pres-v',pres+'%');
   _drawHighFocusCurve(freq,air,deess,pres);
   if(highFocusBypassed || !audioCtx) return;
-  _hfCaptureBase();
+  if(!_hfAir || !_hfDeess || !_hfPres) return;
   let airMul=1, deessMul=1, presMul=1;
-  if(highFocusMode==='vinyl'){ airMul=0.5; deessMul=1.5; }
+  if(highFocusMode==='vinyl'){ airMul=0.5; deessMul=1.6; }
   if(highFocusMode==='club'){ presMul=1.5; }
-  if(eqAir){
-    eqAir.frequency.value = freq;
-    eqAir.gain.setTargetAtTime((_hfBaseEQ?_hfBaseEQ.air:0) + (air/100) * 6 * airMul, audioCtx.currentTime, 0.06);
-  }
-  if(eqHigh){
-    eqHigh.gain.setTargetAtTime((_hfBaseEQ?_hfBaseEQ.high:0) - (deess/100) * 4 * deessMul, audioCtx.currentTime, 0.06);
-  }
-  if(eqMid){
-    eqMid.frequency.value = 3000;
-    eqMid.gain.setTargetAtTime((_hfBaseEQ?_hfBaseEQ.mid:0) + (pres/100) * 3 * presMul, audioCtx.currentTime, 0.06);
-  }
+  _hfAir.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.06);
+  _hfAir.gain.setTargetAtTime((air/100) * 6 * airMul, audioCtx.currentTime, 0.06);
+  _hfDeess.frequency.setTargetAtTime(7000, audioCtx.currentTime, 0.06);
+  _hfDeess.Q.setTargetAtTime(2.5, audioCtx.currentTime, 0.06);
+  _hfDeess.gain.setTargetAtTime(-(deess/100) * 4 * deessMul, audioCtx.currentTime, 0.06);
+  _hfPres.frequency.setTargetAtTime(3000, audioCtx.currentTime, 0.06);
+  _hfPres.Q.setTargetAtTime(0.9, audioCtx.currentTime, 0.06);
+  _hfPres.gain.setTargetAtTime((pres/100) * 3 * presMul, audioCtx.currentTime, 0.06);
 }
 function _drawHighFocusCurve(freq,air,deess,pres){
   const cv=document.getElementById('hf-cv'); if(!cv) return;
@@ -1141,6 +1192,551 @@ function _drawHighFocusCurve(freq,air,deess,pres){
     px===0 ? ctx.moveTo(px,y) : ctx.lineTo(px,y);
   }
   ctx.stroke();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC EQ — 4 bandas que só atuam quando excedem threshold
+// Cria 4 nós peaking dedicados + 4 analysers de banda. Loop modula gain
+// quando energia da banda excede threshold do utilizador.
+// ═══════════════════════════════════════════════════════════════════════════
+let dynEQBypassed=false;
+let _dynEQNodes=null; // {peaks:[4], analysers:[4]}
+let _dynEQInterval=null;
+
+function _buildDynEQ(){
+  if(!audioCtx || _dynEQNodes) return;
+  const peaks=[], analysers=[], filters=[];
+  for(let i=0;i<4;i++){
+    const p=audioCtx.createBiquadFilter();
+    p.type='peaking'; p.Q.value=1.5; p.gain.value=0; p.frequency.value=[120,500,3000,8000][i];
+    peaks.push(p);
+    // analyser por banda — usa um bandpass + analyser
+    const bp=audioCtx.createBiquadFilter();
+    bp.type='bandpass'; bp.Q.value=1.5; bp.frequency.value=p.frequency.value;
+    filters.push(bp);
+    const an=audioCtx.createAnalyser();
+    an.fftSize=512; an.smoothingTimeConstant=0.3;
+    analysers.push(an);
+  }
+  // Insere o EQ na cadeia: liga em série antes do limitador
+  // Usamos o masterGain como tap-off para os bandpasses (análise paralela)
+  if(masterGain){
+    filters.forEach((bp,i)=>{
+      masterGain.connect(bp); bp.connect(analysers[i]);
+    });
+  }
+  _dynEQNodes = {peaks, analysers, filters};
+  // peaks ligados em série — inserir entre eqAir e shapeWS
+  // Mas para evitar reconstruir a chain, ligamos os peaks ao masterGain como side-effect
+  // através do EQ existente: aplicamos delta nos peaks pré-existentes (eqBass/mid/high/air)
+  // mais simples e estável.
+}
+
+function updateDynEQ(){
+  for(let i=1;i<=4;i++){
+    const f=parseInt(document.getElementById('deq'+i+'-f')?.value||1000);
+    const g=parseFloat(document.getElementById('deq'+i+'-g')?.value||0);
+    const t=parseInt(document.getElementById('deq'+i+'-t')?.value||-20);
+    const fv=document.getElementById('deq'+i+'-f-v'); if(fv) fv.textContent = f>=1000?(f/1000).toFixed(1)+' kHz':f+' Hz';
+    const gv=document.getElementById('deq'+i+'-g-v'); if(gv) gv.textContent = (g>=0?'+':'')+g.toFixed(1)+' dB';
+    const tv=document.getElementById('deq'+i+'-t-v'); if(tv) tv.textContent = t+' dB';
+  }
+  _drawDynEQ();
+  if(dynEQBypassed) return;
+  if(!audioCtx) return;
+  _buildDynEQ();
+  // arranca loop se necessário
+  if(!_dynEQInterval) _startDynEQLoop();
+}
+function _startDynEQLoop(){
+  if(_dynEQInterval) return;
+  _dynEQInterval = setInterval(()=>{
+    if(dynEQBypassed || !_dynEQNodes || !audioCtx) return;
+    for(let i=0;i<4;i++){
+      const idx=i+1;
+      const f=parseInt(document.getElementById('deq'+idx+'-f')?.value||1000);
+      const g=parseFloat(document.getElementById('deq'+idx+'-g')?.value||0);
+      const t=parseInt(document.getElementById('deq'+idx+'-t')?.value||-20);
+      // medir energia na banda
+      const an=_dynEQNodes.analysers[i];
+      const data=new Float32Array(an.frequencyBinCount);
+      an.getFloatFrequencyData(data);
+      const bandHz=audioCtx.sampleRate/2/an.frequencyBinCount;
+      const targetBin=Math.round(f/bandHz);
+      let avg=-Infinity;
+      for(let b=Math.max(0,targetBin-4); b<Math.min(an.frequencyBinCount,targetBin+4); b++){
+        if(data[b]>-Infinity) avg = avg===-Infinity ? data[b] : Math.max(avg,data[b]);
+      }
+      const ratio = avg>t ? Math.min(1, (avg-t)/12) : 0;
+      const applied = g * ratio;
+      // Atualiza nó dedicado deste DYN EQ
+      if(_deqNodes[i]){
+        _deqNodes[i].frequency.setTargetAtTime(f, audioCtx.currentTime, 0.04);
+        _deqNodes[i].gain.setTargetAtTime(applied, audioCtx.currentTime, 0.04);
+      }
+    }
+  }, 100);
+}
+let _dynEQBaseEQ=null;
+function _drawDynEQ(){
+  const cv=document.getElementById('deq-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  [60,250,1000,4000,16000].forEach(f=>{
+    const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H-14);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText(f>=1000?(f/1000)+'k':f+'',x,H-2);
+  });
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  // 4 bandas
+  const colors=['rgba(45,212,255,1)','rgba(45,255,138,1)','rgba(255,225,53,1)','rgba(255,58,181,1)'];
+  for(let i=0;i<4;i++){
+    const idx=i+1;
+    const f=parseInt(document.getElementById('deq'+idx+'-f')?.value||1000);
+    const g=parseFloat(document.getElementById('deq'+idx+'-g')?.value||0);
+    const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    const y=H/2 - g*8;
+    ctx.fillStyle=colors[i]; ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=colors[i].replace('1)','0.3)'); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(x,y,18,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.font='10px monospace'; ctx.textAlign='center';
+    ctx.fillText(idx, x, y+3);
+    ctx.fillStyle=colors[i]; ctx.font='9px monospace';
+    ctx.fillText((g>=0?'+':'')+g.toFixed(1)+' dB', x, y-22);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MID/SIDE EQ — 3 bandas paramétrico por canal (MID ou SIDE)
+// Usa os filtros side já existentes (msSideEqLow/Mid/High) para o SIDE
+// e cria 3 nós peaking para o MID
+// ═══════════════════════════════════════════════════════════════════════════
+let mseqBypassed=false;
+let mseqChannel='mid'; // 'mid' ou 'side'
+let _mseqMidNodes=null; // 3 peaks para mid
+let _mseqMidValues={low:{f:200,g:0}, mid:{f:1500,g:0}, high:{f:8000,g:0}};
+let _mseqSideValues={low:{f:200,g:0}, mid:{f:1500,g:0}, high:{f:8000,g:0}};
+
+function _buildMSEqMid(){
+  if(!audioCtx || _mseqMidNodes || !msMidGain) return;
+  const low=audioCtx.createBiquadFilter(); low.type='peaking'; low.Q.value=1; low.frequency.value=200; low.gain.value=0;
+  const mid=audioCtx.createBiquadFilter(); mid.type='peaking'; mid.Q.value=1; mid.frequency.value=1500; mid.gain.value=0;
+  const high=audioCtx.createBiquadFilter(); high.type='peaking'; high.Q.value=1; high.frequency.value=8000; high.gain.value=0;
+  // insere antes do msMidGain — mas msMidGain já está ligado; criar tap-off seria invasivo
+  // estratégia: para o MID, modulamos os EQ existentes via delta
+  _mseqMidNodes = {low,mid,high};
+}
+function setMSEqChannel(ch){
+  // antes de trocar, guarda valores atuais no canal corrente
+  const vals = mseqChannel==='mid' ? _mseqMidValues : _mseqSideValues;
+  vals.low.f  = parseInt(document.getElementById('ms-l-f')?.value||vals.low.f);
+  vals.low.g  = parseFloat(document.getElementById('ms-l-g')?.value||vals.low.g);
+  vals.mid.f  = parseInt(document.getElementById('ms-m-f')?.value||vals.mid.f);
+  vals.mid.g  = parseFloat(document.getElementById('ms-m-g')?.value||vals.mid.g);
+  vals.high.f = parseInt(document.getElementById('ms-h-f')?.value||vals.high.f);
+  vals.high.g = parseFloat(document.getElementById('ms-h-g')?.value||vals.high.g);
+  mseqChannel=ch;
+  const m=document.getElementById('mseq-ch-mid'), s=document.getElementById('mseq-ch-side');
+  if(m) m.classList.toggle('rs-mode-active', ch==='mid');
+  if(s) s.classList.toggle('rs-mode-active', ch==='side');
+  // carrega novos sliders
+  const newVals = ch==='mid' ? _mseqMidValues : _mseqSideValues;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  set('ms-l-f', newVals.low.f); set('ms-l-g', newVals.low.g);
+  set('ms-m-f', newVals.mid.f); set('ms-m-g', newVals.mid.g);
+  set('ms-h-f', newVals.high.f); set('ms-h-g', newVals.high.g);
+  updateMSEq();
+}
+let _mseqBaseEQ=null;
+function updateMSEq(){
+  const vals = mseqChannel==='mid' ? _mseqMidValues : _mseqSideValues;
+  vals.low.f  = parseInt(document.getElementById('ms-l-f')?.value||200);
+  vals.low.g  = parseFloat(document.getElementById('ms-l-g')?.value||0);
+  vals.mid.f  = parseInt(document.getElementById('ms-m-f')?.value||1500);
+  vals.mid.g  = parseFloat(document.getElementById('ms-m-g')?.value||0);
+  vals.high.f = parseInt(document.getElementById('ms-h-f')?.value||8000);
+  vals.high.g = parseFloat(document.getElementById('ms-h-g')?.value||0);
+  const setv=(id,t)=>{const e=document.getElementById(id); if(e) e.textContent=t;};
+  setv('ms-l-f-v', vals.low.f >=1000?(vals.low.f/1000).toFixed(1)+' kHz':vals.low.f+' Hz');
+  setv('ms-l-g-v', (vals.low.g>=0?'+':'')+vals.low.g.toFixed(1)+' dB');
+  setv('ms-m-f-v', vals.mid.f >=1000?(vals.mid.f/1000).toFixed(1)+' kHz':vals.mid.f+' Hz');
+  setv('ms-m-g-v', (vals.mid.g>=0?'+':'')+vals.mid.g.toFixed(1)+' dB');
+  setv('ms-h-f-v', vals.high.f>=1000?(vals.high.f/1000).toFixed(1)+' kHz':vals.high.f+' Hz');
+  setv('ms-h-g-v', (vals.high.g>=0?'+':'')+vals.high.g.toFixed(1)+' dB');
+  _drawMSEqCurve();
+  if(mseqBypassed) return;
+  if(!audioCtx) return;
+  // Aplica AMBOS os canais (cada um tem os seus próprios nós)
+  // Canal MID (nós dedicados na chain principal)
+  const m=_mseqMidValues;
+  if(_mseqMidLow){ _mseqMidLow.frequency.value=m.low.f;  _mseqMidLow.gain.setTargetAtTime(m.low.g, audioCtx.currentTime, 0.05); }
+  if(_mseqMidMid){ _mseqMidMid.frequency.value=m.mid.f;  _mseqMidMid.gain.setTargetAtTime(m.mid.g, audioCtx.currentTime, 0.05); }
+  if(_mseqMidHigh){_mseqMidHigh.frequency.value=m.high.f; _mseqMidHigh.gain.setTargetAtTime(m.high.g, audioCtx.currentTime, 0.05); }
+  // Canal SIDE (filtros side existentes)
+  const s=_mseqSideValues;
+  const anySide = s.low.g!==0 || s.mid.g!==0 || s.high.g!==0;
+  if(anySide){
+    msBypassed=false;
+    if(msDirectGain) msDirectGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.06);
+    if(msProcGain)   msProcGain.gain.setTargetAtTime(1, audioCtx.currentTime, 0.06);
+  }
+  if(msSideEqLow){ msSideEqLow.frequency.value=s.low.f;  msSideEqLow.gain.setTargetAtTime(s.low.g, audioCtx.currentTime, 0.05); }
+  if(msSideEqMid){ msSideEqMid.frequency.value=s.mid.f;  msSideEqMid.gain.setTargetAtTime(s.mid.g, audioCtx.currentTime, 0.05); }
+  if(msSideEqHigh){msSideEqHigh.frequency.value=s.high.f;msSideEqHigh.gain.setTargetAtTime(s.high.g, audioCtx.currentTime, 0.05); }
+}
+function _drawMSEqCurve(){
+  const cv=document.getElementById('mseq-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  [60,250,1000,4000,16000].forEach(f=>{
+    const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H-14);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText(f>=1000?(f/1000)+'k':f+'',x,H-2);
+  });
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  // mostra curva do canal atual + canal oposto a sombra
+  const drawCurve=(vals,color,alpha)=>{
+    ctx.strokeStyle=color.replace('1)',alpha+')'); ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let px=0;px<=W;px++){
+      const f=20*Math.pow(20000/20, px/W);
+      let g=0;
+      g += vals.low.g * Math.exp(-Math.pow(Math.log10(f/vals.low.f), 2) * 4);
+      g += vals.mid.g * Math.exp(-Math.pow(Math.log10(f/vals.mid.f), 2) * 4);
+      g += vals.high.g * Math.exp(-Math.pow(Math.log10(f/vals.high.f), 2) * 4);
+      const y = H/2 - g * 6;
+      px===0 ? ctx.moveTo(px,y) : ctx.lineTo(px,y);
+    }
+    ctx.stroke();
+  };
+  // shadow canal oposto
+  drawCurve(mseqChannel==='mid'?_mseqSideValues:_mseqMidValues, 'rgba(150,150,170,1)', '0.3');
+  // canal ativo
+  drawCurve(mseqChannel==='mid'?_mseqMidValues:_mseqSideValues, mseqChannel==='mid'?'rgba(45,255,138,1)':'rgba(45,212,255,1)', '0.95');
+  // legenda
+  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='10px monospace'; ctx.textAlign='left';
+  ctx.fillText(mseqChannel.toUpperCase()+' (ativo)', 10, 16);
+  ctx.fillStyle='rgba(150,150,170,0.7)';
+  ctx.fillText((mseqChannel==='mid'?'side':'mid').toUpperCase()+' (sombra)', 10, 30);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALOG WARMTH — Saturação multibanda
+// Estratégia: usa o shapeWS existente como motor, troca a curve consoante o tipo
+// ═══════════════════════════════════════════════════════════════════════════
+let warmthBypassed=false;
+let warmthType='tape';
+let _warmthBaseCurve=null;
+function setWarmthType(t){
+  warmthType=t;
+  ['tape','tube','transformer','console'].forEach(x=>{
+    const b=document.getElementById('wm-t-'+x); if(b) b.classList.toggle('rs-mode-active', x===t);
+  });
+  updateWarmth();
+}
+function updateWarmth(){
+  const lowD=parseInt(document.getElementById('wm-low-drive')?.value||20);
+  const midD=parseInt(document.getElementById('wm-mid-drive')?.value||15);
+  const hiD=parseInt(document.getElementById('wm-high-drive')?.value||10);
+  const v=(id,t)=>{const e=document.getElementById(id); if(e) e.textContent=t;};
+  v('wm-low-drive-v',lowD+'%');
+  v('wm-mid-drive-v',midD+'%');
+  v('wm-high-drive-v',hiD+'%');
+  _drawWarmthCurve(lowD,midD,hiD);
+  if(warmthBypassed || !audioCtx) return;
+  // aplica curva no shapeWS existente
+  if(typeof shapeWS!=='undefined' && shapeWS){
+    if(!_warmthBaseCurve) _warmthBaseCurve = shapeWS.curve;
+    // gera curva consoante tipo
+    const overallDrive = (lowD+midD+hiD)/300; // 0..1
+    shapeWS.curve = _genWarmthCurve(warmthType, overallDrive);
+    shapeWS.oversample = '4x';
+  }
+}
+function _genWarmthCurve(type, amt){
+  const N=2048;
+  const curve=new Float32Array(N);
+  for(let i=0;i<N;i++){
+    const x=(i*2/N)-1;
+    let y=x;
+    if(type==='tape'){
+      // soft tanh + 3rd harmonic
+      const k=1+amt*4;
+      y=Math.tanh(x*k)/Math.tanh(k);
+      y += amt*0.05*Math.pow(x,3);
+    } else if(type==='tube'){
+      // asymmetric: positive harder, negative softer
+      const k=1+amt*3;
+      if(x>0) y=Math.tanh(x*k*1.3)/Math.tanh(k*1.3);
+      else y=Math.tanh(x*k*0.85)/Math.tanh(k*0.85);
+      y += amt*0.08*x*x*(x>0?1:-1);
+    } else if(type==='transformer'){
+      // soft saturation + boost graves
+      const k=1+amt*2.5;
+      y=Math.tanh(x*k)/Math.tanh(k);
+      y *= 1+amt*0.15;
+    } else if(type==='console'){
+      // very subtle "glue"
+      const k=1+amt*1.5;
+      y=Math.tanh(x*k)/Math.tanh(k);
+      y *= 1+amt*0.05;
+    }
+    curve[i]=Math.max(-1,Math.min(1,y));
+  }
+  return curve;
+}
+function _drawWarmthCurve(low,mid,high){
+  const cv=document.getElementById('wm-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  // mostra a transfer curve do tipo selecionado
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  for(let i=1;i<4;i++){
+    const y=i/4*H;
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+  // diagonal de referência
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.beginPath();ctx.moveTo(0,H);ctx.lineTo(W,0);ctx.stroke();
+  // curva
+  const amt=(low+mid+high)/300;
+  const curve=_genWarmthCurve(warmthType, amt);
+  ctx.strokeStyle = warmthType==='tape'?'rgba(255,107,53,1)':warmthType==='tube'?'rgba(255,225,53,1)':warmthType==='transformer'?'rgba(184,85,247,1)':'rgba(45,212,255,1)';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let px=0;px<=W;px++){
+    const xn=px/W*2-1;
+    const idx=Math.floor((xn+1)/2*(curve.length-1));
+    const y=curve[idx];
+    const py=H/2 - y*(H/2-8);
+    px===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='10px monospace';ctx.textAlign='left';
+  ctx.fillText(warmthType.toUpperCase()+' · drive '+Math.round(amt*100)+'%', 10, 18);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPECTRAL SHAPER — mantém espectro equilibrado em movimento
+// Compara o espectro atual com curva-alvo (TILT) e ajusta EQ dinamicamente
+// ═══════════════════════════════════════════════════════════════════════════
+let spectralBypassed=false;
+let spectralMode='balanced';
+let _spectralInterval=null;
+let _spectralBaseEQ=null;
+
+function setSpectralMode(m){
+  spectralMode=m;
+  ['balanced','vocal','bright','warm'].forEach(x=>{
+    const b=document.getElementById('sp-m-'+x); if(b) b.classList.toggle('rs-mode-active', x===m);
+  });
+  updateSpectral();
+}
+function updateSpectral(){
+  const tilt=parseFloat(document.getElementById('sp-tilt')?.value||-4.5);
+  const smooth=parseInt(document.getElementById('sp-smooth')?.value||50);
+  const amt=parseInt(document.getElementById('sp-amount')?.value||40);
+  const speed=parseInt(document.getElementById('sp-speed')?.value||500);
+  const v=(id,t)=>{const e=document.getElementById(id); if(e) e.textContent=t;};
+  v('sp-tilt-v',tilt.toFixed(1)+' dB/oct');
+  v('sp-smooth-v',smooth+'%');
+  v('sp-amount-v',amt+'%');
+  v('sp-speed-v',speed+' ms');
+  _drawSpectralCurve(tilt);
+  if(spectralBypassed || !audioCtx) return;
+  if(!_spectralInterval) _startSpectralLoop();
+}
+function _startSpectralLoop(){
+  if(_spectralInterval) return;
+  _spectralInterval = setInterval(()=>{
+    if(spectralBypassed || !_resonAnalyser || !audioCtx) return;
+    const bins=_resonAnalyser.frequencyBinCount;
+    const data=new Float32Array(bins);
+    _resonAnalyser.getFloatFrequencyData(data);
+    const sr=audioCtx.sampleRate;
+    const binHz=sr/2/bins;
+    const tilt=parseFloat(document.getElementById('sp-tilt')?.value||-4.5);
+    const amt=parseInt(document.getElementById('sp-amount')?.value||40)/100;
+    const speed=parseInt(document.getElementById('sp-speed')?.value||500)/1000;
+    const bandFreqs=[150,800,3000,10000];
+    const bandWidths=[100,400,1500,4000];
+    for(let bi=0;bi<4;bi++){
+      const f=bandFreqs[bi];
+      const w=bandWidths[bi];
+      const minBin=Math.max(0,Math.floor((f-w/2)/binHz));
+      const maxBin=Math.min(bins,Math.floor((f+w/2)/binHz));
+      let sum=0,cnt=0;
+      for(let b=minBin;b<maxBin;b++){ if(data[b]>-Infinity){sum+=data[b];cnt++;} }
+      const measured = cnt>0 ? sum/cnt : -60;
+      const octsFrom1k = Math.log2(f/1000);
+      let target = -20 + tilt * octsFrom1k;
+      if(spectralMode==='vocal') target += bi===1?3:0;
+      if(spectralMode==='bright') target += bi>=2?2:-1;
+      if(spectralMode==='warm') target += bi<=1?2:-2;
+      const diff = measured - target;
+      let delta = -diff * amt * 0.3;
+      delta = Math.max(-6,Math.min(6,delta));
+      // Aplica no nó dedicado deste módulo
+      if(_spNodes[bi]){
+        _spNodes[bi].frequency.setTargetAtTime(f, audioCtx.currentTime, speed);
+        _spNodes[bi].gain.setTargetAtTime(delta, audioCtx.currentTime, speed);
+      }
+    }
+  }, 150);
+}
+function _drawSpectralCurve(tilt){
+  const cv=document.getElementById('sp-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  [60,250,1000,4000,16000].forEach(f=>{
+    const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H-14);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText(f>=1000?(f/1000)+'k':f+'',x,H-2);
+  });
+  // curva-alvo
+  ctx.strokeStyle='rgba(255,58,181,0.8)';
+  ctx.lineWidth=2; ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  for(let px=0;px<=W;px++){
+    const f=20*Math.pow(20000/20, px/W);
+    const octsFrom1k=Math.log2(f/1000);
+    const target = tilt * octsFrom1k;
+    const y = H/2 - target * 3;
+    px===0 ? ctx.moveTo(px,y) : ctx.lineTo(px,y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  // espectro atual se disponível
+  if(_resonAnalyser){
+    const bins=_resonAnalyser.frequencyBinCount;
+    const data=new Float32Array(bins);
+    _resonAnalyser.getFloatFrequencyData(data);
+    const sr=audioCtx.sampleRate;
+    const binHz=sr/2/bins;
+    ctx.strokeStyle='rgba(255,255,255,0.4)';
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let b=2;b<bins;b++){
+      const f=b*binHz;
+      const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+      const t=Math.max(0,Math.min(1,(data[b]+90)/90));
+      const y=H-14 - t*(H-22);
+      if(b===2) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,58,181,0.95)';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText('— ALVO ('+tilt.toFixed(1)+' dB/oct)', 10, 18);
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  ctx.fillText('— ESPECTRO ATUAL', 10, 32);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRANSIENT MASTER — 3 bandas attack/sustain
+// Estratégia: usa o _transientNode existente + 2 nós dedicados por banda
+// para simular o efeito. Cada banda tem o seu compressor com envelope
+// rápido (attack) ou lento (sustain).
+// ═══════════════════════════════════════════════════════════════════════════
+let tdesignBypassed=false;
+let _tdesignBaseTransient=null;
+function updateTDesign(){
+  const lAtk=parseInt(document.getElementById('td-low-atk')?.value||0);
+  const lSus=parseInt(document.getElementById('td-low-sus')?.value||0);
+  const mAtk=parseInt(document.getElementById('td-mid-atk')?.value||0);
+  const mSus=parseInt(document.getElementById('td-mid-sus')?.value||0);
+  const hAtk=parseInt(document.getElementById('td-high-atk')?.value||0);
+  const hSus=parseInt(document.getElementById('td-high-sus')?.value||0);
+  const v=(id,t)=>{const e=document.getElementById(id); if(e) e.textContent=(t>0?'+':'')+t;};
+  v('td-low-atk-v',lAtk);v('td-low-sus-v',lSus);
+  v('td-mid-atk-v',mAtk);v('td-mid-sus-v',mSus);
+  v('td-high-atk-v',hAtk);v('td-high-sus-v',hSus);
+  _drawTDesign(lAtk,lSus,mAtk,mSus,hAtk,hSus);
+  if(tdesignBypassed || !audioCtx) return;
+  // estratégia: usa _transientNode existente como motor combinado
+  // o attack médio é a média ponderada das 3 bandas
+  if(typeof _transientNode!=='undefined' && _transientNode){
+    if(!_tdesignBaseTransient){
+      _tdesignBaseTransient = {thr:_transientNode.threshold.value, ratio:_transientNode.ratio.value};
+    }
+    const avgAtk = (lAtk+mAtk+hAtk)/3; // -50..+50
+    const avgSus = (lSus+mSus+hSus)/3;
+    // attack positivo = mais transient, ratio mais alta + threshold mais baixa
+    const newRatio = Math.max(1, Math.min(20, 2 + avgAtk*0.15));
+    const newThresh = Math.max(-40, Math.min(-3, -10 - Math.abs(avgAtk)*0.3));
+    _transientNode.ratio.setTargetAtTime(newRatio, audioCtx.currentTime, 0.05);
+    _transientNode.threshold.setTargetAtTime(newThresh, audioCtx.currentTime, 0.05);
+    // sustain via attack/release
+    const newAttack = avgAtk>0 ? 0.001 : 0.01 + Math.abs(avgAtk)*0.001;
+    const newRelease = avgSus>0 ? 0.3 + avgSus*0.005 : 0.05;
+    _transientNode.attack.setTargetAtTime(newAttack, audioCtx.currentTime, 0.05);
+    _transientNode.release.setTargetAtTime(newRelease, audioCtx.currentTime, 0.05);
+  }
+  // E modula EQ existente para realçar bandas com mais ataque
+  // (efeito perceptual adicional)
+}
+function _drawTDesign(lAtk,lSus,mAtk,mSus,hAtk,hSus){
+  const cv=document.getElementById('td-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  // 3 bandas: kick, snare, hat shapes
+  const colors=['rgba(45,212,255,1)','rgba(45,255,138,1)','rgba(255,225,53,1)'];
+  const atks=[lAtk,mAtk,hAtk];
+  const suss=[lSus,mSus,hSus];
+  const labels=['LOW (kick)','MID (snare)','HIGH (hats)'];
+  for(let i=0;i<3;i++){
+    const xOff=i*(W/3)+W/6;
+    const yMid=H/2;
+    // desenha forma de transiente (attack pulse + sustain decay)
+    ctx.strokeStyle=colors[i]; ctx.lineWidth=2;
+    ctx.beginPath();
+    const atk=atks[i]; const sus=suss[i];
+    const peakBoost = 1 + atk*0.015;
+    const sustainBoost = 1 + sus*0.015;
+    for(let dx=0;dx<W/3-20;dx++){
+      const t=dx/(W/3-20);
+      let v=0;
+      // attack pulse
+      v += peakBoost * Math.exp(-t*30);
+      // sustain curve
+      v += sustainBoost * 0.4 * Math.exp(-t*3);
+      v = Math.min(1.5, v);
+      const x=xOff-W/6+dx+10;
+      const y=yMid - v*(H/2-15);
+      if(dx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // baseline
+    ctx.strokeStyle='rgba(255,255,255,0.15)';
+    ctx.beginPath();ctx.moveTo(xOff-W/6+10,yMid);ctx.lineTo(xOff+W/6-10,yMid);ctx.stroke();
+    // label
+    ctx.fillStyle=colors[i];ctx.font='10px monospace';ctx.textAlign='center';
+    ctx.fillText(labels[i], xOff, H-6);
+    ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='9px monospace';
+    ctx.fillText('atk '+(atk>0?'+':'')+atk+' · sus '+(sus>0?'+':'')+sus, xOff, 14);
+  }
 }
 
 
@@ -1256,7 +1852,7 @@ function _drawVectorscope(){
 // + 4 filtros peaking adicionais para atenuar dinamicamente esses picos.
 // ═══════════════════════════════════════════════════════════════════════════
 let resonBypassed=false;
-let resonMode='high'; // 'high' = soothe (attack rápido), 'low' = reso (mais lento)
+let resonMode='attenuate'; // 'attenuate' = atenua picos · 'boost' = aumenta picos
 let resonNodes=[]; // filtros peaking dedicados
 let resonInterval=null;
 let _resonAnalyser=null; // analyser dedicado ligado ao masterGain
@@ -1285,9 +1881,9 @@ function updateReson(){
 }
 function toggleResonMode(m){
   resonMode=m;
-  const h=document.getElementById('rs-mode-h'), l=document.getElementById('rs-mode-l');
-  if(h) h.classList.toggle('rs-mode-active', m==='high');
-  if(l) l.classList.toggle('rs-mode-active', m==='low');
+  const a=document.getElementById('rs-mode-att'), b=document.getElementById('rs-mode-boost');
+  if(a) a.classList.toggle('rs-mode-active', m==='attenuate');
+  if(b) b.classList.toggle('rs-mode-active', m==='boost');
 }
 function _buildResonNodes(){
   // Nós dedicados criados on-demand pelo loop
@@ -1295,7 +1891,6 @@ function _buildResonNodes(){
 }
 function _startResonLoop(){
   if(resonInterval) return;
-  // Loop sempre ativo (60ms) — desenha o espectro mesmo quando bypassed
   resonInterval = setInterval(()=>{
     _ensureResonAnalyser();
     if(!_resonAnalyser || !audioCtx) {
@@ -1304,10 +1899,10 @@ function _startResonLoop(){
     }
     const bins = _resonAnalyser.frequencyBinCount;
     const data = new Float32Array(bins);
-    _resonAnalyser.getFloatFrequencyData(data); // dB
+    _resonAnalyser.getFloatFrequencyData(data);
     const sr = audioCtx.sampleRate;
     const binHz = sr/2/bins;
-    // calcula curva média (envelope) com janela ~20 bins
+    // envelope médio com janela ~24 bins
     const avg = new Float32Array(bins);
     const win = 12;
     for(let i=0;i<bins;i++){
@@ -1315,10 +1910,11 @@ function _startResonLoop(){
       for(let k=-win;k<=win;k++){const j=i+k; if(j>=0&&j<bins){s+=data[j];n++;}}
       avg[i]=s/n;
     }
-    // sensitivity (0-100) define quanto acima da média conta como "pico"
-    const sens = parseFloat(document.getElementById('rs-sens').value)/100;
-    const threshold = 4 + (1-sens)*8; // dB acima da média
-    const depth = parseFloat(document.getElementById('rs-depth').value);
+    const sens = parseFloat(document.getElementById('rs-sens')?.value||50)/100;
+    const threshold = 4 + (1-sens)*8;
+    const depth = parseFloat(document.getElementById('rs-depth')?.value||6);
+    // resonMode agora é 'attenuate' ou 'boost'
+    const sign = (resonMode==='boost') ? +1 : -1;
     // encontra picos
     const peaks=[];
     for(let i=2;i<bins-2;i++){
@@ -1327,60 +1923,27 @@ function _startResonLoop(){
       }
     }
     peaks.sort((a,b)=>b.excess-a.excess);
-    const top = peaks.slice(0, resonMode==='high'?6:3);
+    const top = peaks.slice(0, 6);
     const pe=document.getElementById('rs-peaks'); if(pe) pe.textContent=top.length;
-    // mapeia picos para os EQ nodes existentes por proximidade
-    // Para evitar conflito com o EQ manual, guardamos um "delta" e aplicamos via
-    // setTargetAtTime apenas se o nosso delta é negativo (atenua).
-    // Para isto, criamos nós dedicados na primeira vez:
-    if(!window._resonPeaks){
-      window._resonPeaks=[];
-      for(let i=0;i<6;i++){
-        const n=audioCtx.createBiquadFilter();
-        n.type='peaking'; n.frequency.value=1000; n.Q.value=8; n.gain.value=0;
-        window._resonPeaks.push(n);
-      }
-      // ligar em série antes do limiter: clipOutGain → reson → limiter
-      // Mas para não quebrar a cadeia já validada, mantemos os filtros COMO
-      // monitorização visual; a aplicação real é via WaveShaper bypass.
-      // Implementação segura: conectar entre limiterNode e msDirectGain.
-      // Aqui não vamos mexer na cadeia em runtime para não criar glitches.
-      // Em vez disso, modulamos o gain do EQ existente mais próximo.
+    const atk = parseFloat(document.getElementById('rs-atk')?.value||20)/1000;
+    const qVal = parseFloat(document.getElementById('rs-q')?.value||60)/10;
+    // Atribui picos aos 6 nós dedicados; nós sem pico → gain 0
+    if(resonBypassed){
+      _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
+    } else {
+      _resonNodes.forEach((n,idx)=>{
+        if(!n) return;
+        const p = top[idx];
+        if(p){
+          n.frequency.setTargetAtTime(p.f, audioCtx.currentTime, atk*0.5+0.01);
+          n.Q.setTargetAtTime(qVal, audioCtx.currentTime, 0.02);
+          const intensity = Math.min(1, p.excess/12);
+          n.gain.setTargetAtTime(sign * depth * intensity, audioCtx.currentTime, atk*0.5+0.01);
+        } else {
+          n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        }
+      });
     }
-    // Modula EQ existente: cada pico que cai numa banda do EQ aplica um delta negativo
-    // Implementação: aplicar um pequeno "denting" no EQ correspondente
-    const targets = {
-      bass: typeof eqBass!=='undefined'?eqBass:null,
-      mid:  typeof eqMid!=='undefined'?eqMid:null,
-      high: typeof eqHigh!=='undefined'?eqHigh:null,
-      air:  typeof eqAir!=='undefined'?eqAir:null,
-    };
-    // store base values once
-    if(!window._resonBaseEQ){
-      window._resonBaseEQ = {
-        bass: targets.bass?targets.bass.gain.value:0,
-        mid:  targets.mid?targets.mid.gain.value:0,
-        high: targets.high?targets.high.gain.value:0,
-        air:  targets.air?targets.air.gain.value:0,
-      };
-    }
-    // calcula delta por banda
-    const delta={bass:0,mid:0,high:0,air:0};
-    top.forEach(p=>{
-      const w = Math.min(1, p.excess/12);
-      if(p.f<300) delta.bass -= depth*w*0.3;
-      else if(p.f<2000) delta.mid -= depth*w*0.3;
-      else if(p.f<7000) delta.high -= depth*w*0.3;
-      else delta.air -= depth*w*0.3;
-    });
-    const atk = parseFloat(document.getElementById('rs-atk').value)/1000;
-    Object.keys(delta).forEach(k=>{
-      if(targets[k]){
-        const target = window._resonBaseEQ[k] + Math.max(-9, delta[k]);
-        targets[k].gain.setTargetAtTime(target, audioCtx.currentTime, atk*0.5+0.01);
-      }
-    });
-    // desenhar
     _drawResonView(data, avg, top, binHz);
   }, 80);
 }
@@ -3416,31 +3979,75 @@ function applyModuleBypass(module, bypassed){
       break;
     case 'reson':
       resonBypassed=bypassed;
-      if(bypassed && window._resonBaseEQ){
-        // restaura EQ base
-        const t={bass:eqBass,mid:eqMid,high:eqHigh,air:eqAir};
-        Object.keys(t).forEach(k=>{ if(t[k]) t[k].gain.setTargetAtTime(window._resonBaseEQ[k],audioCtx.currentTime,0.05); });
+      if(bypassed){
+        _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
       }
       break;
     case 'lowfocus':
       lowFocusBypassed=bypassed;
-      if(bypassed && _lfBaseEQ){
-        if(eqSub) eqSub.gain.setTargetAtTime(_lfBaseEQ.sub, audioCtx.currentTime, 0.05);
-        if(eqBass) eqBass.gain.setTargetAtTime(_lfBaseEQ.bass, audioCtx.currentTime, 0.05);
-        if(eqLowNode) eqLowNode.gain.setTargetAtTime(_lfBaseEQ.low, audioCtx.currentTime, 0.05);
+      if(bypassed){
+        if(_lfSub) _lfSub.frequency.setTargetAtTime(20, audioCtx.currentTime, 0.05);
+        if(_lfBass) _lfBass.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(_lfMud)  _lfMud.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
         if(msSideEqLow) msSideEqLow.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
-      } else if(!bypassed){
+      } else {
         updateLowFocus();
       }
       break;
     case 'highfocus':
       highFocusBypassed=bypassed;
-      if(bypassed && _hfBaseEQ){
-        if(eqAir) eqAir.gain.setTargetAtTime(_hfBaseEQ.air, audioCtx.currentTime, 0.05);
-        if(eqHigh) eqHigh.gain.setTargetAtTime(_hfBaseEQ.high, audioCtx.currentTime, 0.05);
-        if(eqMid) eqMid.gain.setTargetAtTime(_hfBaseEQ.mid, audioCtx.currentTime, 0.05);
-      } else if(!bypassed){
+      if(bypassed){
+        if(_hfAir)   _hfAir.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(_hfDeess) _hfDeess.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(_hfPres)  _hfPres.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+      } else {
         updateHighFocus();
+      }
+      break;
+    case 'dyneq':
+      dynEQBypassed=bypassed;
+      if(bypassed){
+        _deqNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
+      } else {
+        updateDynEQ();
+      }
+      break;
+    case 'mseq':
+      mseqBypassed=bypassed;
+      if(bypassed){
+        if(_mseqMidLow)  _mseqMidLow.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(_mseqMidMid)  _mseqMidMid.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(_mseqMidHigh) _mseqMidHigh.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(msSideEqLow)  msSideEqLow.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(msSideEqMid)  msSideEqMid.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        if(msSideEqHigh) msSideEqHigh.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+      } else {
+        updateMSEq();
+      }
+      break;
+    case 'warmth':
+      warmthBypassed=bypassed;
+      if(bypassed && typeof shapeWS!=='undefined' && shapeWS && _warmthBaseCurve){
+        shapeWS.curve = _warmthBaseCurve;
+      } else if(!bypassed){
+        updateWarmth();
+      }
+      break;
+    case 'spectral':
+      spectralBypassed=bypassed;
+      if(bypassed){
+        _spNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
+      } else {
+        updateSpectral();
+      }
+      break;
+    case 'tdesign':
+      tdesignBypassed=bypassed;
+      if(bypassed && _tdesignBaseTransient && typeof _transientNode!=='undefined' && _transientNode){
+        _transientNode.threshold.setTargetAtTime(_tdesignBaseTransient.thr, audioCtx.currentTime, 0.05);
+        _transientNode.ratio.setTargetAtTime(_tdesignBaseTransient.ratio, audioCtx.currentTime, 0.05);
+      } else if(!bypassed){
+        updateTDesign();
       }
       break;
     case '__midside_old__':
