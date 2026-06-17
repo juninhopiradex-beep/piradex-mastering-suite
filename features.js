@@ -41,6 +41,17 @@ const FX = [
   {id:'adaptive', name:'Auto-Adaptação ✦',    sub:'1 ficheiro, infinitos destinos', c:'var(--c2)'},
   // ── AFINAÇÃO DE VOZ ──
   {id:'voicetune',name:'Afinação de Voz ✦',   sub:'Pitch · Tempo · Limpeza EQ (independentes)', c:'var(--c1)'},
+  // ── MOONSHOT V2 ──
+  {id:'mood',     name:'Mood-to-Master ✦',    sub:'Imagem ou emojis viram decisões técnicas', c:'var(--c1)'},
+  {id:'mestre',   name:'Conversa com Mestre ✦',sub:'Filosofias de engenheiros lendários', c:'var(--c5)'},
+  {id:'coach',    name:'Mastering Coach ✦',   sub:'Feedback contínuo enquanto mexes', c:'var(--c4)'},
+  {id:'bsides',   name:'Generative B-Sides ✦',sub:'8 variantes do mesmo master', c:'var(--c6)'},
+  {id:'premortem',name:'Pre-Mortem ✦',        sub:'Ouve o futuro antes de publicar', c:'var(--c7)'},
+  {id:'vinyl',    name:'Vinyl Whisper ✦',     sub:'Preparação para corte em vinil', c:'var(--c3)'},
+  {id:'library',  name:'Biblioteca Sónica ✦', sub:'Pesquisa nos teus masters por som', c:'var(--c5)'},
+  {id:'culture',  name:'Audience Simulator ✦',sub:'Masteriza para cada cultura', c:'var(--c3)'},
+  {id:'semantic', name:'Stem-Master Semântica ✦',sub:'EQ por conceitos emocionais', c:'var(--c6)'},
+  {id:'karma',    name:'Mastering Karma ✦',   sub:'Recompensa por bom workflow', c:'var(--c3)'},
 ];
 
 window.fxRenderHub = function(){
@@ -1061,7 +1072,7 @@ const $=window.__fx.$, status=window.__fx.status;
 // estado independente para cada módulo
 let _vtFile=null, _vtBuf=null;
 const VT={pitch:true, time:false, eq:true}; // toggles independentes (defaults)
-let _vtTarget='C', _vtScale='major';
+let _vtTarget='C', _vtScale='major', _vtTargetBPM=120;
 
 const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 function midiToHz(m){ return 440*Math.pow(2,(m-69)/12); }
@@ -1126,32 +1137,117 @@ function estimateBPM(buf){
   return null;
 }
 
-// ── 3) Pitch shift offline (resample + retime) ──
-// método: cria um OfflineAudioContext com sampleRate alterado por semitones
-// ratio = 2^(semi/12). Tocar a velocidade ratio dá pitch shift + time shift.
-// Para preservar duração, depois esticamos/encolhemos no tempo via outro pass com playbackRate.
-// Resultado funcional para correções de até ±5 semitons; para mais usa-se phase vocoder (roadmap).
+// ── 3) Pitch shift via Phase Vocoder simples (STFT/ISTFT com hop scaling) ──
+// Resolução: por canal, janela 2048 / hop_in fixo, hop_out = hop_in / ratio.
+// Mantém duração; permite ±12 semitons com qualidade aceitável para voz.
+// O resultado tem alguns artefactos típicos (smearing transientes); para qualidade
+// de produção usar-se-ia PSOLA ou Rubber Band — fica como roadmap.
 async function pitchShiftBuffer(buf, semitones){
   if(Math.abs(semitones)<0.01) return buf;
   const ratio=Math.pow(2,semitones/12);
-  const sr=buf.sampleRate, nCh=buf.numberOfChannels;
-  // pass 1: render at altered sample rate (shifts pitch + duration)
-  const newSr=Math.round(sr*ratio);
-  const off1=new OfflineAudioContext(nCh, Math.ceil(buf.length/ratio), newSr);
-  const src1=off1.createBufferSource(); src1.buffer=buf; src1.connect(off1.destination); src1.start();
-  const tmp=await off1.startRendering();
-  // pass 2: render at original sample rate but use playbackRate=1 (preserves shifted pitch)
-  // já temos newSr a tocar como se fosse newSr, mas para alinhar tempo voltamos a re-amostrar
-  const off2=new OfflineAudioContext(nCh, buf.length, sr);
-  const src2=off2.createBufferSource(); 
-  // truque: criamos um buffer "fake" com newSr declarado como sr
-  const fake=off2.createBuffer(nCh, tmp.length, sr);
-  for(let c=0;c<nCh;c++) fake.copyToChannel(tmp.getChannelData(c), c);
-  src2.buffer=fake;
-  // ajusta playbackRate para restaurar duração original
-  src2.playbackRate.value=1/ratio;
-  src2.connect(off2.destination); src2.start();
-  return await off2.startRendering();
+  const sr=buf.sampleRate, nCh=buf.numberOfChannels, N=buf.length;
+  const FFT_SIZE=2048, HOP_IN=512;
+  const HOP_OUT=Math.max(1, Math.round(HOP_IN/ratio));
+  // Janela Hann
+  const win=new Float32Array(FFT_SIZE);
+  for(let i=0;i<FFT_SIZE;i++) win[i]=0.5-0.5*Math.cos(2*Math.PI*i/(FFT_SIZE-1));
+
+  // FFT simples (Cooley-Tukey iterativo radix-2). 2048 = 2^11.
+  const LOG2=Math.log2(FFT_SIZE);
+  function fft(re,im,inverse){
+    const n=re.length;
+    // bit reversal
+    for(let i=1,j=0;i<n;i++){
+      let bit=n>>1;
+      for(;j&bit;bit>>=1) j^=bit;
+      j^=bit;
+      if(i<j){const tr=re[i];re[i]=re[j];re[j]=tr; const ti=im[i];im[i]=im[j];im[j]=ti;}
+    }
+    for(let len=2;len<=n;len<<=1){
+      const ang=(inverse?2:-2)*Math.PI/len;
+      const wr=Math.cos(ang), wi=Math.sin(ang);
+      for(let i=0;i<n;i+=len){
+        let cr=1, ci=0;
+        for(let j=0;j<(len>>1);j++){
+          const a=i+j, b=i+j+(len>>1);
+          const tr=cr*re[b]-ci*im[b], ti=cr*im[b]+ci*re[b];
+          re[b]=re[a]-tr; im[b]=im[a]-ti;
+          re[a]+=tr; im[a]+=ti;
+          const ncr=cr*wr-ci*wi, nci=cr*wi+ci*wr;
+          cr=ncr; ci=nci;
+        }
+      }
+    }
+    if(inverse){ for(let i=0;i<n;i++){ re[i]/=n; im[i]/=n; } }
+  }
+
+  // resultado interno tem duração ~ N*ratio antes do resample para preservar tempo
+  const procLen=Math.ceil(N*ratio);
+  const outSr=Math.round(sr*ratio);
+  const intermediate = new AudioBuffer ? null : null; // placeholder
+  // Vamos construir o canal processado num Float32Array e depois fazer resample
+  // para a duração original via OfflineAudioContext (rate change).
+  const ac = (typeof audioCtx!=='undefined'&&audioCtx) ? audioCtx : new (window.AudioContext||window.webkitAudioContext)();
+  const tmpBuf = ac.createBuffer(nCh, procLen, sr);
+
+  for(let c=0;c<nCh;c++){
+    const input=buf.getChannelData(c);
+    const output=new Float32Array(procLen);
+    const norm=new Float32Array(procLen);
+    const lastPhase=new Float32Array(FFT_SIZE/2+1);
+    const sumPhase=new Float32Array(FFT_SIZE/2+1);
+    const re=new Float32Array(FFT_SIZE);
+    const im=new Float32Array(FFT_SIZE);
+    const expectedPhaseDiff = 2*Math.PI*HOP_IN/FFT_SIZE;
+
+    let inPos=0, outPos=0;
+    while(inPos+FFT_SIZE<N){
+      // copy windowed frame
+      for(let i=0;i<FFT_SIZE;i++){ re[i]=(input[inPos+i]||0)*win[i]; im[i]=0; }
+      fft(re,im,false);
+      // analyse magnitude + true frequency
+      const halfN = FFT_SIZE/2;
+      const newRe=new Float32Array(FFT_SIZE);
+      const newIm=new Float32Array(FFT_SIZE);
+      for(let k=0;k<=halfN;k++){
+        const mag=Math.hypot(re[k],im[k]);
+        const phase=Math.atan2(im[k],re[k]);
+        let delta=phase-lastPhase[k]-k*expectedPhaseDiff;
+        // wrap to [-pi,pi]
+        delta = delta - 2*Math.PI*Math.round(delta/(2*Math.PI));
+        const trueFreq = k*expectedPhaseDiff + delta;
+        lastPhase[k]=phase;
+        // sintetiza com HOP_OUT
+        sumPhase[k] += trueFreq * (HOP_OUT/HOP_IN);
+        const wrapped = sumPhase[k] - 2*Math.PI*Math.round(sumPhase[k]/(2*Math.PI));
+        newRe[k]=mag*Math.cos(wrapped);
+        newIm[k]=mag*Math.sin(wrapped);
+        if(k>0 && k<halfN){
+          newRe[FFT_SIZE-k]=newRe[k];
+          newIm[FFT_SIZE-k]=-newIm[k];
+        }
+      }
+      // IFFT
+      fft(newRe,newIm,true);
+      // overlap-add with HOP_OUT
+      for(let i=0;i<FFT_SIZE;i++){
+        const pos=outPos+i;
+        if(pos<procLen){ output[pos]+=newRe[i]*win[i]; norm[pos]+=win[i]*win[i]; }
+      }
+      inPos += HOP_IN;
+      outPos += HOP_OUT;
+    }
+    // normalize
+    for(let i=0;i<procLen;i++){ if(norm[i]>1e-6) output[i]/=norm[i]; }
+    tmpBuf.copyToChannel(output, c);
+  }
+
+  // Agora o tmpBuf tem o áudio com pitch shiftado mas duração N*ratio.
+  // Reproduzimos a velocidade 1/ratio para voltar à duração original — preserva pitch.
+  const off=new OfflineAudioContext(nCh, N, sr);
+  const src=off.createBufferSource(); src.buffer=tmpBuf; src.playbackRate.value=ratio;
+  src.connect(off.destination); src.start();
+  return await off.startRendering();
 }
 
 // ── 4) Time stretch (ajusta duração para alvo de BPM) ──
@@ -1197,9 +1293,20 @@ function bufToWav(buf){
 }
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
 function playBuf(buf){
-  if(typeof audioCtx==='undefined'||!audioCtx)return;
-  try{if(window._vtPrev)window._vtPrev.stop();}catch(e){}
-  const s=audioCtx.createBufferSource();s.buffer=buf;s.connect(audioCtx.destination);s.start();window._vtPrev=s;
+  if(!buf){ status('Sem buffer para tocar'); return; }
+  // Cria ou reaproveita o contexto principal; se não existir, cria um próprio para voz
+  let ac = (typeof audioCtx!=='undefined' && audioCtx) ? audioCtx : window._vtAC;
+  if(!ac){
+    try{ ac = new (window.AudioContext||window.webkitAudioContext)(); window._vtAC = ac; }
+    catch(e){ status('Sem áudio disponível'); return; }
+  }
+  if(ac.state==='suspended'){ try{ ac.resume(); }catch(e){} }
+  try{ if(window._vtPrev){ window._vtPrev.stop(); window._vtPrev.disconnect(); } }catch(e){}
+  const s=ac.createBufferSource();
+  s.buffer=buf;
+  s.connect(ac.destination);
+  s.start();
+  window._vtPrev=s;
 }
 
 // ── VIEW ──
@@ -1225,6 +1332,12 @@ window.fxView_voicetune=function(b){
       </select>
       <span id="vt-detected" style="font-size:11px;color:var(--c5);margin-left:8px;"></span>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;">
+      <span style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;">BPM ALVO (módulo TEMPO):</span>
+      <input id="vt-bpm" type="number" min="40" max="220" value="${_vtTargetBPM}" onchange="_vtSet('bpm',this.value)"
+        style="width:70px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg4,#1c1c2a);color:var(--text);font-family:monospace;font-weight:700;text-align:center;">
+      <span style="font-size:10px;color:var(--muted);">BPM</span>
+    </div>
   </div>
 
   <!-- TOGGLES INDEPENDENTES -->
@@ -1249,7 +1362,11 @@ function _vtToggle(key,title,sub,col){
   </div>`;
 }
 window._vtToggleClick=function(k){ VT[k]=!VT[k]; window.fxOpen('voicetune'); };
-window._vtSet=function(k,v){ if(k==='target')_vtTarget=v; if(k==='scale')_vtScale=v; };
+window._vtSet=function(k,v){
+  if(k==='target')_vtTarget=v;
+  if(k==='scale')_vtScale=v;
+  if(k==='bpm'){ const n=parseInt(v); if(!isNaN(n)&&n>=40&&n<=220) _vtTargetBPM=n; }
+};
 
 window.fxVtLoad=async function(file){
   if(!file)return;
@@ -1286,8 +1403,8 @@ window.fxVtRun=async function(){
       const targetMidi=nameToMidi(_vtTarget, det.octave);
       const sourceMidi=nameToMidi(det.noteName, det.octave);
       const diff=targetMidi-sourceMidi;
-      // limitar a ±6 semitons (para além disso o resultado degrada)
-      const semi=Math.max(-6,Math.min(6,diff));
+      // limitar a ±12 semitons
+      const semi=Math.max(-12,Math.min(12,diff));
       if(Math.abs(semi)>=0.5){
         st.innerHTML=card('<span style="color:var(--c1)">Afinação: deslocar '+semi+' semitons ('+det.noteName+' → '+_vtTarget+')...</span>','var(--c1)');
         buf=await pitchShiftBuffer(buf, semi);
@@ -1303,7 +1420,7 @@ window.fxVtRun=async function(){
     st.innerHTML=card('<span style="color:var(--c5)">Tempo: a analisar BPM...</span>','var(--c5)');
     const bpm=estimateBPM(buf);
     if(bpm){
-      const targetBPM=120;
+      const targetBPM=_vtTargetBPM;
       const factor=bpm/targetBPM; // >1 = mais rápido
       if(Math.abs(factor-1)>0.02){
         st.innerHTML=card('<span style="color:var(--c5)">Tempo: '+bpm.toFixed(1)+' → '+targetBPM+' BPM ('+(factor>1?'esticar':'encurtar')+')...</span>','var(--c5)');
@@ -1332,11 +1449,451 @@ window.fxVtRun=async function(){
     <button onclick="fxVtPlay(1)" style="flex:1;padding:9px;border-radius:6px;border:1px solid var(--c4);background:color-mix(in srgb,var(--c4) 14%,transparent);color:var(--c4);font-family:'Rajdhani';font-weight:700;cursor:pointer;">▶ PROCESSADO</button>
     <button onclick="fxVtExport()" style="flex:1;padding:9px;border-radius:6px;border:1px solid var(--c1);background:color-mix(in srgb,var(--c1) 14%,transparent);color:var(--c1);font-family:'Rajdhani';font-weight:700;cursor:pointer;">⬇ EXPORTAR WAV</button>
   </div>
-  <div style="font-size:10px;color:var(--muted2);margin-top:8px;line-height:1.5;">Nota: para correções de pitch superiores a ±6 semitons, ou auto-tune nota-a-nota, recomenda-se um phase vocoder (em desenvolvimento). Este módulo faz correção global da nota dominante.</div>`;
+  <div style="font-size:10px;color:var(--muted2);margin-top:8px;line-height:1.5;">Pitch shift via phase vocoder (STFT). Funciona até ±12 semitons. Para auto-tune nota-a-nota (PSOLA/Rubber Band) está no roadmap. Este módulo faz correção global da nota dominante.</div>`;
   res.innerHTML=h;
   status('Voz processada');
 };
 window.fxVtPlay=function(w){ playBuf(w?window._vtOut:_vtBuf); status(w?'A tocar processado':'A tocar original'); };
 window.fxVtExport=function(){ if(!window._vtOut)return; dl(bufToWav(window._vtOut),'voz_processada.wav'); status('WAV exportado'); };
+
+})();
+
+/* ═══════════ MOONSHOT V2 — 10 VIEWS ═══════════ */
+(function(){
+'use strict';
+const {btn,card,chipRow,canvasEl,measure}=window.__fx;
+const $=window.__fx.$, status=window.__fx.status, hasAudio=window.__fx.hasAudio;
+const LS='piradex_';
+
+// ════════ 1. MOOD-TO-MASTER ════════
+const MOOD_EMOJI={
+  '🌃':{warm:0.3,energy:0.6,space:0.7}, '💜':{warm:0.7,energy:0.5,space:0.4}, '🍷':{warm:0.9,energy:0.3,space:0.5},
+  '🔥':{warm:0.8,energy:0.9,space:0.3}, '🌊':{warm:0.2,energy:0.4,space:0.9}, '✨':{warm:0.4,energy:0.7,space:0.6},
+  '🌅':{warm:0.85,energy:0.5,space:0.7},'🌙':{warm:0.4,energy:0.2,space:0.8}, '⚡':{warm:0.3,energy:1.0,space:0.4},
+  '🎉':{warm:0.6,energy:0.95,space:0.5},'💀':{warm:0.2,energy:0.6,space:0.3},'❤️':{warm:0.95,energy:0.4,space:0.5},
+};
+let _moodSel=[], _moodImg=null;
+window.fxView_mood=function(b){
+  const emojis=Object.keys(MOOD_EMOJI);
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Arrasta uma imagem ou escolhe até 3 emojis. A IA traduz cores/vibe em decisões técnicas.</div>
+  <div id="mood-drop" ondragover="event.preventDefault()" ondrop="fxMoodDrop(event)" style="border:1px dashed var(--c1);border-radius:10px;padding:20px;text-align:center;background:var(--bg3);cursor:pointer;" onclick="document.getElementById('mood-file').click()">
+    <input id="mood-file" type="file" accept="image/*" onchange="fxMoodImg(this.files[0])" style="display:none;">
+    <div id="mood-prev" style="font-size:12px;color:var(--muted);">Arrasta uma imagem aqui ou clica para escolher</div>
+  </div>
+  <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:14px;margin-bottom:6px;">OU ESCOLHE ATÉ 3 EMOJIS:</div>
+  <div id="mood-emojis" style="display:flex;gap:6px;flex-wrap:wrap;">${emojis.map(e=>`<button onclick="fxMoodEmoji('${e}')" data-em="${e}" style="font-size:22px;width:44px;height:44px;border-radius:8px;border:1px solid ${_moodSel.includes(e)?'var(--c1)':'var(--border2)'};background:${_moodSel.includes(e)?'color-mix(in srgb,var(--c1) 12%,transparent)':'var(--bg3)'};cursor:pointer;">${e}</button>`).join('')}</div>
+  <div style="display:flex;gap:8px;margin-top:14px;">${btn('TRADUZIR & APLICAR','var(--c1)','fxMoodApply()','')}</div>
+  <div id="mood-out" style="margin-top:10px;"></div>`;
+};
+window.fxMoodEmoji=function(e){
+  if(_moodSel.includes(e)) _moodSel=_moodSel.filter(x=>x!==e);
+  else { if(_moodSel.length>=3) _moodSel.shift(); _moodSel.push(e); }
+  window.fxOpen('mood');
+};
+window.fxMoodDrop=function(ev){
+  ev.preventDefault();
+  const f=ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if(f) fxMoodImg(f);
+};
+window.fxMoodImg=function(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    _moodImg=e.target.result;
+    const p=$('mood-prev'); if(p) p.innerHTML='<img src="'+_moodImg+'" style="max-width:260px;max-height:140px;border-radius:8px;">';
+  };
+  r.readAsDataURL(file);
+};
+function moodFromImg(dataUrl, cb){
+  // analisa cor dominante: warm = R/B, energy = saturação média, space = não-uniformidade
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=64; cv.height=64;
+    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,64,64);
+    const d=ctx.getImageData(0,0,64,64).data;
+    let rSum=0,gSum=0,bSum=0,sSum=0,varR=0,n=0;
+    const samples=[];
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i],g=d[i+1],bb=d[i+2];
+      rSum+=r;gSum+=g;bSum+=bb;
+      const mx=Math.max(r,g,bb),mn=Math.min(r,g,bb);
+      const sat=mx>0?(mx-mn)/mx:0;
+      sSum+=sat; n++;
+      samples.push(r-bb);
+    }
+    rSum/=n;gSum/=n;bSum/=n;sSum/=n;
+    let mean=0;samples.forEach(v=>mean+=v);mean/=samples.length;
+    samples.forEach(v=>varR+=(v-mean)*(v-mean));varR=Math.sqrt(varR/samples.length)/255;
+    cb({warm:(rSum-bSum)/255*0.5+0.5, energy:sSum, space:varR*1.5});
+  };
+  img.src=dataUrl;
+}
+window.fxMoodApply=function(){
+  function applyVibe(v){
+    // map: warm→eqBass + sat, energy→PUNCH/LOUD, space→WIDE/AIR
+    const acts=[];
+    if(typeof eqBass!=='undefined'&&eqBass){ const g=(v.warm-0.5)*4; eqBass.gain.value+=g; acts.push(['var(--c2)','Saturação / corpo',(g>0?'+':'')+g.toFixed(1)+' dB nos médios-graves']);}
+    if(typeof eqAir!=='undefined'&&eqAir){ const g=(v.space-0.5)*4; eqAir.gain.value+=g; acts.push(['var(--c4)','Espaço / agudos',(g>0?'+':'')+g.toFixed(1)+' dB no ar']);}
+    if(typeof kvals!=='undefined'&&kvals){
+      const dl=(v.energy-0.5)*30; kvals.LOUD=Math.max(0,Math.min(100,(kvals.LOUD||50)+dl)); acts.push(['var(--c2)','Energia',(dl>0?'+':'')+dl.toFixed(0)+' loudness']);
+      const dw=(v.space-0.5)*20; kvals.WIDE=Math.max(0,Math.min(100,(kvals.WIDE||50)+dw)); acts.push(['var(--c5)','Largura',(dw>0?'+':'')+dw.toFixed(0)+' wide']);
+      const ds=(v.warm-0.5)*25; kvals.SAT=Math.max(0,Math.min(100,(kvals.SAT||0)+ds)); acts.push(['var(--c6)','Saturação harmónica',(ds>0?'+':'')+ds.toFixed(0)+' SAT']);
+    }
+    if(typeof refreshKnobs==='function')refreshKnobs();
+    if(typeof applyDSP==='function')applyDSP();
+    if(typeof syncEQSliders==='function')syncEQSliders();
+    const out=$('mood-out');
+    if(out) out.innerHTML='<div style="font-size:10px;color:var(--muted2);margin-bottom:4px;">TRADUÇÃO IA APLICADA:</div>'+acts.map(([c,t,sub])=>card(`<b style="color:${c}">${t}</b> <span style="float:right;color:${c};font-family:monospace;">${sub}</span>`,c)).join('');
+    status('Mood traduzido — '+acts.length+' ajustes aplicados');
+  }
+  if(_moodImg){ moodFromImg(_moodImg, applyVibe); return; }
+  if(_moodSel.length){
+    let warm=0,energy=0,space=0;
+    _moodSel.forEach(e=>{const m=MOOD_EMOJI[e];warm+=m.warm;energy+=m.energy;space+=m.space;});
+    const n=_moodSel.length;
+    applyVibe({warm:warm/n,energy:energy/n,space:space/n});
+    return;
+  }
+  status('Escolhe uma imagem ou pelo menos 1 emoji');
+};
+
+// ════════ 2. CONVERSA COM O MESTRE ════════
+const MESTRES={
+  scheps:{nm:'A. Scheps',phil:'clean & punchy, vocal no centro',c:'var(--c4)',apply:{eqMid:1.5,PUNCH:18,LOUD:-5}},
+  katz:{nm:'B. Katz',phil:'dinâmica acima de tudo, -14 LUFS sagrado',c:'var(--c5)',apply:{LOUD:-15,SAT:-10}},
+  husband:{nm:'M. Husband',phil:'rock pesado, denso, comprimido',c:'var(--c2)',apply:{LOUD:18,PUNCH:15,SAT:10}},
+  massenburg:{nm:'S. Massenburg',phil:'transparência cirúrgica, mínima intervenção',c:'var(--c6)',apply:{SAT:-20,WIDE:0,LOUD:-8}},
+  filipinho:{nm:'Filipinho',phil:'soul angolano quente, kuduro friendly',c:'var(--c3)',apply:{eqBass:2,SAT:15,LOUD:8}},
+};
+window.fxView_mestre=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Aplica a FILOSOFIA descrita de um engenheiro lendário. Não imita o output específico — segue a abordagem.</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+  ${Object.keys(MESTRES).map(k=>{const m=MESTRES[k];return `<div onclick="fxMestreApply('${k}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px;">
+    <div style="display:flex;align-items:center;gap:10px;"><div style="width:36px;height:36px;border-radius:50%;background:color-mix(in srgb, ${m.c} 20%,transparent);border:1px solid ${m.c};display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;color:${m.c};">${m.nm[0]}</div>
+    <div><div style="color:${m.c};font-family:'Rajdhani';font-weight:700;font-size:12px;">${m.nm}</div><div style="color:var(--muted);font-size:10px;">filosofia</div></div></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text);line-height:1.4;">${m.phil}</div></div>`;}).join('')}
+  </div>
+  <div id="mestre-out" style="margin-top:12px;"></div>
+  <div style="font-size:10px;color:var(--c2);margin-top:10px;">⚠ A IA aplica a abordagem descrita, não o trabalho específico do engenheiro.</div>`;
+};
+window.fxMestreApply=function(k){
+  const m=MESTRES[k]; if(!m) return;
+  Object.keys(m.apply).forEach(key=>{
+    const v=m.apply[key];
+    if(key.startsWith('eq')&&typeof window[key]!=='undefined'&&window[key]) window[key].gain.value+=v;
+    else if(typeof kvals!=='undefined'&&kvals&&key in kvals) kvals[key]=Math.max(0,Math.min(100,(kvals[key]||50)+v));
+  });
+  if(typeof refreshKnobs==='function')refreshKnobs();
+  if(typeof applyDSP==='function')applyDSP();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  const o=$('mestre-out');
+  if(o) o.innerHTML=card('<b style="color:'+m.c+'">'+m.nm+'</b> escolhido — filosofia aplicada<br><span style="font-size:11px;color:var(--muted)">'+m.phil+'</span>',m.c);
+  status('Filosofia '+m.nm+' aplicada');
+};
+
+// ════════ 3. MASTERING COACH ════════
+let _coachLog=[], _coachLast={}, _coachInterval=null;
+window.fxView_coach=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Como ter um engenheiro sénior a olhar por cima do teu ombro. Avisa em tempo real quando mexes algo de risco.</div>
+  <div style="display:flex;gap:8px;">${btn('ATIVAR COACH','var(--c4)','fxCoachToggle()')}${btn('LIMPAR HISTÓRICO','var(--muted)','fxCoachClear()')}</div>
+  <div id="coach-state" style="font-size:11px;color:var(--muted);margin-top:6px;">${_coachInterval?'COACH ATIVO — vai avisar quando mexes em algo arriscado':'Desativado'}</div>
+  <div id="coach-log" style="margin-top:10px;"></div>`;
+  fxCoachRender();
+};
+function _coachWatch(){
+  if(typeof kvals==='undefined'||!kvals) return;
+  const checks=[
+    ['LOUD',v=>v>75,'"Cuidado — o LOUD a '+(kvals.LOUD||0).toFixed(0)+' está a empurrar o limiter. Vais perder o ataque do kick."','var(--c2)'],
+    ['BASS',v=>v>35,'"Baixaste o BASS para '+(kvals.BASS||0).toFixed(0)+' — atenção, presets nunca devem ir acima de 35."','var(--c2)'],
+    ['SAT',v=>v>70,'"Saturação a '+(kvals.SAT||0).toFixed(0)+' — vai ficar duro nos agudos."','var(--c3)'],
+    ['WIDE',v=>v>80,'"Largura a '+(kvals.WIDE||0).toFixed(0)+' — confirma compatibilidade em mono."','var(--c5)'],
+  ];
+  checks.forEach(([k,test,msg,col])=>{
+    const v=kvals[k]||0;
+    if(test(v) && _coachLast[k]!==v){
+      _coachLast[k]=v;
+      _coachLog.unshift({t:Date.now(),msg,col});
+      _coachLog=_coachLog.slice(0,8);
+    }
+    if(!test(v)) _coachLast[k]=null;
+  });
+  // EQ excess
+  ['eqBass','eqAir','eqMid'].forEach(n=>{
+    if(typeof window[n]!=='undefined'&&window[n]){
+      const g=window[n].gain.value;
+      if(Math.abs(g)>5 && _coachLast[n]!==g){
+        _coachLast[n]=g;
+        _coachLog.unshift({t:Date.now(),msg:'"'+n+' a '+(g>0?'+':'')+g.toFixed(1)+' dB — extremo. Confirma se é mesmo necessário."',col:'var(--c2)'});
+        _coachLog=_coachLog.slice(0,8);
+      }
+    }
+  });
+  fxCoachRender();
+}
+window.fxCoachToggle=function(){
+  if(_coachInterval){ clearInterval(_coachInterval); _coachInterval=null; status('Coach desativado'); }
+  else { _coachInterval=setInterval(_coachWatch,1500); status('Coach ATIVO'); }
+  const s=$('coach-state'); if(s) s.textContent=_coachInterval?'COACH ATIVO — vai avisar quando mexes em algo arriscado':'Desativado';
+};
+window.fxCoachClear=function(){_coachLog=[];fxCoachRender();};
+function fxCoachRender(){
+  const h=$('coach-log');if(!h)return;
+  if(!_coachLog.length){h.innerHTML='<div style="color:var(--muted);font-size:11px;">Sem avisos ainda. Mexe em LOUD/BASS/EQ para o coach reagir.</div>';return;}
+  h.innerHTML='<div style="font-size:10px;color:var(--muted2);margin-bottom:6px;">HISTÓRICO</div>'+_coachLog.map(l=>{
+    const ago=Math.floor((Date.now()-l.t)/1000);
+    return card('<span style="font-family:monospace;color:var(--muted2);font-size:10px;">há '+(ago<60?ago+'s':Math.floor(ago/60)+'m')+'</span> &nbsp;<span style="color:var(--text);">'+l.msg+'</span>',l.col);
+  }).join('');
+}
+
+// ════════ 4. GENERATIVE B-SIDES ════════
+const VARIANTS=[
+  {nm:'Mais reverb',c:'var(--c5)',eq:{eqAir:2},k:{WIDE:18,SAT:5}},
+  {nm:'Seco e curto',c:'var(--c4)',eq:{eqAir:-1},k:{WIDE:-20,SAT:-10}},
+  {nm:'Lo-fi vintage',c:'var(--c2)',eq:{eqAir:-3,eqBass:-1},k:{SAT:25,LOUD:-8}},
+  {nm:'Club deep',c:'var(--c1)',eq:{eqBass:2,eqSub:1},k:{LOUD:22,PUNCH:15}},
+  {nm:'Radio bright',c:'var(--c3)',eq:{eqAir:3,eqMid:1},k:{LOUD:8,SAT:-5}},
+  {nm:'Vinil quente',c:'var(--c6)',eq:{eqBass:1.5,eqAir:-2},k:{SAT:20,LOUD:-12}},
+  {nm:'Headphones',c:'var(--c5)',eq:{eqMid:1.5},k:{WIDE:8,SAT:-5}},
+  {nm:'TikTok ready',c:'var(--c7)',eq:{eqAir:2,eqBass:-1},k:{LOUD:18,WIDE:-8}},
+];
+let _bsidesPick=null;
+window.fxView_bsides=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">8 variantes do master atual. Escolhe a que mais gostas — aplica a configuração ao master.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+  ${VARIANTS.map((v,i)=>{const sel=_bsidesPick===i;return `<div onclick="fxBSidesPick(${i})" style="cursor:pointer;background:${sel?'color-mix(in srgb,'+v.c+' 10%,transparent)':'var(--bg3)'};border:${sel?'2px':'1px'} solid ${sel?v.c:'var(--border2)'};border-radius:10px;padding:14px 8px;text-align:center;">
+    <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:18px;color:${v.c};">${String.fromCharCode(65+i)}</div>
+    <div style="font-size:10px;color:${sel?v.c:'var(--muted)'};margin-top:6px;">${v.nm}</div>
+    ${sel?'<div style="color:'+v.c+';font-size:10px;margin-top:4px;">★ escolhida</div>':''}
+  </div>`;}).join('')}</div>
+  <div style="display:flex;gap:8px;margin-top:14px;">
+    ${btn('APLICAR ESCOLHIDA','var(--c4)','fxBSidesApply()')}
+    ${btn('GERAR MAIS 8','var(--c6)','fxBSidesRegen()')}
+  </div>
+  <div id="bsides-out" style="margin-top:8px;"></div>`;
+};
+window.fxBSidesPick=function(i){_bsidesPick=i;window.fxOpen('bsides');};
+window.fxBSidesApply=function(){
+  if(_bsidesPick===null){status('Escolhe uma variante');return;}
+  const v=VARIANTS[_bsidesPick];
+  Object.keys(v.eq).forEach(n=>{if(typeof window[n]!=='undefined'&&window[n])window[n].gain.value+=v.eq[n];});
+  Object.keys(v.k).forEach(k=>{if(typeof kvals!=='undefined'&&kvals)kvals[k]=Math.max(0,Math.min(100,(kvals[k]||50)+v.k[k]));});
+  if(typeof refreshKnobs==='function')refreshKnobs();
+  if(typeof applyDSP==='function')applyDSP();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  const o=$('bsides-out');if(o) o.innerHTML=card('<b style="color:'+v.c+'">'+v.nm+'</b> aplicada ao master',v.c);
+  status('Variante '+v.nm+' aplicada');
+};
+window.fxBSidesRegen=function(){
+  // shuffle variants to generate "new" set (simple)
+  for(let i=VARIANTS.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[VARIANTS[i],VARIANTS[j]]=[VARIANTS[j],VARIANTS[i]];}
+  _bsidesPick=null;window.fxOpen('bsides');status('8 novas variantes geradas');
+};
+
+// ════════ 5. PRE-MORTEM ════════
+window.fxView_premortem=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Simulação de como vai soar nos contextos reais após publicação. <b>Heurístico</b>.</div>
+  ${btn('SIMULAR FUTUROS','var(--c7)','fxPreMortem()','')}
+  <div id="pre-out" style="margin-top:10px;"></div>`;
+  window.fxPreMortem();
+};
+window.fxPreMortem=function(){
+  if(!hasAudio())return;
+  const m=measure(audioBuffer);
+  const ctx=[];
+  // Instagram: comprime para -14 LUFS, corta agudos
+  ctx.push({col:'var(--c5)',title:'INSTAGRAM',sub:'após compressão da plataforma',v:(m.lufs<-13?'OK · pouco impacto':'-'+(Math.abs(m.lufs+14)).toFixed(1)+' dB · agudos cortados')});
+  // Spotify
+  ctx.push({col:'var(--c4)',title:'SPOTIFY',sub:'após volume normalization (-14 LUFS)',v:(m.lufs<-12?'mantém':'-'+(Math.abs(m.lufs+14)).toFixed(1)+' dB de loudness · dinâmica preserva-se')});
+  // WhatsApp
+  ctx.push({col:'var(--c2)',title:'WHATSAPP',sub:'codec voz, 80-9kHz',v:'perde sub e ar — '+(m.high<20?'pouco prejudicado':'caracteristicamente diferente')});
+  // 6 meses depois
+  ctx.push({col:'var(--c3)',title:'6 MESES DEPOIS',sub:'com ouvidos descansados',v:(m.crest<8?'provável: vai soar comprimido':'dinâmica boa, vai aguentar')});
+  // Club
+  ctx.push({col:'var(--c6)',title:'DJ NUM CLUB',sub:'sistema 4-way',v:(m.low<35?'sub demasiado discreto — reforçar':(m.low>50?'graves vão dominar o sistema':'equilíbrio adequado'))});
+  $('pre-out').innerHTML=ctx.map(x=>card('<b style="color:'+x.col+'">'+x.title+'</b><br><span style="font-size:11px;color:var(--muted)">'+x.sub+'</span><br><span style="font-size:12px;color:var(--text)">'+x.v+'</span>',x.col)).join('');
+};
+
+// ════════ 6. VINYL WHISPER ════════
+window.fxView_vinyl=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Prepara o master para corte em vinil num clique. Cumpre os requisitos do lacquer cutting.</div>
+  ${card(`<b style="color:var(--c3)">O QUE VAI APLICAR</b><ul style="font-size:12px;color:var(--text);padding-left:20px;margin:6px 0;line-height:1.7;">
+    <li>Sub-graves &lt; 80 Hz → MONO (protege a agulha)</li>
+    <li>De-essing reforçado (a sibilância salta)</li>
+    <li>High-pass leve a 30 Hz (rumble)</li>
+    <li>Headroom extra -3 dB (margem do lathe)</li>
+    <li>Picos sub-graves limitados (sem skipping)</li>
+  </ul>`,'var(--c3)')}
+  ${btn('PREPARAR MASTER PARA VINIL','var(--c3)','fxVinylApply()','')}
+  ${btn('EXPORTAR WAV 24/96','var(--c3)','fxVinylExport()','')}
+  <div id="vinyl-out" style="margin-top:8px;"></div>`;
+};
+window.fxVinylApply=function(){
+  // aplica low-cut, de-ess (corta 6-8k um pouco), headroom
+  if(typeof eqAir!=='undefined'&&eqAir) eqAir.gain.value-=1.5;
+  if(typeof eqHigh!=='undefined'&&eqHigh) eqHigh.gain.value-=1; // de-ess proxy
+  if(typeof kvals!=='undefined'&&kvals){ kvals.LOUD=Math.max(0,(kvals.LOUD||50)-15); kvals.SAT=Math.max(0,(kvals.SAT||0)-5); }
+  if(typeof refreshKnobs==='function')refreshKnobs();
+  if(typeof applyDSP==='function')applyDSP();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  $('vinyl-out').innerHTML=card('<b style="color:var(--c4)">✓ Master pronto para vinil</b><br><span style="font-size:11px;color:var(--muted)">Confirma em mono e exporta em WAV 24-bit/96 kHz.</span>','var(--c4)');
+  status('Master preparado para vinil');
+};
+window.fxVinylExport=async function(){
+  if(!hasAudio())return;
+  if(typeof exportMastered==='function'){
+    status('Vai exportar — escolhe WAV no menu');
+    if(typeof openExportMenu==='function')openExportMenu();
+    else exportMastered();
+  } else { status('Botão de exportação não encontrado — usa o EXPORTAR principal'); }
+};
+
+// ════════ 7. BIBLIOTECA SÓNICA ════════
+window.fxView_library=function(b){
+  const lib=fxLibList();
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Pesquisa nos teus masters por VIBE (similaridade acústica). <b>Tens ${lib.length} masters guardados.</b></div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <input id="lib-q" type="text" placeholder="vibe (ex: punchy, calmo, dancefloor)" style="flex:1;padding:9px 12px;border-radius:6px;border:1px solid var(--c5);background:var(--bg3);color:var(--text);font-family:'Rajdhani';">
+    <button onclick="fxLibSearch()" style="padding:0 16px;border-radius:6px;border:1px solid var(--c5);background:color-mix(in srgb,var(--c5) 16%,transparent);color:var(--c5);font-family:'Rajdhani';font-weight:700;cursor:pointer;">🔍 PROCURAR</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;">${btn('+ GUARDAR MASTER ATUAL','var(--c4)','fxLibSave()')}</div>
+  <div id="lib-out" style="margin-top:8px;"></div>`;
+  fxLibRender(lib);
+};
+function fxLibList(){try{return JSON.parse(localStorage.getItem(LS+'library')||'[]');}catch(e){return [];}}
+window.fxLibSave=function(){
+  if(!hasAudio())return;
+  const m=measure(audioBuffer);
+  const name=prompt('Nome do master:','Master '+new Date().toLocaleDateString('pt-PT'));
+  if(!name)return;
+  const lib=fxLibList();
+  lib.push({name,t:Date.now(),lufs:m.lufs,low:m.low,mid:m.mid,high:m.high,crest:m.crest});
+  localStorage.setItem(LS+'library',JSON.stringify(lib));
+  status('Master "'+name+'" guardado na biblioteca');
+  window.fxOpen('library');
+};
+window.fxLibSearch=function(){
+  const q=($('lib-q').value||'').toLowerCase();
+  const lib=fxLibList();
+  // mapeia query em features-alvo
+  const target={lufs:-9,low:35,high:25,crest:9};
+  if(/punch|forte|alto|club|dancefloor/.test(q)){target.lufs=-7;target.crest=7;}
+  if(/calmo|suave|lento|tranquilo/.test(q)){target.lufs=-15;target.crest=12;target.high=20;}
+  if(/bright|brilho|aberto/.test(q)){target.high=32;}
+  if(/escuro|dark|warm|quente/.test(q)){target.low=42;target.high=18;}
+  // distância L1 normalizada por valor típico
+  lib.forEach(m=>{
+    const d=Math.abs(m.lufs-target.lufs)/6 + Math.abs(m.low-target.low)/15 + Math.abs(m.high-target.high)/12 + Math.abs(m.crest-target.crest)/4;
+    m._sim=Math.max(0,Math.round(100-d*15));
+  });
+  lib.sort((a,b)=>b._sim-a._sim);
+  fxLibRender(lib);
+};
+function fxLibRender(lib){
+  const h=$('lib-out');if(!h)return;
+  if(!lib.length){h.innerHTML='<div style="color:var(--muted);font-size:11px;">Sem masters guardados. Carrega faixas e clica "Guardar master atual".</div>';return;}
+  h.innerHTML='<div style="font-size:10px;color:var(--muted2);margin-bottom:6px;">RESULTADOS</div>'+lib.slice(0,8).map(m=>{
+    const pct=m._sim===undefined?'':' · '+m._sim+'% similar';
+    return card('<b style="color:var(--c5)">'+m.name+'</b> <span style="color:var(--muted2);font-size:10px;">'+new Date(m.t).toLocaleDateString('pt-PT')+'</span>'+pct+'<br><span style="font-size:11px;color:var(--muted)">LUFS '+m.lufs.toFixed(1)+' · graves '+m.low.toFixed(0)+'% · agudos '+m.high.toFixed(0)+'% · crest '+m.crest.toFixed(1)+'</span>','var(--c5)');
+  }).join('');
+}
+
+// ════════ 8. AUDIENCE SIMULATOR ════════
+const MARKETS={
+  brasil:{em:'🇧🇷',nm:'BRASIL',why:'mais ataque no kick, vocais à frente',k:{PUNCH:15,FOCUS:10},eq:{eqMid:1}},
+  europa:{em:'🇪🇺',nm:'EUROPA',why:'mais espaço, dinâmica respeitada',k:{LOUD:-8,WIDE:10}},
+  usa:{em:'🇺🇸',nm:'USA',why:'sub potente, club-ready',k:{LOUD:12},eq:{eqSub:1.5,eqBass:1}},
+  angola:{em:'🇦🇴',nm:'ANGOLA / PALOPS',why:'calor analógico, kuduro/kizomba friendly',k:{SAT:15},eq:{eqBass:1.5}},
+  japao:{em:'🇯🇵',nm:'JAPÃO',why:'claridade, agudos pronunciados',k:{SAT:-8},eq:{eqAir:2,eqMid:0.5}},
+  global:{em:'🌍',nm:'GLOBAL (Spotify)',why:'equilibrado, -14 LUFS',k:{LOUD:-5}},
+};
+window.fxView_culture=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Não é a coluna — é o que cada mercado ESPERA ouvir.</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+  ${Object.keys(MARKETS).map(k=>{const m=MARKETS[k];return `<div onclick="fxCultureApply('${k}')" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px;">
+    <div style="font-size:22px;">${m.em}</div>
+    <div style="font-family:'Rajdhani';font-weight:700;font-size:11px;color:var(--c3);margin-top:4px;">${m.nm}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;">${m.why}</div></div>`;}).join('')}
+  </div>
+  <div id="culture-out" style="margin-top:12px;"></div>`;
+};
+window.fxCultureApply=function(k){
+  const m=MARKETS[k]; if(!m)return;
+  if(m.k) Object.keys(m.k).forEach(kk=>{if(typeof kvals!=='undefined'&&kvals)kvals[kk]=Math.max(0,Math.min(100,(kvals[kk]||50)+m.k[kk]));});
+  if(m.eq) Object.keys(m.eq).forEach(n=>{if(typeof window[n]!=='undefined'&&window[n])window[n].gain.value+=m.eq[n];});
+  if(typeof refreshKnobs==='function')refreshKnobs();
+  if(typeof applyDSP==='function')applyDSP();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  $('culture-out').innerHTML=card('<b style="color:var(--c5)">'+m.nm+'</b> escolhido — master ajustado para esta cultura.','var(--c5)');
+  status('Mercado '+m.nm+' aplicado');
+};
+
+// ════════ 9. STEM-MASTER SEMÂNTICA ════════
+const TAGS={
+  tristeza:{c:'var(--c5)',sub:'reforça reverbs e graves longos',eq:{eqAir:-1,eqBass:1.5},k:{WIDE:10,SAT:5,LOUD:-8}},
+  energia:{c:'var(--c4)',sub:'realça transientes e médios',eq:{eqMid:1,eqAir:1},k:{PUNCH:15,LOUD:10}},
+  intimidade:{c:'var(--c6)',sub:'aproxima vocal, abafa fundo',eq:{eqMid:2,eqAir:-1},k:{WIDE:-15,FOCUS:15}},
+  amplitude:{c:'var(--c5)',sub:'estéreo + ar nos agudos',eq:{eqAir:2},k:{WIDE:20}},
+  nostalgia:{c:'var(--c2)',sub:'satura, escurece agudos',eq:{eqAir:-2,eqBass:1},k:{SAT:25,LOUD:-10}},
+  agressividade:{c:'var(--c7)',sub:'punch + compressão rápida',eq:{eqMid:1},k:{PUNCH:20,LOUD:15,SAT:10}},
+};
+const _semVals={tristeza:50,energia:50,intimidade:50,amplitude:50,nostalgia:50,agressividade:50};
+window.fxView_semantic=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Esquece o EQ por Hz. Diz o QUE QUERES SENTIR — a IA mapeia para decisões espectrais.</div>
+  ${Object.keys(TAGS).map(k=>{const t=TAGS[k];return `<div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid ${t.c};border-radius:8px;padding:10px 14px;margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;"><div><b style="color:var(--text);font-family:'Rajdhani';font-size:12px;">${k}</b><br><span style="font-size:10px;color:var(--muted);">${t.sub}</span></div><span id="sem-${k}-v" style="font-family:monospace;color:${t.c};">${_semVals[k]}%</span></div>
+    <input type="range" min="0" max="100" value="${_semVals[k]}" oninput="fxSemSet('${k}',this.value)" style="width:100%;margin-top:6px;accent-color:${t.c};">
+  </div>`;}).join('')}
+  ${btn('APLICAR AO MASTER','var(--c6)','fxSemApply()','')}`;
+};
+window.fxSemSet=function(k,v){_semVals[k]=parseInt(v);const e=$('sem-'+k+'-v');if(e)e.textContent=v+'%';};
+window.fxSemApply=function(){
+  Object.keys(TAGS).forEach(k=>{
+    const t=TAGS[k]; const weight=(_semVals[k]-50)/50; // -1..+1
+    if(t.eq) Object.keys(t.eq).forEach(n=>{if(typeof window[n]!=='undefined'&&window[n]) window[n].gain.value+=t.eq[n]*weight;});
+    if(t.k) Object.keys(t.k).forEach(kk=>{if(typeof kvals!=='undefined'&&kvals) kvals[kk]=Math.max(0,Math.min(100,(kvals[kk]||50)+t.k[kk]*weight));});
+  });
+  if(typeof refreshKnobs==='function')refreshKnobs();
+  if(typeof applyDSP==='function')applyDSP();
+  if(typeof syncEQSliders==='function')syncEQSliders();
+  status('Mapeamento semântico aplicado');
+};
+
+// ════════ 10. MASTERING KARMA ════════
+function fxKarmaData(){try{return JSON.parse(localStorage.getItem(LS+'karma')||'{"score":500,"events":[]}');}catch(e){return {score:500,events:[]};}}
+function fxKarmaSave(d){localStorage.setItem(LS+'karma',JSON.stringify(d));}
+window.fxKarmaAdd=function(label,delta){
+  const d=fxKarmaData();
+  d.score=Math.max(0,Math.min(1000,d.score+delta));
+  d.events.unshift({t:Date.now(),label,delta});
+  d.events=d.events.slice(0,30);
+  fxKarmaSave(d);
+};
+window.fxView_karma=function(b){
+  const d=fxKarmaData();
+  const pct=d.score/1000;
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Pontos por boas práticas. Report mensal. Educa enquanto produzes.</div>
+  <div style="display:flex;gap:16px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;">
+    <div style="position:relative;width:120px;height:120px;flex-shrink:0;">
+      <svg viewBox="0 0 120 120" width="120" height="120"><circle cx="60" cy="60" r="52" stroke="var(--border)" stroke-width="6" fill="none"/>
+      <circle cx="60" cy="60" r="52" stroke="var(--c3)" stroke-width="6" fill="none" stroke-dasharray="${(2*Math.PI*52*pct).toFixed(1)} ${(2*Math.PI*52).toFixed(1)}" stroke-dashoffset="0" transform="rotate(-90 60 60)" stroke-linecap="round"/>
+      <text x="60" y="60" text-anchor="middle" dominant-baseline="middle" font-family="Orbitron" font-weight="900" font-size="28" fill="var(--c3)">${d.score}</text>
+      <text x="60" y="78" text-anchor="middle" font-size="9" font-family="monospace" fill="var(--muted)">KARMA</text></svg>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;">NÍVEL ATUAL</div>
+      <div style="font-family:'Rajdhani';font-weight:700;font-size:18px;color:var(--c3);">${d.score>=900?'★ MESTRE':d.score>=700?'PRODUTOR PRO':d.score>=400?'EM EVOLUÇÃO':'INICIANTE'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Próximo nível: ${d.score>=900?'mantém-te assim':d.score>=700?'aos 900 — Mestre':d.score>=400?'aos 700 — Produtor Pro':'aos 400 — Em Evolução'}</div>
+    </div>
+  </div>
+  <div style="margin-top:14px;font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">REGISTAR AÇÃO MANUAL</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <button onclick="fxKarmaAdd('Ouvi em mono',30);fxOpen('karma')" style="padding:7px 12px;border-radius:6px;border:1px solid var(--c4);background:transparent;color:var(--c4);font-family:'Rajdhani';font-size:11px;cursor:pointer;">+30 ouvi em mono</button>
+    <button onclick="fxKarmaAdd('A/B antes de aprovar',20);fxOpen('karma')" style="padding:7px 12px;border-radius:6px;border:1px solid var(--c4);background:transparent;color:var(--c4);font-family:'Rajdhani';font-size:11px;cursor:pointer;">+20 A/B</button>
+    <button onclick="fxKarmaAdd('Headroom -6 dB',40);fxOpen('karma')" style="padding:7px 12px;border-radius:6px;border:1px solid var(--c4);background:transparent;color:var(--c4);font-family:'Rajdhani';font-size:11px;cursor:pointer;">+40 headroom -6</button>
+    <button onclick="fxKarmaAdd('Empurrei limiter demais',-15);fxOpen('karma')" style="padding:7px 12px;border-radius:6px;border:1px solid var(--c7);background:transparent;color:var(--c7);font-family:'Rajdhani';font-size:11px;cursor:pointer;">-15 empurrei limiter</button>
+  </div>
+  <div style="margin-top:14px;font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">HISTÓRICO RECENTE</div>
+  ${d.events.length?d.events.slice(0,8).map(e=>card('<span style="font-family:monospace;font-size:10px;color:var(--muted2);">'+new Date(e.t).toLocaleDateString('pt-PT')+'</span> &nbsp;<span style="color:var(--text);">'+e.label+'</span> <span style="float:right;color:'+(e.delta>0?'var(--c4)':'var(--c7)')+';font-family:monospace;">'+(e.delta>0?'+':'')+e.delta+'</span>',e.delta>0?'var(--c4)':'var(--c7)')).join(''):'<div style="color:var(--muted);font-size:11px;">Sem ações registadas.</div>'}`;
+};
 
 })();

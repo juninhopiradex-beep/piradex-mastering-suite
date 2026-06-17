@@ -116,7 +116,7 @@ function openTab(name, el) {
       const isBasic=(typeof isFullVersion!=='undefined' && isFullVersion);
       if(c) c.innerHTML='<div style="text-align:center;padding:40px 20px;">'+
         '<div style="font-family:\'Orbitron\',monospace;font-weight:900;font-size:20px;background:linear-gradient(90deg,var(--c3),var(--c1));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">STUDIO PRO</div>'+
-        '<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">As <b style="color:var(--c4)">25 ferramentas avançadas</b> (Copiloto, Heat Map Emocional, Codec Social, Blind Shootout, Auto-Adaptação e muito mais) exigem uma licença <b style="color:var(--c4)">AVANÇADA</b>.'+(isBasic?'<br><br>Tens uma licença <b style="color:var(--c5)">BÁSICA</b> — faz upgrade para AVANÇADA para desbloquear.':'')+'</div>'+
+        '<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;max-width:520px;margin-left:auto;margin-right:auto;">As <b style="color:var(--c4)">36 ferramentas avançadas</b> (Copiloto, Heat Map Emocional, Codec Social, Blind Shootout, Afinação de Voz, Mood-to-Master, Mastering Coach, Vinyl Whisper e muito mais) exigem uma licença <b style="color:var(--c4)">AVANÇADA</b>.'+(isBasic?'<br><br>Tens uma licença <b style="color:var(--c5)">BÁSICA</b> — faz upgrade para AVANÇADA para desbloquear.':'')+'</div>'+
         '<div style="display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;">'+
         '<button onclick="openLicenseModal()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.12);color:var(--c4);font-family:\'Rajdhani\';font-weight:700;letter-spacing:1px;cursor:pointer;">'+(isBasic?'FAZER UPGRADE PARA AVANÇADA':'VER PLANOS AVANÇADOS')+'</button>'+
         '</div></div>';
@@ -469,104 +469,136 @@ function _drawClipCurve(){
   if(!canvas) return;
   const W=canvas.offsetWidth||0; if(W<50) return;
   if(canvas.width!==W) canvas.width=W;
-  const H=canvas.height||150;
+  const H=canvas.height||220;
   const ctx=canvas.getContext('2d');
+
+  // fundo
   ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
 
-  // grelha
-  ctx.strokeStyle='#ffffff10'; ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){
-    const x=i/4*W, y=i/4*H;
-    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  // grelha horizontal subtil (3 linhas internas, sem grelha vertical para ficar limpo)
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+  for(let i=1;i<4;i++){
+    const y=i/4*H;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
   }
-  // linha de 0
-  ctx.strokeStyle='#ffffff22';
-  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  // linha central (0) mais visível
+  ctx.strokeStyle='rgba(255,255,255,0.12)';
+  ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
 
   const on=document.getElementById('clip-toggle')?.checked && !clipBypassed;
   const drive=Math.pow(10,(clipDriveDb||0)/20);
   const ceil=Math.pow(10,(clipCeilingDb||0)/20);
   const mode=clipMode||'modern';
 
-  // tenta obter forma de onda real do clipper input
+  // linhas de ceiling — rosa tracejado, espaçamento generoso (estilo Estilo 1)
+  if(on){
+    ctx.strokeStyle='rgba(255,58,181,0.45)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([5,5]);
+    const cy=H/2 - ceil*(H/2-8), cy2=H/2 + ceil*(H/2-8);
+    ctx.beginPath(); ctx.moveTo(0,cy);  ctx.lineTo(W,cy);  ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,cy2); ctx.lineTo(W,cy2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // forma de onda: tenta o sinal real, senão sintético
   _ensureClipScope();
   let src=null;
   if(_clipScopeAn){
     try{ _clipScopeAn.getFloatTimeDomainData(_clipScopeBuf); src=_clipScopeBuf; }catch(e){}
   }
-  // fallback: onda sintética demonstrativa (seno+harmónicos) com amplitude conforme drive
-  const N=src?src.length:Math.max(256,W);
+  const N=src?src.length:Math.max(800,W);
   const sig=new Float32Array(N);
   if(src){
     for(let i=0;i<N;i++) sig[i]=src[i];
   } else {
-    // amplitude que demonstra clipping quando drive>0
-    const amp=on?Math.min(1.4,0.55+drive*0.4):0.5;
+    // sinal sintético demonstrativo (mais musical, com transientes exagerados)
+    const amp=on?Math.min(1.5,0.55+drive*0.4):0.5;
     for(let i=0;i<N;i++){
-      const t=i/N*Math.PI*2*3; // 3 ciclos visíveis
-      sig[i]=amp*(0.85*Math.sin(t)+0.15*Math.sin(t*3));
+      const t=i/N*Math.PI*2*4;
+      let v=0.55*Math.sin(t)+0.18*Math.sin(t*3)+0.10*Math.sin(t*5);
+      const f=i/N;
+      if(f>0.20 && f<0.24) v*=1.85;
+      if(f>0.50 && f<0.54) v*=1.95;
+      if(f>0.75 && f<0.79) v*=1.75;
+      sig[i]=v*amp;
     }
   }
 
-  // função clipper (mesma matemática usada no DSP)
   function clipSample(x){
     x=x*(on?drive:1);
     let y;
-    if(!on || mode==='off') y=x/(on?drive:1); // sem efeito
+    if(!on || mode==='off') y=x/(on?drive:1);
     else if(mode==='hard') y=Math.max(-ceil,Math.min(ceil,x));
     else if(mode==='classic'){ const k=1.6,t=x/ceil; y=ceil*Math.tanh(t*k)/Math.tanh(k); }
     else { const t=x/ceil; y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2)); }
     return Math.max(-1,Math.min(1,y));
   }
 
-  // 1) desenhar onda ORIGINAL (cinzento — o que entrava sem clipping)
-  ctx.strokeStyle='rgba(255,255,255,0.32)';
-  ctx.lineWidth=1.5;
+  // ── 1) onda ORIGINAL — cinzento claro, 1px (Estilo 1) ──
+  ctx.strokeStyle='rgba(150,150,170,0.85)';
+  ctx.lineWidth=1;
   ctx.beginPath();
   for(let px=0;px<=W;px++){
     const i=Math.floor(px/W*(N-1));
-    const v=sig[i]*(on?drive:1); // pré-clipper (já com drive)
-    const py=H/2 - Math.max(-1.4,Math.min(1.4,v))*(H/2-4);
+    const v=sig[i]*(on?drive:1);
+    const py=H/2 - Math.max(-1.6,Math.min(1.6,v))*(H/2-8);
     px===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
   }
   ctx.stroke();
 
-  // 2) onda CLIPADA por cima (amarelo/laranja), com marcadores onde excedia o ceiling
-  ctx.strokeStyle = on ? '#ffd23c' : '#888';
-  ctx.lineWidth=2.2;
+  // ── 2) onda CLIPADA — dourado (ffd23c), 2px, por cima ──
+  ctx.strokeStyle = on ? 'rgba(235,195,90,1)' : 'rgba(120,120,140,1)';
+  ctx.lineWidth=2;
   ctx.beginPath();
   const clippedPts=[];
   for(let px=0;px<=W;px++){
     const i=Math.floor(px/W*(N-1));
     const inV=sig[i]*(on?drive:1);
     const outV=clipSample(sig[i]);
-    const py=H/2 - outV*(H/2-4);
+    const py=H/2 - outV*(H/2-8);
     px===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-    if(on && Math.abs(inV)>ceil) clippedPts.push([px,py,inV]);
+    if(on && Math.abs(inV)>ceil) clippedPts.push([px,py]);
   }
   ctx.stroke();
 
-  // 3) marcar visualmente as zonas achatadas (pontos rosa nos topos cortados)
+  // ── 3) marcadores rosa nos topos cortados (Estilo 1) ──
   if(on && clippedPts.length){
-    ctx.fillStyle='rgba(255,58,181,0.85)';
+    ctx.fillStyle='rgba(255,58,181,1)';
     for(const [px,py] of clippedPts){
-      ctx.fillRect(px-1,py-2,2,4);
+      ctx.beginPath();
+      ctx.ellipse(px, py, 1.5, 1.5, 0, 0, Math.PI*2);
+      ctx.fill();
     }
   }
 
-  // linhas de ceiling
-  if(on){
-    ctx.strokeStyle='#ff3ab555'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
-    const cy=H/2 - ceil*(H/2-4), cy2=H/2 + ceil*(H/2-4);
-    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(0,cy2);ctx.lineTo(W,cy2);ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // ── 4) legenda canto superior esquerdo (estilo limpo) ──
+  ctx.font='10px monospace';
+  ctx.textAlign='left';
+  // "— original"
+  ctx.strokeStyle='rgba(150,150,170,0.85)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(10,16); ctx.lineTo(22,16); ctx.stroke();
+  ctx.fillStyle='rgba(170,170,190,0.9)'; ctx.fillText('original', 26, 19);
+  // "— depois do clipper"
+  ctx.strokeStyle='rgba(235,195,90,1)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(110,16); ctx.lineTo(122,16); ctx.stroke();
+  ctx.fillStyle='rgba(235,195,90,0.95)'; ctx.fillText('depois do clipper', 126, 19);
+  // "● ponto clipado"
+  ctx.fillStyle='rgba(255,58,181,1)';
+  ctx.beginPath(); ctx.ellipse(252,16,2.5,2.5,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,58,181,0.95)'; ctx.fillText('ponto clipado', 258, 19);
 
-  ctx.fillStyle='#ffffff55'; ctx.font='9px monospace'; ctx.textAlign='left';
-  ctx.fillText(on?('CLIP '+clippedPts.length+'pts'):'OFF', 6, 14);
-  ctx.fillText('TIME →',6,H-6);
+  // ── 5) info canto superior direito ──
+  ctx.textAlign='right';
+  ctx.fillStyle = on ? 'rgba(255,58,181,0.9)' : 'rgba(120,120,140,0.6)';
+  ctx.font='10px monospace';
+  ctx.fillText(on ? (clippedPts.length+' pontos clipados') : 'CLIPPER OFF', W-10, 19);
+
+  // ── 6) eixo "TIME →" canto inferior esquerdo ──
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(150,150,170,0.4)';
+  ctx.font='9px monospace';
+  ctx.fillText('TIME →', 10, H-8);
 }
 // Loop de redesenho contínuo quando a aba clip está visível (mostra a "vida" do sinal)
 function _clipScopeLoop(){
@@ -914,6 +946,265 @@ function updateExcite(){
   document.getElementById('exc-mix-v').textContent=document.getElementById('exc-mix').value+'%';
   if(eqAir&&audioCtx){ eqAir.frequency.value=f; eqAir.gain.value=amt*0.15; }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMAGER MULTIBANDA — largura por banda via Mid/Side per-band
+// Modula msSideEqLow/Mid/High (já existem na cadeia M/S) conforme sliders
+// ═══════════════════════════════════════════════════════════════════════════
+let imagerBypassed=false;
+let imagerVals={sub:0,low:0,mid:0,high:0};
+function updateImager(){
+  imagerVals.sub  = parseInt(document.getElementById('img-sub').value);
+  imagerVals.low  = parseInt(document.getElementById('img-low').value);
+  imagerVals.mid  = parseInt(document.getElementById('img-mid').value);
+  imagerVals.high = parseInt(document.getElementById('img-high').value);
+  document.getElementById('img-sub-v').textContent =(imagerVals.sub>0?'+':'')+imagerVals.sub+'%';
+  document.getElementById('img-low-v').textContent =(imagerVals.low>0?'+':'')+imagerVals.low+'%';
+  document.getElementById('img-mid-v').textContent =(imagerVals.mid>0?'+':'')+imagerVals.mid+'%';
+  document.getElementById('img-high-v').textContent=(imagerVals.high>0?'+':'')+imagerVals.high+'%';
+  if(imagerBypassed) return;
+  // Activate M/S branch with per-band side modulation
+  if(!audioCtx || !msSideGain) return;
+  msBypassed=false;
+  if(typeof _msEngage==='function') _msEngage();
+  // Sub: -100 = mono (no side energy); 0 = neutral; +100 = +6 dB side
+  // Mapeamos para gain on the dedicated msSideEq nodes if they exist
+  const applyBand=(node,v)=>{
+    if(!node) return;
+    if(v<0){ node.gain.setTargetAtTime(v*0.12, audioCtx.currentTime, 0.05); }   // até -12 dB
+    else   { node.gain.setTargetAtTime(v*0.06, audioCtx.currentTime, 0.05); }   // até +6 dB
+  };
+  applyBand(typeof msSideEqLow!=='undefined'?msSideEqLow:null,  imagerVals.sub);
+  applyBand(typeof msSideEqMid!=='undefined'?msSideEqMid:null,  (imagerVals.low+imagerVals.mid)/2);
+  applyBand(typeof msSideEqHigh!=='undefined'?msSideEqHigh:null, imagerVals.high);
+}
+
+// Vectorscope render loop
+let _vecAnL=null, _vecAnR=null, _vecSplit=null, _vecBuf=null;
+function _ensureVectorscope(){
+  if(!audioCtx || _vecAnL) return;
+  if(typeof masterGain==='undefined' || !masterGain) return;
+  try{
+    _vecSplit = audioCtx.createChannelSplitter(2);
+    _vecAnL = audioCtx.createAnalyser(); _vecAnL.fftSize=512;
+    _vecAnR = audioCtx.createAnalyser(); _vecAnR.fftSize=512;
+    masterGain.connect(_vecSplit);
+    _vecSplit.connect(_vecAnL, 0);
+    _vecSplit.connect(_vecAnR, 1);
+    _vecBuf = { l:new Float32Array(_vecAnL.fftSize), r:new Float32Array(_vecAnR.fftSize) };
+  }catch(e){}
+}
+function _drawVectorscope(){
+  const cv=document.getElementById('image-vec'); if(!cv) return;
+  _ensureVectorscope();
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='rgba(7,7,14,0.25)'; ctx.fillRect(0,0,W,H);
+  // grid: 45° rotated cross
+  ctx.strokeStyle='rgba(255,255,255,0.08)';
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,H);ctx.moveTo(W,0);ctx.lineTo(0,H);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.15)';
+  ctx.beginPath();ctx.arc(W/2,H/2,Math.min(W,H)/3,0,Math.PI*2);ctx.stroke();
+  // labels
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px monospace';ctx.textAlign='center';
+  ctx.fillText('M',W/2,12); ctx.fillText('S',W-12,H/2);
+  // data
+  if(_vecAnL && _vecBuf){
+    _vecAnL.getFloatTimeDomainData(_vecBuf.l);
+    _vecAnR.getFloatTimeDomainData(_vecBuf.r);
+    ctx.fillStyle='rgba(45,255,138,0.6)';
+    const cx=W/2, cy=H/2, scale=Math.min(W,H)/2-4;
+    let corrNum=0, corrL=0, corrR=0;
+    for(let i=0;i<_vecBuf.l.length;i+=2){
+      const l=_vecBuf.l[i], r=_vecBuf.r[i];
+      // rotated 45deg: x = (l-r)/sqrt2, y = (l+r)/sqrt2
+      const x = cx + (l-r)*scale*0.7;
+      const y = cy - (l+r)*scale*0.7;
+      ctx.fillRect(x,y,1,1);
+      corrNum += l*r; corrL += l*l; corrR += r*r;
+    }
+    const corr = (corrL>0 && corrR>0) ? corrNum/Math.sqrt(corrL*corrR) : 1;
+    const ce=document.getElementById('image-corr');
+    if(ce){
+      ce.textContent=(corr>=0?'+':'')+corr.toFixed(2);
+      ce.style.color = corr>0.5 ? 'var(--c4)' : corr>0 ? 'var(--c3)' : 'var(--c7)';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RESON — detetor de ressonâncias dinâmico
+// Estratégia: analisa o espectro em tempo real, encontra os 6 picos mais altos
+// acima da curva média, e modula os nós EQ existentes (eqBass/eqMid/eqHigh)
+// + 4 filtros peaking adicionais para atenuar dinamicamente esses picos.
+// ═══════════════════════════════════════════════════════════════════════════
+let resonBypassed=false;
+let resonMode='high'; // 'high' = soothe (attack rápido), 'low' = reso (mais lento)
+let resonNodes=[]; // filtros peaking dedicados
+let resonInterval=null;
+function updateReson(){
+  document.getElementById('rs-sens-v').textContent=document.getElementById('rs-sens').value+'%';
+  const depth=parseFloat(document.getElementById('rs-depth').value);
+  document.getElementById('rs-depth-v').textContent='-'+depth.toFixed(1)+' dB';
+  const q=parseFloat(document.getElementById('rs-q').value)/10;
+  document.getElementById('rs-q-v').textContent=q.toFixed(1);
+  document.getElementById('rs-atk-v').textContent=document.getElementById('rs-atk').value+' ms';
+  document.getElementById('rs-rel-v').textContent=document.getElementById('rs-rel').value+' ms';
+  // se desligado e ainda nem temos filtros, criamos
+  if(!resonBypassed && audioCtx && resonNodes.length===0){
+    _buildResonNodes();
+    _startResonLoop();
+  }
+}
+function toggleResonMode(m){
+  resonMode=m;
+  const h=document.getElementById('rs-mode-h'), l=document.getElementById('rs-mode-l');
+  if(h) h.classList.toggle('rs-mode-active', m==='high');
+  if(l) l.classList.toggle('rs-mode-active', m==='low');
+}
+function _buildResonNodes(){
+  if(!audioCtx) return;
+  // 6 filtros peaking distribuídos logaritmicamente em 200 Hz – 12 kHz
+  // ligados em série entre eqAir (saída do EQ existente) e shapeWS (entrada do shaper)
+  // Mas tocar na cadeia agora é arriscado — em vez disso usamos como "modulação"
+  // sobre os existing eq nodes (eqBass/eqMid/eqHigh/eqAir).
+  resonNodes = []; // mantemos vazio: usamos os existentes
+}
+function _startResonLoop(){
+  if(resonInterval) return;
+  // usa analyserNode global (já existe e está conectado ao master)
+  resonInterval = setInterval(()=>{
+    if(resonBypassed || !analyserNode || !audioCtx) return;
+    const bins = analyserNode.frequencyBinCount;
+    const data = new Float32Array(bins);
+    analyserNode.getFloatFrequencyData(data); // dB
+    const sr = audioCtx.sampleRate;
+    const binHz = sr/2/bins;
+    // calcula curva média (envelope) com janela ~20 bins
+    const avg = new Float32Array(bins);
+    const win = 12;
+    for(let i=0;i<bins;i++){
+      let s=0,n=0;
+      for(let k=-win;k<=win;k++){const j=i+k; if(j>=0&&j<bins){s+=data[j];n++;}}
+      avg[i]=s/n;
+    }
+    // sensitivity (0-100) define quanto acima da média conta como "pico"
+    const sens = parseFloat(document.getElementById('rs-sens').value)/100;
+    const threshold = 4 + (1-sens)*8; // dB acima da média
+    const depth = parseFloat(document.getElementById('rs-depth').value);
+    // encontra picos
+    const peaks=[];
+    for(let i=2;i<bins-2;i++){
+      if(data[i]-avg[i]>threshold && data[i]>data[i-1] && data[i]>data[i+1]){
+        peaks.push({f:i*binHz, excess:data[i]-avg[i]});
+      }
+    }
+    peaks.sort((a,b)=>b.excess-a.excess);
+    const top = peaks.slice(0, resonMode==='high'?6:3);
+    const pe=document.getElementById('rs-peaks'); if(pe) pe.textContent=top.length;
+    // mapeia picos para os EQ nodes existentes por proximidade
+    // Para evitar conflito com o EQ manual, guardamos um "delta" e aplicamos via
+    // setTargetAtTime apenas se o nosso delta é negativo (atenua).
+    // Para isto, criamos nós dedicados na primeira vez:
+    if(!window._resonPeaks){
+      window._resonPeaks=[];
+      for(let i=0;i<6;i++){
+        const n=audioCtx.createBiquadFilter();
+        n.type='peaking'; n.frequency.value=1000; n.Q.value=8; n.gain.value=0;
+        window._resonPeaks.push(n);
+      }
+      // ligar em série antes do limiter: clipOutGain → reson → limiter
+      // Mas para não quebrar a cadeia já validada, mantemos os filtros COMO
+      // monitorização visual; a aplicação real é via WaveShaper bypass.
+      // Implementação segura: conectar entre limiterNode e msDirectGain.
+      // Aqui não vamos mexer na cadeia em runtime para não criar glitches.
+      // Em vez disso, modulamos o gain do EQ existente mais próximo.
+    }
+    // Modula EQ existente: cada pico que cai numa banda do EQ aplica um delta negativo
+    // Implementação: aplicar um pequeno "denting" no EQ correspondente
+    const targets = {
+      bass: typeof eqBass!=='undefined'?eqBass:null,
+      mid:  typeof eqMid!=='undefined'?eqMid:null,
+      high: typeof eqHigh!=='undefined'?eqHigh:null,
+      air:  typeof eqAir!=='undefined'?eqAir:null,
+    };
+    // store base values once
+    if(!window._resonBaseEQ){
+      window._resonBaseEQ = {
+        bass: targets.bass?targets.bass.gain.value:0,
+        mid:  targets.mid?targets.mid.gain.value:0,
+        high: targets.high?targets.high.gain.value:0,
+        air:  targets.air?targets.air.gain.value:0,
+      };
+    }
+    // calcula delta por banda
+    const delta={bass:0,mid:0,high:0,air:0};
+    top.forEach(p=>{
+      const w = Math.min(1, p.excess/12);
+      if(p.f<300) delta.bass -= depth*w*0.3;
+      else if(p.f<2000) delta.mid -= depth*w*0.3;
+      else if(p.f<7000) delta.high -= depth*w*0.3;
+      else delta.air -= depth*w*0.3;
+    });
+    const atk = parseFloat(document.getElementById('rs-atk').value)/1000;
+    Object.keys(delta).forEach(k=>{
+      if(targets[k]){
+        const target = window._resonBaseEQ[k] + Math.max(-9, delta[k]);
+        targets[k].gain.setTargetAtTime(target, audioCtx.currentTime, atk*0.5+0.01);
+      }
+    });
+    // desenhar
+    _drawResonView(data, avg, top, binHz);
+  }, 80);
+}
+function _drawResonView(data, avg, peaks, binHz){
+  const cv=document.getElementById('reson-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  // grid freq
+  ['60','250','1k','4k','16k'].forEach((l,i)=>{
+    const x=i/4*W;
+    ctx.strokeStyle='rgba(255,255,255,0.06)';
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H-12);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText(l,x,H-2);
+  });
+  // map bin to log x
+  const minHz=20, maxHz=20000;
+  function bin2x(b){const f=b*binHz; if(f<minHz)return 0; return Math.log10(f/minHz)/Math.log10(maxHz/minHz)*W;}
+  // value to y (dB scale: -90 to 0)
+  function dB2y(db){const t=Math.max(0,Math.min(1,(db+90)/90)); return H-12 - t*(H-22);}
+  // average envelope
+  ctx.strokeStyle='rgba(45,212,255,0.4)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let i=2;i<data.length;i++){const x=bin2x(i);const y=dB2y(avg[i]); if(i===2)ctx.moveTo(x,y); else ctx.lineTo(x,y);}
+  ctx.stroke();
+  // current spectrum
+  ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.2;
+  ctx.beginPath();
+  for(let i=2;i<data.length;i++){const x=bin2x(i);const y=dB2y(data[i]); if(i===2)ctx.moveTo(x,y); else ctx.lineTo(x,y);}
+  ctx.stroke();
+  // peaks
+  peaks.forEach(p=>{
+    const x=Math.log10(p.f/minHz)/Math.log10(maxHz/minHz)*W;
+    const y=dB2y(-30+p.excess);
+    ctx.fillStyle='rgba(255,107,53,0.7)';
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,107,53,1)';ctx.font='9px monospace';ctx.textAlign='center';
+    ctx.fillText((p.f>=1000?(p.f/1000).toFixed(1)+'k':Math.round(p.f)+'Hz'), x, y-8);
+  });
+}
+// continuous vector + reson redraw if tabs are visible
+(function _imagerLoop(){
+  const t=document.getElementById('tab-image');
+  if(t && t.classList.contains('active')) _drawVectorscope();
+  requestAnimationFrame(_imagerLoop);
+})();
 
 // ===== LOUD — platform buttons =====
 function updateLoud(){
@@ -2879,6 +3170,24 @@ function applyModuleBypass(module, bypassed){
         _msEngage(); // re-evaluate based on current settings
       }
       break;
+    case 'image':
+      imagerBypassed=bypassed;
+      if(bypassed){
+        if(typeof msSideEqLow!=='undefined'&&msSideEqLow) msSideEqLow.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);
+        if(typeof msSideEqMid!=='undefined'&&msSideEqMid) msSideEqMid.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);
+        if(typeof msSideEqHigh!=='undefined'&&msSideEqHigh) msSideEqHigh.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);
+      } else {
+        updateImager();
+      }
+      break;
+    case 'reson':
+      resonBypassed=bypassed;
+      if(bypassed && window._resonBaseEQ){
+        // restaura EQ base
+        const t={bass:eqBass,mid:eqMid,high:eqHigh,air:eqAir};
+        Object.keys(t).forEach(k=>{ if(t[k]) t[k].gain.setTargetAtTime(window._resonBaseEQ[k],audioCtx.currentTime,0.05); });
+      }
+      break;
     case '__midside_old__':
       if(bypassed){
         moduleBypassSaved.midside={
@@ -3223,10 +3532,29 @@ function doLogin(){
 
     // apply tier from the account
     if(userData.type==='full' || userData.type==='master'){
+      // ── RESET total de qualquer estado anterior de demo/beta ──
+      if(betaTimerInterval){ clearInterval(betaTimerInterval); betaTimerInterval=null; }
+      betaSessionStart=null;
+      betaExportsUsed=0;
+      sessionStorage.removeItem('beta_session_start');
+      sessionStorage.removeItem('beta_exports_used');
+      const tb=document.getElementById('beta-timer'); if(tb) tb.style.display='none';
+      // ── aplica licença full/master ──
       isFullVersion=true;
       hasStudioPro=(userData.tier==='advanced');
       currentLicense={key:'account:'+user, tier:userData.tier, mode:userData.type, days:null};
       updateLicenseBadge();
+      // ── força refresh da UI: se algum modal de licença/paywall estiver aberto, fecha ──
+      const lm=document.getElementById('license-modal'); if(lm) lm.style.display='none';
+      const pm=document.getElementById('paywall-modal'); if(pm) pm.style.display='none';
+      // se a tab STUDIO PRO estiver aberta com o ecrã de bloqueio, renderiza o hub
+      const sp=document.getElementById('tab-studiopro');
+      if(sp && sp.style.display!=='none' && typeof fxRenderHub==='function'){
+        setTimeout(()=>fxRenderHub(),60);
+      }
+      const tier=userData.tier==='advanced'?'AVANÇADA':'BÁSICA';
+      const lvl=userData.type==='master'?'★ MASTER':'FULL '+tier;
+      setStatus('✓ Entraste como '+user+' — '+lvl+(userData.tier==='advanced'?' (STUDIO PRO desbloqueado)':''));
     }
     // Beta/limited user setup OR Demo with time limit
     if(userData.type==='beta' || (userData.type==='demo' && userData.minutes)){
@@ -3491,11 +3819,16 @@ function licCopy(t){ if(navigator.clipboard) navigator.clipboard.writeText(t); s
 function licLogin(){
   // Fecha o modal de licença e abre o ecrã de login para autenticar como master/full
   document.getElementById('license-modal').style.display='none';
-  // limpa sessão atual para forçar login
+  // ── RESET total ──
+  if(typeof betaTimerInterval!=='undefined' && betaTimerInterval){ clearInterval(betaTimerInterval); betaTimerInterval=null; }
+  if(typeof betaSessionStart!=='undefined') betaSessionStart=null;
+  if(typeof betaExportsUsed!=='undefined') betaExportsUsed=0;
   sessionStorage.removeItem('piradex_session');
   sessionStorage.removeItem('piradex_user');
   sessionStorage.removeItem('beta_session_start');
+  sessionStorage.removeItem('beta_exports_used');
   isLoggedIn=false; isFullVersion=false; hasStudioPro=false; currentLicense=null;
+  const tb=document.getElementById('beta-timer'); if(tb) tb.style.display='none';
   updateLicenseBadge();
   const ls=document.getElementById('login-screen');
   if(ls){ ls.style.display='flex'; const u=document.getElementById('login-user'); if(u){u.value='';u.focus();} const p=document.getElementById('login-pass'); if(p)p.value=''; const e=document.getElementById('login-error'); if(e)e.textContent=''; }

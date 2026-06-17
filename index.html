@@ -146,10 +146,12 @@
     <div class="tab" onclick="openTab('dyn',this)">DYN</div>
     <div class="tab" onclick="openTab('shape',this)">SHAPE</div>
     <div class="tab" onclick="openTab('width',this)">WIDTH</div>
+    <div class="tab" onclick="openTab('image',this)">IMAGE</div>
+    <div class="tab" onclick="openTab('reson',this)">RESON</div>
     <div class="tab" onclick="openTab('excite',this)">EXCITE</div>
     <div class="tab" onclick="openTab('loud',this)">LOUD</div>
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
-    <div class="tab" onclick="openTab('clip',this)">CLIP</div>
+    <div class="tab" onclick="openTab('clip',this)">CLIPPER</div>
     <div class="tab" onclick="openTab('midside',this)">M/S</div>
       <div class="tab" onclick="openTab('trans',this)">TRANS</div>
       <div class="tab" onclick="openTab('mband',this)">MBAND</div>
@@ -380,6 +382,74 @@
     </div>
   </div>
 
+  <!-- IMAGE TAB — Multiband Stereo Imager -->
+  <div class="tab-panel" id="tab-image">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">STEREO IMAGER — Multiband Width (4 bandas)</div>
+        <button class="module-bypass-btn" id="bypass-image" onclick="toggleModuleBypass('image')" title="Bypass Imager">BYPASS</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-top:8px;">
+        <div>
+          <canvas id="image-vec" width="320" height="220" style="width:100%;height:220px;background:#07070e;border-radius:6px;border:1px solid var(--border);"></canvas>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted2);margin-top:4px;font-family:monospace;">
+            <span>VECTORSCOPE (em tempo real)</span>
+            <span>correlação: <span id="image-corr" style="color:var(--c4)">+1.00</span></span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted2);letter-spacing:2px;margin-bottom:6px;">LARGURA POR BANDA</div>
+          <div class="img-band" style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:var(--c6)">SUB &lt;120Hz</span><span id="img-sub-v" style="font-family:monospace;color:var(--c6)">0%</span></div>
+            <input type="range" min="-100" max="100" value="0" step="1" id="img-sub" oninput="updateImager()" style="width:100%;accent-color:var(--c6)">
+            <div style="font-size:8px;color:var(--muted2);">sub recomendado: MONO ou negativo</div>
+          </div>
+          <div class="img-band" style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:var(--c5)">LOW 120-800</span><span id="img-low-v" style="font-family:monospace;color:var(--c5)">0%</span></div>
+            <input type="range" min="-100" max="100" value="0" step="1" id="img-low" oninput="updateImager()" style="width:100%;accent-color:var(--c5)">
+          </div>
+          <div class="img-band" style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:var(--c4)">MID 0.8-5k</span><span id="img-mid-v" style="font-family:monospace;color:var(--c4)">0%</span></div>
+            <input type="range" min="-100" max="100" value="0" step="1" id="img-mid" oninput="updateImager()" style="width:100%;accent-color:var(--c4)">
+          </div>
+          <div class="img-band" style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:var(--c3)">HIGH 5k+</span><span id="img-high-v" style="font-family:monospace;color:var(--c3)">0%</span></div>
+            <input type="range" min="-100" max="100" value="0" step="1" id="img-high" oninput="updateImager()" style="width:100%;accent-color:var(--c3)">
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:9px;color:var(--muted);margin-top:6px;font-family:monospace;">
+            <div>L/R · 0 = neutro · +100 = wide · -100 = mono</div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">Imager multibanda. Sub em mono protege graves para club/vinil. Médios e agudos podem ir wide para imersão. Vectorscope mostra a fase em tempo real.</div>
+    </div>
+  </div>
+
+  <!-- RESON TAB — Resonance Suppressor -->
+  <div class="tab-panel" id="tab-reson">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">RESON — Detetor de Ressonâncias Dinâmico</div>
+        <button class="module-bypass-btn" id="bypass-reson" onclick="toggleModuleBypass('reson')" title="Bypass Reson">BYPASS</button>
+      </div>
+      <canvas id="reson-cv" width="900" height="220" style="width:100%;height:220px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">
+        <div class="mod-ctrl"><label>SENSITIVITY</label><input type="range" min="0" max="100" value="50" step="1" id="rs-sens" oninput="updateReson()"><span id="rs-sens-v">50%</span></div>
+        <div class="mod-ctrl"><label>DEPTH (dB)</label><input type="range" min="0" max="18" value="6" step="0.5" id="rs-depth" oninput="updateReson()"><span id="rs-depth-v">-6 dB</span></div>
+        <div class="mod-ctrl"><label>SELECTIVITY (Q)</label><input type="range" min="20" max="100" value="60" step="1" id="rs-q" oninput="updateReson()"><span id="rs-q-v">6.0</span></div>
+        <div class="mod-ctrl"><label>ATTACK (ms)</label><input type="range" min="1" max="200" value="20" step="1" id="rs-atk" oninput="updateReson()"><span id="rs-atk-v">20 ms</span></div>
+        <div class="mod-ctrl"><label>RELEASE (ms)</label><input type="range" min="20" max="1000" value="200" step="10" id="rs-rel" oninput="updateReson()"><span id="rs-rel-v">200 ms</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button onclick="toggleResonMode('high')" id="rs-mode-h" class="rs-mode rs-mode-active">SOOTHE (suaviza ressonâncias)</button>
+        <button onclick="toggleResonMode('low')" id="rs-mode-l" class="rs-mode">RESO (controla zonas)</button>
+        <span style="flex:1;"></span>
+        <span style="font-size:10px;color:var(--muted);align-self:center;font-family:monospace;">picos ativos: <span id="rs-peaks" style="color:var(--c2)">0</span></span>
+      </div>
+      <div class="module-info">Deteta picos ressonantes ao longo do espectro em tempo real e aplica corte dinâmico apenas onde e quando precisa. Não toca em frequências limpas. <b>SOOTHE</b> = suaviza tudo. <b>RESO</b> = só atua nas piores zonas.</div>
+    </div>
+  </div>
+
   <!-- EXCITE TAB -->
   <div class="tab-panel" id="tab-excite">
     <div class="module-panel">
@@ -488,7 +558,7 @@
       </div>
 
       <!-- Curve display -->
-      <canvas id="clip-curve-canvas" height="150" style="width:100%;height:150px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:16px;"></canvas>
+      <canvas id="clip-curve-canvas" height="220" style="width:100%;height:220px;display:block;border-radius:6px;background:#07070e;border:1px solid var(--border);margin-bottom:16px;"></canvas>
 
       <!-- SECTION 1: CLIPPER -->
       <div style="font-size:10px;color:var(--c4);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">① CLIPPER</div>
@@ -1000,9 +1070,9 @@
 
         <!-- ===== BUY PANEL ===== -->
         <div id="lic-panel-buy">
-          <div class="paywall-desc" style="margin-bottom:14px;">Acesso vitalício à versão completa: <strong style="color:var(--c4)">25 ferramentas STUDIO PRO</strong>, exportações ilimitadas, todos os módulos.</div>
+          <div class="paywall-desc" style="margin-bottom:14px;">Acesso vitalício à versão completa: <strong style="color:var(--c4)">36 ferramentas STUDIO PRO</strong>, exportações ilimitadas, todos os módulos.</div>
 
-          <div class="paywall-desc" style="margin-bottom:12px;">Escolhe o teu plano. <b style="color:var(--c5)">Básica</b> = todos os módulos de masterização. <b style="color:var(--c4)">Avançada</b> = inclui as 25 ferramentas STUDIO PRO.</div>
+          <div class="paywall-desc" style="margin-bottom:12px;">Escolhe o teu plano. <b style="color:var(--c5)">Básica</b> = todos os módulos de masterização. <b style="color:var(--c4)">Avançada</b> = inclui as 36 ferramentas STUDIO PRO.</div>
 
           <!-- PLAN SELECTOR -->
           <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">VITALÍCIA — pagamento único</div>

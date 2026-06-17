@@ -1,24 +1,17 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-NESTA ATUALIZAÇÃO:
-1) Admin (admin / piradex2024) já é MASTER FULL com STUDIO PRO
-   e acesso a tudo (já estava — confirmado).
-2) DEMO: só MP3 — se a conta demo tentar exportar WAV, sai
-   aviso (alerta + status) e força o seletor para MP3.
-3) Mensagem do STUDIO PRO: já indica "25 ferramentas avançadas"
-   (verificado em todo o código).
-4) NOVA FERRAMENTA STUDIO PRO — AFINAÇÃO DE VOZ:
-   • Upload da faixa de voz
-   • Indicas a NOTA do canto (C…B) + tonalidade (maior/menor)
-   • Três módulos INDEPENDENTES (toggle on/off):
-       PITCH — deteta a nota dominante e corrige até ±6 semitons
-       TIME  — deteta BPM e ajusta para 120 BPM (alvo)
-       EQ    — HP 80 Hz, -3 dB @ 300 (lama), de-ess 7 kHz,
-               presença +2 dB @ 3 kHz
-   • Botões PROCESSAR · ORIGINAL / PROCESSADO (A/B) · EXPORTAR WAV
-   • Para auto-tune dinâmico nota-a-nota (phase vocoder) fica
-     no roadmap; esta versão faz correção global da nota dominante.
+GRÁFICO DO CLIPPER — Estilo 1 (Waveform Clássico) implementado:
+• Onda original (cinza claro, 1px)
+• Onda clipada (dourado #ebc35a, 2px) por cima
+• Marcadores rosa (pontos elípticos) nos topos cortados
+• Linhas tracejadas rosa do ceiling (5px on/off, mais arejado)
+• Legenda no canto superior esquerdo:
+   "— original   — depois do clipper   ● ponto clipado"
+• Contagem de pontos clipados no canto superior direito
+• Eixo "TIME →" no canto inferior esquerdo
+• Canvas aumentado de 150px para 220px (mais respiração)
+• Grelha mais discreta (só horizontais, sem verticais)
 
-TUDO O QUE JÁ EXISTIA mantém-se: 25 ferramentas STUDIO PRO,
-Piradex Mode com headroom -6 dBFS, demo com 10 min, login no
-modal de licença, gráfico do clipper com waveform, etc.
+Funciona com sinal real do clipper (analyserNode em
+clipInGain) ou sintético quando não há audio a tocar.
+Atualiza em tempo real via requestAnimationFrame.
