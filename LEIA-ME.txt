@@ -1,39 +1,34 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-REFORMA ESTRUTURAL — cada módulo tem agora os SEUS PRÓPRIOS
-nós de filtro dedicados. Já não há conflitos entre módulos.
+CORREÇÕES PRINCIPAIS:
 
-CADEIA SONORA (em ordem, após eqAir do EQ principal):
-  EQ → LOW FOCUS → HIGH FOCUS → MS EQ MID → DYN EQ
-     → SPECTRAL → RESON → shapeWS → ...
+1) DUPLICATAS REMOVIDAS
+   Havia 5 tabs ANTIGAS coloridas (DYN-EQ, M/S EQ, WARMTH,
+   TRANS-X, SPEC-S) duplicadas no fim da barra, a apontar
+   para tabs inexistentes (tmaster, sshaper). Removidas.
 
-Cada conjunto de nós:
-• LOW FOCUS:  highpass + peaking (punch) + peaking (mud)
-• HIGH FOCUS: highshelf (air) + peaking (de-ess) + peaking (presence)
-• MS EQ MID:  3 peaking dedicados (low/mid/high)
-• DYN EQ:     4 peaking dedicados (modulados por threshold)
-• SPECTRAL:   4 peaking dedicados (modulados pela curva-alvo)
-• RESON:      6 peaking dedicados (atribuídos aos picos detetados)
+2) SLIDERS QUE NÃO RESPONDIAM — CAUSA E SOLUÇÃO
+   Era um bug de LAYOUT, não de DSP. A classe .mod-ctrl usa
+   grid de 130px + 1fr + 80px (=210px de paddings). Dentro
+   de cartões pequenos (DYN EQ, MS EQ, etc com 1/3 ou 1/4 do
+   ecrã), o slider ficava com ~40px de largura — basicamente
+   invisível e impossível de arrastar.
+   SOLUÇÃO: nova classe .mod-ctrl-vert com layout vertical
+   (label em cima, slider+valor em baixo) que cabe em qualquer
+   largura. 39 sliders convertidos.
 
-QUANDO BYPASSED: todos os gain → 0 (transparente, sem efeito)
-QUANDO ATIVO:    cada módulo modula apenas os seus nós
+3) TRANSIENT MASTER agora atua a sério
+   Web Audio só comprime (DynamicsCompressorNode). Não dá para
+   "amplificar transientes" diretamente. Estratégia honesta:
+   • ATTACK negativo (-) → comprime os transientes (attack rápido)
+   • ATTACK positivo (+) → deixa transients passar, comprime sustain
+   • SUSTAIN negativo (-) → release rápido, corta cauda
+   • SUSTAIN positivo (+) → release longo, sustenta cauda
 
-═══ MUDANÇAS NA UI ═══
+4) TABS SEM COR
+   DYN EQ, M/S EQ, WARMTH, SPECTRAL, T-DESIGN, LOW FOCUS,
+   HIGH FOCUS agora têm as tabs SEM cor — iguais aos outros.
 
-1) LOW FOCUS e HIGH FOCUS agora têm tabs SEM cor (iguais aos outros).
-2) DYN EQ, M/S EQ, WARMTH, SPECTRAL, T-DESIGN: tabs sem cor também.
-3) RESON: dois botões DESCRITIVOS:
-   "Atenuar ressonâncias" · "Aumentar ressonâncias"
-   (já não há nomes SOOTHE / RESO)
-4) LOW FOCUS botões mantêm-se: TIGHT / BALANCED / WARM
-5) HIGH FOCUS botões mantêm-se: OPEN / VINYL / CLUB
-
-═══ QUALIDADE SONORA ═══
-
-Como cada módulo agora só toca nos seus próprios filtros, ao
-ativar várias coisas em conjunto os efeitos somam-se LIMPAMENTE
-em série — sem distorção de competição. O som é mais limpo.
-
-A chain está limitada a 1 só caminho serial: EQ principal +
-módulos dedicados + shape + compressor + multiband + clipper +
-limiter + M/S. Sem branches paralelos que dupliquem o sinal.
+A reforma estrutural anterior (cada módulo com seus próprios
+nós dedicados) mantém-se. Combinada com o fix dos sliders,
+todos os módulos devem agora responder e tocar no áudio.

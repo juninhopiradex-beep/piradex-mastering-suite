@@ -107,6 +107,11 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .module-title{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border2);}
 .module-controls{display:flex;flex-direction:column;gap:10px;}
 .mod-ctrl{display:grid;grid-template-columns:130px 1fr 80px;align-items:center;gap:10px;}
+.mod-ctrl-vert{display:flex;flex-direction:column;gap:3px;margin-bottom:6px;}
+.mod-ctrl-vert label{font-size:9px;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;font-weight:600;}
+.mod-ctrl-vert .row{display:flex;align-items:center;gap:6px;}
+.mod-ctrl-vert input[type=range]{flex:1;accent-color:var(--c1);min-width:50px;}
+.mod-ctrl-vert span{font-family:'Orbitron',monospace;font-size:10px;color:var(--text);min-width:50px;text-align:right;}
 .mod-ctrl label{font-size:9px;letter-spacing:1.5px;color:var(--muted2);text-transform:uppercase;font-weight:600;}
 .mod-ctrl input[type=range]{width:100%;accent-color:var(--c1);}
 .mod-ctrl span{font-family:'Orbitron',monospace;font-size:10px;color:var(--text);text-align:right;}

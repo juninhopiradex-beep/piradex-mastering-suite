@@ -166,11 +166,6 @@
     <div class="tab" onclick="openTab('tdesign',this)">T-DESIGN</div>
     <div class="tab" onclick="openTab('lowfocus',this)">LOW FOCUS</div>
     <div class="tab" onclick="openTab('highfocus',this)">HIGH FOCUS</div>
-    <div class="tab" onclick="openTab('dyneq',this)" style="color:var(--c4);">DYN-EQ</div>
-    <div class="tab" onclick="openTab('mseq',this)" style="color:var(--c5);">M/S EQ</div>
-    <div class="tab" onclick="openTab('warmth',this)" style="color:var(--c2);">WARMTH</div>
-    <div class="tab" onclick="openTab('tmaster',this)" style="color:var(--c1);">TRANS-X</div>
-    <div class="tab" onclick="openTab('sshaper',this)" style="color:var(--c7);">SPEC-S</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -826,27 +821,27 @@
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
         <div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--c5);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c5);margin-bottom:4px;">BANDA 1 (LOW)</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="40" max="400" value="120" id="deq1-f" oninput="updateDynEQ()"><span id="deq1-f-v">120 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="deq1-g" oninput="updateDynEQ()"><span id="deq1-g-v">0.0 dB</span></div>
-          <div class="mod-ctrl"><label>THRESHOLD</label><input type="range" min="-40" max="0" value="-20" id="deq1-t" oninput="updateDynEQ()"><span id="deq1-t-v">-20 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="40" max="400" value="120" id="deq1-f" oninput="updateDynEQ()"><span id="deq1-f-v">120 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="deq1-g" oninput="updateDynEQ()"><span id="deq1-g-v">0.0 dB</span></div></div>
+          <div class="mod-ctrl-vert"><label>THRESHOLD</label><div class="row"><input type="range" min="-40" max="0" value="-20" id="deq1-t" oninput="updateDynEQ()"><span id="deq1-t-v">-20 dB</span></div></div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--c4);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c4);margin-bottom:4px;">BANDA 2 (MID-LOW)</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="200" max="2000" value="500" id="deq2-f" oninput="updateDynEQ()"><span id="deq2-f-v">500 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="deq2-g" oninput="updateDynEQ()"><span id="deq2-g-v">0.0 dB</span></div>
-          <div class="mod-ctrl"><label>THRESHOLD</label><input type="range" min="-40" max="0" value="-18" id="deq2-t" oninput="updateDynEQ()"><span id="deq2-t-v">-18 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="200" max="2000" value="500" id="deq2-f" oninput="updateDynEQ()"><span id="deq2-f-v">500 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="deq2-g" oninput="updateDynEQ()"><span id="deq2-g-v">0.0 dB</span></div></div>
+          <div class="mod-ctrl-vert"><label>THRESHOLD</label><div class="row"><input type="range" min="-40" max="0" value="-18" id="deq2-t" oninput="updateDynEQ()"><span id="deq2-t-v">-18 dB</span></div></div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--c3);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c3);margin-bottom:4px;">BANDA 3 (MID-HI)</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="1000" max="8000" value="3000" id="deq3-f" oninput="updateDynEQ()"><span id="deq3-f-v">3000 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="deq3-g" oninput="updateDynEQ()"><span id="deq3-g-v">0.0 dB</span></div>
-          <div class="mod-ctrl"><label>THRESHOLD</label><input type="range" min="-40" max="0" value="-15" id="deq3-t" oninput="updateDynEQ()"><span id="deq3-t-v">-15 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="1000" max="8000" value="3000" id="deq3-f" oninput="updateDynEQ()"><span id="deq3-f-v">3000 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="deq3-g" oninput="updateDynEQ()"><span id="deq3-g-v">0.0 dB</span></div></div>
+          <div class="mod-ctrl-vert"><label>THRESHOLD</label><div class="row"><input type="range" min="-40" max="0" value="-15" id="deq3-t" oninput="updateDynEQ()"><span id="deq3-t-v">-15 dB</span></div></div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--c1);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c1);margin-bottom:4px;">BANDA 4 (HIGH)</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="4000" max="18000" value="8000" id="deq4-f" oninput="updateDynEQ()"><span id="deq4-f-v">8000 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="deq4-g" oninput="updateDynEQ()"><span id="deq4-g-v">0.0 dB</span></div>
-          <div class="mod-ctrl"><label>THRESHOLD</label><input type="range" min="-40" max="0" value="-12" id="deq4-t" oninput="updateDynEQ()"><span id="deq4-t-v">-12 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="4000" max="18000" value="8000" id="deq4-f" oninput="updateDynEQ()"><span id="deq4-f-v">8000 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="deq4-g" oninput="updateDynEQ()"><span id="deq4-g-v">0.0 dB</span></div></div>
+          <div class="mod-ctrl-vert"><label>THRESHOLD</label><div class="row"><input type="range" min="-40" max="0" value="-12" id="deq4-t" oninput="updateDynEQ()"><span id="deq4-t-v">-12 dB</span></div></div>
         </div>
       </div>
       <div class="module-info">EQ que SÓ ATUA quando a banda excede o threshold. Doma vocais duros, controla picos transientes, mantém respiração nas zonas calmas. <b>Gain negativo</b> = atenua quando excede (compressão por banda). <b>Gain positivo</b> = expande (amplifica quando excede). Gráfico mostra resposta atual + zona de atividade.</div>
@@ -868,18 +863,18 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;" id="mseq-controls">
         <div style="background:var(--bg3);border-left:3px solid var(--c5);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c5);margin-bottom:4px;">BANDA LOW</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="40" max="800" value="200" id="ms-l-f" oninput="updateMSEq()"><span id="ms-l-f-v">200 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-l-g" oninput="updateMSEq()"><span id="ms-l-g-v">0.0 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="40" max="800" value="200" id="ms-l-f" oninput="updateMSEq()"><span id="ms-l-f-v">200 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-l-g" oninput="updateMSEq()"><span id="ms-l-g-v">0.0 dB</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c4);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c4);margin-bottom:4px;">BANDA MID</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="500" max="5000" value="1500" id="ms-m-f" oninput="updateMSEq()"><span id="ms-m-f-v">1500 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-m-g" oninput="updateMSEq()"><span id="ms-m-g-v">0.0 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="500" max="5000" value="1500" id="ms-m-f" oninput="updateMSEq()"><span id="ms-m-f-v">1500 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-m-g" oninput="updateMSEq()"><span id="ms-m-g-v">0.0 dB</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:8px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c3);margin-bottom:4px;">BANDA HIGH</div>
-          <div class="mod-ctrl"><label>FREQ</label><input type="range" min="3000" max="18000" value="8000" id="ms-h-f" oninput="updateMSEq()"><span id="ms-h-f-v">8000 Hz</span></div>
-          <div class="mod-ctrl"><label>GAIN</label><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-h-g" oninput="updateMSEq()"><span id="ms-h-g-v">0.0 dB</span></div>
+          <div class="mod-ctrl-vert"><label>FREQ</label><div class="row"><input type="range" min="3000" max="18000" value="8000" id="ms-h-f" oninput="updateMSEq()"><span id="ms-h-f-v">8000 Hz</span></div></div>
+          <div class="mod-ctrl-vert"><label>GAIN</label><div class="row"><input type="range" min="-12" max="12" step="0.1" value="0" id="ms-h-g" oninput="updateMSEq()"><span id="ms-h-g-v">0.0 dB</span></div></div>
         </div>
       </div>
       <div class="module-info">EQ paramétrico que decide se cada banda atua no MID (mono/centro) ou no SIDE (estéreo). Corta 200 Hz só no SIDE para manter o kick em mono. Adiciona ar a 12 kHz só no SIDE para largura imersiva. Indispensável em mastering moderno.</div>
@@ -903,15 +898,15 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;">
         <div style="background:var(--bg3);border-left:3px solid var(--c6);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c6);margin-bottom:4px;">LOW (graves)</div>
-          <div class="mod-ctrl"><label>DRIVE</label><input type="range" min="0" max="100" value="20" id="wm-low-drive" oninput="updateWarmth()"><span id="wm-low-drive-v">20%</span></div>
+          <div class="mod-ctrl-vert"><label>DRIVE</label><div class="row"><input type="range" min="0" max="100" value="20" id="wm-low-drive" oninput="updateWarmth()"><span id="wm-low-drive-v">20%</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c4);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c4);margin-bottom:4px;">MID (médios)</div>
-          <div class="mod-ctrl"><label>DRIVE</label><input type="range" min="0" max="100" value="15" id="wm-mid-drive" oninput="updateWarmth()"><span id="wm-mid-drive-v">15%</span></div>
+          <div class="mod-ctrl-vert"><label>DRIVE</label><div class="row"><input type="range" min="0" max="100" value="15" id="wm-mid-drive" oninput="updateWarmth()"><span id="wm-mid-drive-v">15%</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c3);margin-bottom:4px;">HIGH (agudos)</div>
-          <div class="mod-ctrl"><label>DRIVE</label><input type="range" min="0" max="100" value="10" id="wm-high-drive" oninput="updateWarmth()"><span id="wm-high-drive-v">10%</span></div>
+          <div class="mod-ctrl-vert"><label>DRIVE</label><div class="row"><input type="range" min="0" max="100" value="10" id="wm-high-drive" oninput="updateWarmth()"><span id="wm-high-drive-v">10%</span></div></div>
         </div>
       </div>
       <div class="module-info">Saturação harmónica MULTIBANDA com 4 caracteres distintos. <b>TAPE</b>: harmónicos pares, comprime levemente. <b>TUBE</b>: harmónicos ímpares, calor. <b>TRANSFORMER</b>: graves cheios, agudos suaves. <b>CONSOLE</b>: glue subtil de SSL. Cada banda independente.</div>
@@ -927,10 +922,10 @@
       </div>
       <canvas id="sp-cv" width="900" height="200" style="width:100%;height:200px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
-        <div class="mod-ctrl"><label>TILT TARGET</label><input type="range" min="-12" max="0" value="-4.5" step="0.1" id="sp-tilt" oninput="updateSpectral()"><span id="sp-tilt-v">-4.5 dB/oct</span></div>
-        <div class="mod-ctrl"><label>SMOOTHING</label><input type="range" min="0" max="100" value="50" id="sp-smooth" oninput="updateSpectral()"><span id="sp-smooth-v">50%</span></div>
-        <div class="mod-ctrl"><label>AMOUNT</label><input type="range" min="0" max="100" value="40" id="sp-amount" oninput="updateSpectral()"><span id="sp-amount-v">40%</span></div>
-        <div class="mod-ctrl"><label>SPEED</label><input type="range" min="50" max="2000" value="500" id="sp-speed" oninput="updateSpectral()"><span id="sp-speed-v">500 ms</span></div>
+        <div class="mod-ctrl-vert"><label>TILT TARGET</label><div class="row"><input type="range" min="-12" max="0" value="-4.5" step="0.1" id="sp-tilt" oninput="updateSpectral()"><span id="sp-tilt-v">-4.5 dB/oct</span></div></div>
+        <div class="mod-ctrl-vert"><label>SMOOTHING</label><div class="row"><input type="range" min="0" max="100" value="50" id="sp-smooth" oninput="updateSpectral()"><span id="sp-smooth-v">50%</span></div></div>
+        <div class="mod-ctrl-vert"><label>AMOUNT</label><div class="row"><input type="range" min="0" max="100" value="40" id="sp-amount" oninput="updateSpectral()"><span id="sp-amount-v">40%</span></div></div>
+        <div class="mod-ctrl-vert"><label>SPEED</label><div class="row"><input type="range" min="50" max="2000" value="500" id="sp-speed" oninput="updateSpectral()"><span id="sp-speed-v">500 ms</span></div></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;">
         <button class="rs-mode rs-mode-active" onclick="setSpectralMode('balanced')" id="sp-m-balanced">BALANCED</button>
@@ -953,18 +948,18 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;">
         <div style="background:var(--bg3);border-left:3px solid var(--c5);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c5);margin-bottom:4px;">LOW (kick / sub)</div>
-          <div class="mod-ctrl"><label>ATTACK</label><input type="range" min="-50" max="50" value="0" id="td-low-atk" oninput="updateTDesign()"><span id="td-low-atk-v">0</span></div>
-          <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-50" max="50" value="0" id="td-low-sus" oninput="updateTDesign()"><span id="td-low-sus-v">0</span></div>
+          <div class="mod-ctrl-vert"><label>ATTACK</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-low-atk" oninput="updateTDesign()"><span id="td-low-atk-v">0</span></div></div>
+          <div class="mod-ctrl-vert"><label>SUSTAIN</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-low-sus" oninput="updateTDesign()"><span id="td-low-sus-v">0</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c4);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c4);margin-bottom:4px;">MID (snare / vocal)</div>
-          <div class="mod-ctrl"><label>ATTACK</label><input type="range" min="-50" max="50" value="0" id="td-mid-atk" oninput="updateTDesign()"><span id="td-mid-atk-v">0</span></div>
-          <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-50" max="50" value="0" id="td-mid-sus" oninput="updateTDesign()"><span id="td-mid-sus-v">0</span></div>
+          <div class="mod-ctrl-vert"><label>ATTACK</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-mid-atk" oninput="updateTDesign()"><span id="td-mid-atk-v">0</span></div></div>
+          <div class="mod-ctrl-vert"><label>SUSTAIN</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-mid-sus" oninput="updateTDesign()"><span id="td-mid-sus-v">0</span></div></div>
         </div>
         <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:10px;">
           <div style="font-size:10px;font-family:Rajdhani;font-weight:700;color:var(--c3);margin-bottom:4px;">HIGH (hats / cymbal)</div>
-          <div class="mod-ctrl"><label>ATTACK</label><input type="range" min="-50" max="50" value="0" id="td-high-atk" oninput="updateTDesign()"><span id="td-high-atk-v">0</span></div>
-          <div class="mod-ctrl"><label>SUSTAIN</label><input type="range" min="-50" max="50" value="0" id="td-high-sus" oninput="updateTDesign()"><span id="td-high-sus-v">0</span></div>
+          <div class="mod-ctrl-vert"><label>ATTACK</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-high-atk" oninput="updateTDesign()"><span id="td-high-atk-v">0</span></div></div>
+          <div class="mod-ctrl-vert"><label>SUSTAIN</label><div class="row"><input type="range" min="-50" max="50" value="0" id="td-high-sus" oninput="updateTDesign()"><span id="td-high-sus-v">0</span></div></div>
         </div>
       </div>
       <div class="module-info"><b>ATTACK +</b>: ataque mais pronunciado (kick mais punchy). <b>ATTACK -</b>: suaviza ataque (snare mais soft). <b>SUSTAIN +</b>: cauda mais longa (snare/cymbal). <b>SUSTAIN -</b>: corte rápido. Multibanda para tratar kick/snare/hats separadamente.</div>
@@ -980,10 +975,10 @@
       </div>
       <canvas id="lf-cv" width="900" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
-        <div class="mod-ctrl"><label>FREQ DE CORTE</label><input type="range" min="20" max="250" value="80" step="1" id="lf-freq" oninput="updateLowFocus()"><span id="lf-freq-v">80 Hz</span></div>
-        <div class="mod-ctrl"><label>TIGHTNESS</label><input type="range" min="0" max="100" value="50" step="1" id="lf-tight" oninput="updateLowFocus()"><span id="lf-tight-v">50%</span></div>
-        <div class="mod-ctrl"><label>PUNCH</label><input type="range" min="0" max="100" value="30" step="1" id="lf-punch" oninput="updateLowFocus()"><span id="lf-punch-v">30%</span></div>
-        <div class="mod-ctrl"><label>MONO BELOW</label><input type="range" min="40" max="200" value="100" step="1" id="lf-mono" oninput="updateLowFocus()"><span id="lf-mono-v">100 Hz</span></div>
+        <div class="mod-ctrl-vert"><label>FREQ DE CORTE</label><div class="row"><input type="range" min="20" max="250" value="80" step="1" id="lf-freq" oninput="updateLowFocus()"><span id="lf-freq-v">80 Hz</span></div></div>
+        <div class="mod-ctrl-vert"><label>TIGHTNESS</label><div class="row"><input type="range" min="0" max="100" value="50" step="1" id="lf-tight" oninput="updateLowFocus()"><span id="lf-tight-v">50%</span></div></div>
+        <div class="mod-ctrl-vert"><label>PUNCH</label><div class="row"><input type="range" min="0" max="100" value="30" step="1" id="lf-punch" oninput="updateLowFocus()"><span id="lf-punch-v">30%</span></div></div>
+        <div class="mod-ctrl-vert"><label>MONO BELOW</label><div class="row"><input type="range" min="40" max="200" value="100" step="1" id="lf-mono" oninput="updateLowFocus()"><span id="lf-mono-v">100 Hz</span></div></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button class="rs-mode" onclick="setLowFocusMode('tight')" id="lf-mode-tight">TIGHT (kuduro/club)</button>
@@ -1003,10 +998,10 @@
       </div>
       <canvas id="hf-cv" width="900" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
-        <div class="mod-ctrl"><label>FREQ DE AR</label><input type="range" min="6000" max="20000" value="12000" step="100" id="hf-freq" oninput="updateHighFocus()"><span id="hf-freq-v">12.0 kHz</span></div>
-        <div class="mod-ctrl"><label>AIR</label><input type="range" min="0" max="100" value="40" step="1" id="hf-air" oninput="updateHighFocus()"><span id="hf-air-v">40%</span></div>
-        <div class="mod-ctrl"><label>DE-ESS</label><input type="range" min="0" max="100" value="20" step="1" id="hf-deess" oninput="updateHighFocus()"><span id="hf-deess-v">20%</span></div>
-        <div class="mod-ctrl"><label>PRESENCE</label><input type="range" min="0" max="100" value="35" step="1" id="hf-pres" oninput="updateHighFocus()"><span id="hf-pres-v">35%</span></div>
+        <div class="mod-ctrl-vert"><label>FREQ DE AR</label><div class="row"><input type="range" min="6000" max="20000" value="12000" step="100" id="hf-freq" oninput="updateHighFocus()"><span id="hf-freq-v">12.0 kHz</span></div></div>
+        <div class="mod-ctrl-vert"><label>AIR</label><div class="row"><input type="range" min="0" max="100" value="40" step="1" id="hf-air" oninput="updateHighFocus()"><span id="hf-air-v">40%</span></div></div>
+        <div class="mod-ctrl-vert"><label>DE-ESS</label><div class="row"><input type="range" min="0" max="100" value="20" step="1" id="hf-deess" oninput="updateHighFocus()"><span id="hf-deess-v">20%</span></div></div>
+        <div class="mod-ctrl-vert"><label>PRESENCE</label><div class="row"><input type="range" min="0" max="100" value="35" step="1" id="hf-pres" oninput="updateHighFocus()"><span id="hf-pres-v">35%</span></div></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button class="rs-mode rs-mode-active" onclick="setHighFocusMode('open')" id="hf-mode-open">OPEN (Spotify/Apple)</button>

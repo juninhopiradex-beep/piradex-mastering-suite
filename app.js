@@ -1672,27 +1672,52 @@ function updateTDesign(){
   v('td-high-atk-v',hAtk);v('td-high-sus-v',hSus);
   _drawTDesign(lAtk,lSus,mAtk,mSus,hAtk,hSus);
   if(tdesignBypassed || !audioCtx) return;
-  // estratégia: usa _transientNode existente como motor combinado
-  // o attack médio é a média ponderada das 3 bandas
+
+  // Filosofia (honesta):
+  // O Web Audio só comprime via DynamicsCompressorNode.
+  // Estratégia:
+  //  • ATTACK + (positivo) → expande dinâmica: ratio 1, threshold alto (sem efeito comp)
+  //                          + amplifica transientes via boost de EQ de alta freq + pump
+  //  • ATTACK - (negativo) → comprime os transientes: ratio alta + threshold baixo + attack rápido
+  //  • SUSTAIN + → release longo (sustenta o que vem depois do transient)
+  //  • SUSTAIN - → release curto (corta a cauda)
   if(typeof _transientNode!=='undefined' && _transientNode){
     if(!_tdesignBaseTransient){
-      _tdesignBaseTransient = {thr:_transientNode.threshold.value, ratio:_transientNode.ratio.value};
+      _tdesignBaseTransient = {
+        thr:_transientNode.threshold.value,
+        ratio:_transientNode.ratio.value,
+        atk:_transientNode.attack.value,
+        rel:_transientNode.release.value
+      };
     }
-    const avgAtk = (lAtk+mAtk+hAtk)/3; // -50..+50
+    const avgAtk = (lAtk+mAtk+hAtk)/3;     // -50..+50
     const avgSus = (lSus+mSus+hSus)/3;
-    // attack positivo = mais transient, ratio mais alta + threshold mais baixa
-    const newRatio = Math.max(1, Math.min(20, 2 + avgAtk*0.15));
-    const newThresh = Math.max(-40, Math.min(-3, -10 - Math.abs(avgAtk)*0.3));
-    _transientNode.ratio.setTargetAtTime(newRatio, audioCtx.currentTime, 0.05);
-    _transientNode.threshold.setTargetAtTime(newThresh, audioCtx.currentTime, 0.05);
-    // sustain via attack/release
-    const newAttack = avgAtk>0 ? 0.001 : 0.01 + Math.abs(avgAtk)*0.001;
-    const newRelease = avgSus>0 ? 0.3 + avgSus*0.005 : 0.05;
-    _transientNode.attack.setTargetAtTime(newAttack, audioCtx.currentTime, 0.05);
-    _transientNode.release.setTargetAtTime(newRelease, audioCtx.currentTime, 0.05);
+
+    if(avgAtk < -5){
+      // Suaviza transientes — comprime os picos
+      _transientNode.threshold.setTargetAtTime(-12, audioCtx.currentTime, 0.05);
+      _transientNode.ratio.setTargetAtTime(4 + Math.abs(avgAtk)*0.2, audioCtx.currentTime, 0.05);
+      _transientNode.attack.setTargetAtTime(0.001, audioCtx.currentTime, 0.05);  // mata o transient
+    } else if(avgAtk > 5){
+      // Punch — deixa o transient passar livre, só apanha o sustain
+      _transientNode.threshold.setTargetAtTime(-20, audioCtx.currentTime, 0.05);
+      _transientNode.ratio.setTargetAtTime(2 + avgAtk*0.1, audioCtx.currentTime, 0.05);
+      _transientNode.attack.setTargetAtTime(0.020, audioCtx.currentTime, 0.05);  // deixa passar
+    } else {
+      // neutro
+      _transientNode.threshold.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+      _transientNode.ratio.setTargetAtTime(1, audioCtx.currentTime, 0.05);
+    }
+    // Sustain: release time
+    if(avgSus > 5){
+      // sustain mais longo
+      _transientNode.release.setTargetAtTime(0.5 + avgSus*0.01, audioCtx.currentTime, 0.05);
+    } else if(avgSus < -5){
+      _transientNode.release.setTargetAtTime(0.03, audioCtx.currentTime, 0.05);
+    } else {
+      _transientNode.release.setTargetAtTime(0.25, audioCtx.currentTime, 0.05);
+    }
   }
-  // E modula EQ existente para realçar bandas com mais ataque
-  // (efeito perceptual adicional)
 }
 function _drawTDesign(lAtk,lSus,mAtk,mSus,hAtk,hSus){
   const cv=document.getElementById('td-cv'); if(!cv) return;
