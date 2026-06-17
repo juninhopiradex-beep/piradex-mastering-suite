@@ -1031,6 +1031,18 @@ function setLowFocusMode(m){
     const b=document.getElementById('lf-mode-'+x);
     if(b) b.classList.toggle('rs-mode-active', x===m);
   });
+  // Aplica valores padrão por modo para se notar a mudança
+  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  if(m==='tight'){
+    // Kuduro/Club: HP alto, tightness +, punch +, mono mais alto
+    set('lf-freq',55);  set('lf-tight',80);  set('lf-punch',60);  set('lf-mono',130);
+  } else if(m==='warm'){
+    // Kizomba/Zouk: HP baixo, tightness baixo, punch suave, mono baixo
+    set('lf-freq',35);  set('lf-tight',30);  set('lf-punch',25);  set('lf-mono',80);
+  } else {
+    // Balanced
+    set('lf-freq',45);  set('lf-tight',55);  set('lf-punch',40);  set('lf-mono',100);
+  }
   updateLowFocus();
 }
 function updateLowFocus(){
@@ -1054,14 +1066,15 @@ function updateLowFocus(){
   }
   // Punch boost @ freq (ligeiramente acima do HP para definir o kick)
   let punchMod = 1;
-  if(lowFocusMode==='tight') punchMod = 1.2;
-  if(lowFocusMode==='warm')  punchMod = 0.8;
+  let tightExtra = 0;
+  if(lowFocusMode==='tight'){ punchMod = 1.5; tightExtra = -2; }   // mais punch + mais corte de lama
+  if(lowFocusMode==='warm'){  punchMod = 0.6; tightExtra = +1.5; } // menos punch, mais corpo (positivo em 300)
   _lfBass.frequency.setTargetAtTime(Math.max(60, freq*1.3), audioCtx.currentTime, 0.06);
   _lfBass.Q.setTargetAtTime(1.0, audioCtx.currentTime, 0.06);
   _lfBass.gain.setTargetAtTime((punch/100) * 4 * punchMod, audioCtx.currentTime, 0.06);
   // Tightness — corta lama em 250-400 Hz
   const tightAmt = (tight-50)/50; // -1..+1
-  _lfMud.gain.setTargetAtTime(tightAmt * -5, audioCtx.currentTime, 0.06);
+  _lfMud.gain.setTargetAtTime(tightAmt * -5 + tightExtra, audioCtx.currentTime, 0.06);
   // Mono below — engata M/S e corta side abaixo de `mono`
   if(msSideEqLow && msSideGain){
     msBypassed=false;
@@ -1132,6 +1145,17 @@ function setHighFocusMode(m){
     const b=document.getElementById('hf-mode-'+x);
     if(b) b.classList.toggle('rs-mode-active', x===m);
   });
+  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  if(m==='vinyl'){
+    // VINYL: ar baixo, de-ess forte (proteção do lacquer), presence média
+    set('hf-freq',10000); set('hf-air',20); set('hf-deess',65); set('hf-pres',30);
+  } else if(m==='club'){
+    // CLUB: ar médio, de-ess baixo, presence muito forte (corta no PA)
+    set('hf-freq',14000); set('hf-air',55); set('hf-deess',15); set('hf-pres',70);
+  } else {
+    // OPEN (Spotify/Apple): ar alto, de-ess baixo, presence média
+    set('hf-freq',13000); set('hf-air',60); set('hf-deess',25); set('hf-pres',40);
+  }
   updateHighFocus();
 }
 function updateHighFocus(){
@@ -1206,31 +1230,25 @@ let _dynEQInterval=null;
 
 function _buildDynEQ(){
   if(!audioCtx || _dynEQNodes) return;
-  const peaks=[], analysers=[], filters=[];
+  const analysers=[], filters=[];
   for(let i=0;i<4;i++){
-    const p=audioCtx.createBiquadFilter();
-    p.type='peaking'; p.Q.value=1.5; p.gain.value=0; p.frequency.value=[120,500,3000,8000][i];
-    peaks.push(p);
-    // analyser por banda — usa um bandpass + analyser
+    // analyser por banda: bandpass + analyser
     const bp=audioCtx.createBiquadFilter();
-    bp.type='bandpass'; bp.Q.value=1.5; bp.frequency.value=p.frequency.value;
+    bp.type='bandpass'; bp.Q.value=2; bp.frequency.value=[120,500,3000,8000][i];
     filters.push(bp);
     const an=audioCtx.createAnalyser();
-    an.fftSize=512; an.smoothingTimeConstant=0.3;
+    an.fftSize=512; an.smoothingTimeConstant=0.4;
     analysers.push(an);
   }
-  // Insere o EQ na cadeia: liga em série antes do limitador
-  // Usamos o masterGain como tap-off para os bandpasses (análise paralela)
-  if(masterGain){
+  // IMPORTANTE: tap-off é de eqAir (antes dos peaks DEQ na chain principal)
+  // para evitar feedback loop (o analyser senão estaria a medir o sinal já reduzido).
+  const sourceForAnalysis = (typeof eqAir!=='undefined' && eqAir) ? eqAir : masterGain;
+  if(sourceForAnalysis){
     filters.forEach((bp,i)=>{
-      masterGain.connect(bp); bp.connect(analysers[i]);
+      sourceForAnalysis.connect(bp); bp.connect(analysers[i]);
     });
   }
-  _dynEQNodes = {peaks, analysers, filters};
-  // peaks ligados em série — inserir entre eqAir e shapeWS
-  // Mas para evitar reconstruir a chain, ligamos os peaks ao masterGain como side-effect
-  // através do EQ existente: aplicamos delta nos peaks pré-existentes (eqBass/mid/high/air)
-  // mais simples e estável.
+  _dynEQNodes = {analysers, filters};
 }
 
 function updateDynEQ(){
@@ -1258,7 +1276,7 @@ function _startDynEQLoop(){
       const f=parseInt(document.getElementById('deq'+idx+'-f')?.value||1000);
       const g=parseFloat(document.getElementById('deq'+idx+'-g')?.value||0);
       const t=parseInt(document.getElementById('deq'+idx+'-t')?.value||-20);
-      // medir energia na banda
+      // medir energia na banda (de eqAir, não do master — evita feedback)
       const an=_dynEQNodes.analysers[i];
       const data=new Float32Array(an.frequencyBinCount);
       an.getFloatFrequencyData(data);
@@ -1268,13 +1286,18 @@ function _startDynEQLoop(){
       for(let b=Math.max(0,targetBin-4); b<Math.min(an.frequencyBinCount,targetBin+4); b++){
         if(data[b]>-Infinity) avg = avg===-Infinity ? data[b] : Math.max(avg,data[b]);
       }
+      // ratio = quanto a banda ultrapassa o threshold (0 a 1)
       const ratio = avg>t ? Math.min(1, (avg-t)/12) : 0;
       const applied = g * ratio;
-      // Atualiza nó dedicado deste DYN EQ
+      // Atualiza nó dedicado
       if(_deqNodes[i]){
         _deqNodes[i].frequency.setTargetAtTime(f, audioCtx.currentTime, 0.04);
+        _deqNodes[i].Q.setTargetAtTime(1.5, audioCtx.currentTime, 0.04);
         _deqNodes[i].gain.setTargetAtTime(applied, audioCtx.currentTime, 0.04);
       }
+      // mostrar valor aplicado no label
+      const v=document.getElementById('deq'+idx+'-applied');
+      if(v) v.textContent = applied.toFixed(1)+' dB';
     }
   }, 100);
 }
@@ -1546,6 +1569,16 @@ function setSpectralMode(m){
   ['balanced','vocal','bright','warm'].forEach(x=>{
     const b=document.getElementById('sp-m-'+x); if(b) b.classList.toggle('rs-mode-active', x===m);
   });
+  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  if(m==='vocal'){
+    set('sp-tilt',-4); set('sp-smooth',60); set('sp-amount',55); set('sp-speed',300);
+  } else if(m==='bright'){
+    set('sp-tilt',-3); set('sp-smooth',40); set('sp-amount',45); set('sp-speed',400);
+  } else if(m==='warm'){
+    set('sp-tilt',-6); set('sp-smooth',60); set('sp-amount',55); set('sp-speed',700);
+  } else {
+    set('sp-tilt',-4.5); set('sp-smooth',50); set('sp-amount',40); set('sp-speed',500);
+  }
   updateSpectral();
 }
 function updateSpectral(){
