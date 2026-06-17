@@ -1,17 +1,47 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-GRÁFICO DO CLIPPER — Estilo 1 (Waveform Clássico) implementado:
-• Onda original (cinza claro, 1px)
-• Onda clipada (dourado #ebc35a, 2px) por cima
-• Marcadores rosa (pontos elípticos) nos topos cortados
-• Linhas tracejadas rosa do ceiling (5px on/off, mais arejado)
-• Legenda no canto superior esquerdo:
-   "— original   — depois do clipper   ● ponto clipado"
-• Contagem de pontos clipados no canto superior direito
-• Eixo "TIME →" no canto inferior esquerdo
-• Canvas aumentado de 150px para 220px (mais respiração)
-• Grelha mais discreta (só horizontais, sem verticais)
+CORREÇÕES + NOVOS MÓDULOS:
 
-Funciona com sinal real do clipper (analyserNode em
-clipInGain) ou sintético quando não há audio a tocar.
-Atualiza em tempo real via requestAnimationFrame.
+1) TAB BAR em 2 LINHAS
+   Top:    MASTER · REFERÊNCIA · ANÁLISES · STUDIO PRO
+   Baixo:  EQ · COMP · DYN · SHAPE · WIDTH · IMAGE · RESON ·
+           EXCITE · LOUD · LIMIT · CLIPPER · M/S · TRANS ·
+           MBAND · LOW FOCUS · HIGH FOCUS
+
+2) BYPASS DO COMPRESSOR — corrigido
+   Em vez de só zerar threshold/ratio, agora usa setValueAtTime
+   com knee=0 e ataques curtos para um passthrough TOTAL real.
+
+3) STEREO IMAGER — agora afeta o áudio
+   - Sliders Sub/Low/Mid/High agora controlam EFETIVAMENTE
+     o EQ no caminho SIDE
+   - AMOUNT (0-200%) — controlo global de width estilo Ozone
+   - DRIVE (-12 a +12 dB) — ganho ao side total estilo Ozone
+   - Caminho M/S é automaticamente ativado quando se mexe
+
+4) RESON — gráfico e atuação corrigidos
+   - Analyser DEDICADO ligado ao masterGain
+   - Loop arranca automaticamente quando se abre o tab
+   - Desenha o espectro mesmo em silêncio (curva visível)
+   - Marca picos com bolas laranja + frequência em Hz/kHz
+   - Atenua dinamicamente via EQ existente
+
+5) LOW FOCUS — novo módulo (cor: roxo c6)
+   - Freq de corte 20-250 Hz
+   - TIGHTNESS (reduz mud 250-400 Hz)
+   - PUNCH (boost no kick)
+   - MONO BELOW (frequência abaixo da qual põe em mono)
+   - 3 modos: TIGHT/BALANCED/WARM
+   - Gráfico mostra resposta + zona mono
+
+6) HIGH FOCUS — novo módulo (cor: amarelo c3)
+   - Freq de ar 6-20 kHz
+   - AIR (boost shelf)
+   - DE-ESS (atenuação 7 kHz)
+   - PRESENCE (boost 3 kHz)
+   - 3 modos: OPEN/VINYL/CLUB
+   - Gráfico mostra resposta combinada
+
+TODOS OS NOVOS MÓDULOS modulam EQ nodes existentes (não
+quebram a chain principal). Bypass total restaura valores
+guardados.

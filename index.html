@@ -138,9 +138,13 @@
   </div>
 
   <!-- TABS -->
-  <div class="tabs">
+  <div class="tabs tabs-primary">
     <div class="tab tab-primary active" onclick="openTab('master',this)">MASTER</div>
-    <div class="tab tab-divider">|</div>
+    <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
+    <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
+    <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
+  </div>
+  <div class="tabs tabs-effects">
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
     <div class="tab" onclick="openTab('comp',this)">COMP</div>
     <div class="tab" onclick="openTab('dyn',this)">DYN</div>
@@ -153,12 +157,10 @@
     <div class="tab" onclick="openTab('limit',this)">LIMIT</div>
     <div class="tab" onclick="openTab('clip',this)">CLIPPER</div>
     <div class="tab" onclick="openTab('midside',this)">M/S</div>
-      <div class="tab" onclick="openTab('trans',this)">TRANS</div>
-      <div class="tab" onclick="openTab('mband',this)">MBAND</div>
-    <div class="tab tab-divider">|</div>
-    <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
-    <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
-    <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
+    <div class="tab" onclick="openTab('trans',this)">TRANS</div>
+    <div class="tab" onclick="openTab('mband',this)">MBAND</div>
+    <div class="tab" onclick="openTab('lowfocus',this)" style="color:var(--c6);">LOW FOCUS</div>
+    <div class="tab" onclick="openTab('highfocus',this)" style="color:var(--c3);">HIGH FOCUS</div>
   </div>
 
   <!-- MASTER TAB -->
@@ -416,8 +418,15 @@
             <div style="display:flex;justify-content:space-between;font-size:10px;"><span style="color:var(--c3)">HIGH 5k+</span><span id="img-high-v" style="font-family:monospace;color:var(--c3)">0%</span></div>
             <input type="range" min="-100" max="100" value="0" step="1" id="img-high" oninput="updateImager()" style="width:100%;accent-color:var(--c3)">
           </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:9px;color:var(--muted);margin-top:6px;font-family:monospace;">
-            <div>L/R · 0 = neutro · +100 = wide · -100 = mono</div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:9px;color:var(--muted);margin-top:8px;font-family:monospace;">
+            <div style="font-size:9px;color:var(--c4);letter-spacing:1.5px;margin-bottom:6px;">CONTROLO GLOBAL (estilo Ozone)</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:4px;"><span style="color:var(--c4)">AMOUNT</span><span id="img-amount-v" style="font-family:monospace;color:var(--c4)">100%</span></div>
+            <input type="range" min="0" max="200" value="100" step="1" id="img-amount" oninput="updateImager()" style="width:100%;accent-color:var(--c4)">
+            <div style="font-size:8px;color:var(--muted2);">0% = mono total · 100% = neutro · 200% = wide extremo</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-top:8px;"><span style="color:var(--c2)">DRIVE</span><span id="img-drive-v" style="font-family:monospace;color:var(--c2)">+0.0 dB</span></div>
+            <input type="range" min="-12" max="12" value="0" step="0.1" id="img-drive" oninput="updateImager()" style="width:100%;accent-color:var(--c2)">
+            <div style="font-size:8px;color:var(--muted2);">ganho aplicado ao side total (dB)</div>
+            <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:6px;font-size:8px;">L/R · 0 = neutro · +100 = wide · -100 = mono</div>
           </div>
         </div>
       </div>
@@ -793,6 +802,52 @@
         <input type="range" id="mb-high-ratio" min="1" max="10" value="2" step="0.5" oninput="updateMultiband()">
         <span style="font-size:11px;color:#2dff8a;text-align:right;font-family:'Rajdhani';" id="mb-high-ratio-v">2:1</span>
       </div>
+    </div>
+  </div>
+
+  <!-- LOW FOCUS TAB -->
+  <div class="tab-panel" id="tab-lowfocus">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">LOW FOCUS — Controlo Cirúrgico de Graves</div>
+        <button class="module-bypass-btn" id="bypass-lowfocus" onclick="toggleModuleBypass('lowfocus')" title="Bypass Low Focus">BYPASS</button>
+      </div>
+      <canvas id="lf-cv" width="900" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
+        <div class="mod-ctrl"><label>FREQ DE CORTE</label><input type="range" min="20" max="250" value="80" step="1" id="lf-freq" oninput="updateLowFocus()"><span id="lf-freq-v">80 Hz</span></div>
+        <div class="mod-ctrl"><label>TIGHTNESS</label><input type="range" min="0" max="100" value="50" step="1" id="lf-tight" oninput="updateLowFocus()"><span id="lf-tight-v">50%</span></div>
+        <div class="mod-ctrl"><label>PUNCH</label><input type="range" min="0" max="100" value="30" step="1" id="lf-punch" oninput="updateLowFocus()"><span id="lf-punch-v">30%</span></div>
+        <div class="mod-ctrl"><label>MONO BELOW</label><input type="range" min="40" max="200" value="100" step="1" id="lf-mono" oninput="updateLowFocus()"><span id="lf-mono-v">100 Hz</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="rs-mode" onclick="setLowFocusMode('tight')" id="lf-mode-tight">TIGHT (kuduro/club)</button>
+        <button class="rs-mode rs-mode-active" onclick="setLowFocusMode('balanced')" id="lf-mode-balanced">BALANCED (geral)</button>
+        <button class="rs-mode" onclick="setLowFocusMode('warm')" id="lf-mode-warm">WARM (kizomba/zouk)</button>
+      </div>
+      <div class="module-info">Aperta o grave para um sub controlado e definido. <b>TIGHTNESS</b> reduz mud em 250–400 Hz. <b>PUNCH</b> dá ataque ao kick. <b>MONO BELOW</b> põe tudo abaixo da frequência em mono (protege graves para club/vinil).</div>
+    </div>
+  </div>
+
+  <!-- HIGH FOCUS TAB -->
+  <div class="tab-panel" id="tab-highfocus">
+    <div class="module-panel">
+      <div class="module-title-row">
+        <div class="module-title">HIGH FOCUS — Ar, Claridade e Definição</div>
+        <button class="module-bypass-btn" id="bypass-highfocus" onclick="toggleModuleBypass('highfocus')" title="Bypass High Focus">BYPASS</button>
+      </div>
+      <canvas id="hf-cv" width="900" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;">
+        <div class="mod-ctrl"><label>FREQ DE AR</label><input type="range" min="6000" max="20000" value="12000" step="100" id="hf-freq" oninput="updateHighFocus()"><span id="hf-freq-v">12.0 kHz</span></div>
+        <div class="mod-ctrl"><label>AIR</label><input type="range" min="0" max="100" value="40" step="1" id="hf-air" oninput="updateHighFocus()"><span id="hf-air-v">40%</span></div>
+        <div class="mod-ctrl"><label>DE-ESS</label><input type="range" min="0" max="100" value="20" step="1" id="hf-deess" oninput="updateHighFocus()"><span id="hf-deess-v">20%</span></div>
+        <div class="mod-ctrl"><label>PRESENCE</label><input type="range" min="0" max="100" value="35" step="1" id="hf-pres" oninput="updateHighFocus()"><span id="hf-pres-v">35%</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="rs-mode rs-mode-active" onclick="setHighFocusMode('open')" id="hf-mode-open">OPEN (Spotify/Apple)</button>
+        <button class="rs-mode" onclick="setHighFocusMode('vinyl')" id="hf-mode-vinyl">VINYL (suaviza ar)</button>
+        <button class="rs-mode" onclick="setHighFocusMode('club')" id="hf-mode-club">CLUB (presence forte)</button>
+      </div>
+      <div class="module-info">Abre os agudos sem ficar duro. <b>AIR</b> adiciona brilho em 10–18 kHz. <b>DE-ESS</b> controla sibilância em 5–8 kHz. <b>PRESENCE</b> realça definição em 2–4 kHz para vocais e cymbals.</div>
     </div>
   </div>
 
