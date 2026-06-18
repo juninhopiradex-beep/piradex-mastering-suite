@@ -1,42 +1,17 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-CORREÇÕES NESTE BUILD:
+NESTA VERSÃO:
 
-1) PRESETS (botões de modo) — agora aplicam VALORES, não só multiplicadores
-   • LOW FOCUS:
-     - TIGHT     → freq 55Hz · tight 80% · punch 60% · mono 130Hz
-     - BALANCED  → freq 45Hz · tight 55% · punch 40% · mono 100Hz
-     - WARM      → freq 35Hz · tight 30% · punch 25% · mono 80Hz
-   • HIGH FOCUS:
-     - OPEN      → ar 13kHz · air 60% · de-ess 25% · pres 40%
-     - VINYL     → ar 10kHz · air 20% · de-ess 65% · pres 30%
-     - CLUB      → ar 14kHz · air 55% · de-ess 15% · pres 70%
-   • SPECTRAL:
-     - BALANCED  → tilt -4.5 · amt 40 · speed 500
-     - VOCAL     → tilt -4   · amt 55 · speed 300
-     - BRIGHT    → tilt -3   · amt 45 · speed 400
-     - WARM      → tilt -6   · amt 55 · speed 700
-   Cada clique muda visualmente os sliders e o som.
+• AI De-Noiser implementado a sério (DSP clássico, sem modelo):
+  - Hum 50 Hz / 60 Hz (+harmónicos) via notch filters Q=30
+  - White noise via highshelf -8 dB
+  - Rumble via highpass 40 Hz
+• AI Vocal Tune Pro implementado a sério (sem modelo ML):
+  - Pitch detection via autocorrelação
+  - Histograma de notas + detecção de tonalidade maior
+  - Honesto sobre limitações (não corrige nota-a-nota em master)
+• AI Stems e AI Lyric-Aware mantidos como "Coming Soon" com
+  explicação técnica honesta de PORQUÊ (modelos grandes,
+  download longo em mobile)
 
-2) DYNAMIC EQ — fix de feedback loop
-   Os analysers de banda estavam ligados ao masterGain
-   (depois dos peaks DEQ na chain). Isto criava feedback:
-   o analyser media o sinal já reduzido, reduzia mais, etc.
-   Resultado: ficava sempre próximo de 0, parecia não atuar.
-   AGORA: analysers ligam ao eqAir (antes dos peaks DEQ).
-   Mede o sinal limpo, decide quanto reduzir, aplica nos
-   peaks dedicados. Sem oscilação.
-   Cada cartão mostra agora "aplicado: X.X dB" em verde.
-
-3) RESON — botões maiores e mais claros
-   "▼ ATENUAR RESSONÂNCIAS"  /  "▲ REALÇAR RESSONÂNCIAS"
-   Fontes maiores, ícones direcionais, padding maior.
-
-4) TRANSIENT MASTER — recordatório de uso
-   O Web Audio só comprime (não expande). Logo:
-   ATTACK + → comprime sustain (transients passam livres → soa mais punchy)
-   ATTACK − → comprime transients (soa mais soft)
-   SUSTAIN + → release longo (cauda sustenta)
-   SUSTAIN − → release curto (corta cauda)
-   Com TODOS os sliders a -50, comprime tudo. Diferenças
-   audíveis sobretudo com material com transients fortes.
+Ver também o documento ANÁLISE-GLOBAL.md

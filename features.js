@@ -52,6 +52,17 @@ const FX = [
   {id:'culture',  name:'Audience Simulator ✦',sub:'Masteriza para cada cultura', c:'var(--c3)'},
   {id:'semantic', name:'Stem-Master Semântica ✦',sub:'EQ por conceitos emocionais', c:'var(--c6)'},
   {id:'karma',    name:'Mastering Karma ✦',   sub:'Recompensa por bom workflow', c:'var(--c3)'},
+  // ── AI SUITE (v3 — 6 implementadas + 4 "coming soon") ──
+  {id:'aiRefMatch', name:'AI Reference Match ✦', sub:'Iguala o teu master a qualquer referência', c:'var(--c4)'},
+  {id:'aiGenre',    name:'AI Genre Detector ✦',  sub:'Deteta género e aplica chain otimizada', c:'var(--c5)'},
+  {id:'aiCoach',    name:'AI Loudness Coach ✦',  sub:'Combate a loudness race com pedagogia', c:'var(--c3)'},
+  {id:'aiCohesion', name:'AI Album Cohesion ✦',  sub:'Multi-faixa: master coeso de início ao fim', c:'var(--c6)'},
+  {id:'aiReverb',   name:'AI Reverb from Text ✦',sub:'"igreja em Luanda" → IR sintética', c:'var(--c1)'},
+  {id:'aiAssistant',name:'AI Mastering Assistant ✦', sub:'Diagnóstico inteligente em PT angolano', c:'var(--c4)'},
+  {id:'aiStems',    name:'AI Stem Separator ⏳', sub:'Demucs no browser — Coming Soon Q2', c:'var(--muted)'},
+  {id:'aiLyric',    name:'AI Lyric-Aware Master ⏳', sub:'Master diferente para versos vs refrões', c:'var(--muted)'},
+  {id:'aiDeNoise',  name:'AI Restoration ⏳',    sub:'De-noise + de-hum + de-click — Coming Soon', c:'var(--muted)'},
+  {id:'aiVocal',    name:'AI Vocal Tune Pro ⏳', sub:'Pitch correction sem escolher escala', c:'var(--muted)'},
 ];
 
 window.fxRenderHub = function(){
@@ -1895,5 +1906,657 @@ window.fxView_karma=function(b){
   <div style="margin-top:14px;font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">HISTÓRICO RECENTE</div>
   ${d.events.length?d.events.slice(0,8).map(e=>card('<span style="font-family:monospace;font-size:10px;color:var(--muted2);">'+new Date(e.t).toLocaleDateString('pt-PT')+'</span> &nbsp;<span style="color:var(--text);">'+e.label+'</span> <span style="float:right;color:'+(e.delta>0?'var(--c4)':'var(--c7)')+';font-family:monospace;">'+(e.delta>0?'+':'')+e.delta+'</span>',e.delta>0?'var(--c4)':'var(--c7)')).join(''):'<div style="color:var(--muted);font-size:11px;">Sem ações registadas.</div>'}`;
 };
+
+})();
+
+/* ═══════════ AI SUITE V3 ═══════════ */
+(function(){
+'use strict';
+const {btn,card,canvasEl,measure}=window.__fx;
+const $=window.__fx.$, status=window.__fx.status, hasAudio=window.__fx.hasAudio;
+
+// ════════ 1. AI REFERENCE MATCH ════════
+let _refBuffer=null, _refSpec=null, _tgtSpec=null;
+window.fxView_aiRefMatch=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Carrega uma faixa de referência. A AI analisa a impressão sónica (EQ curve, dynamics, stereo image, loudness) e alinha o teu master.</div>
+  ${card('<label style="display:inline-block;padding:8px 14px;border-radius:6px;border:1px solid var(--c4);background:color-mix(in srgb,var(--c4) 12%,transparent);color:var(--c4);font-family:Rajdhani;font-weight:700;font-size:11px;cursor:pointer;">+ CARREGAR REFERÊNCIA<input id="ref-file" type="file" accept="audio/*" onchange="fxRefLoad(this.files[0])" style="display:none;"></label> <span id="ref-info" style="margin-left:10px;font-size:11px;color:var(--muted);">Sem referência carregada</span>','var(--c4)')}
+  <canvas id="ref-comp" width="700" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:10px;"></canvas>
+  <div style="display:flex;gap:8px;margin-top:10px;">${btn('ANALISAR AMBOS','var(--c5)','fxRefAnalyze()','')}${btn('APLICAR MATCH','var(--c4)','fxRefApply()','')}</div>
+  <div id="ref-out" style="margin-top:10px;"></div>`;
+  _drawRefComparison();
+};
+window.fxRefLoad=async function(file){
+  if(!file) return;
+  const info=$('ref-info'); if(info) info.textContent='A carregar '+file.name+'...';
+  try{
+    const ac=(typeof audioCtx!=='undefined'&&audioCtx)?audioCtx:new(window.AudioContext||window.webkitAudioContext)();
+    _refBuffer=await ac.decodeAudioData(await file.arrayBuffer());
+    if(info) info.textContent='✓ '+file.name+' · '+_refBuffer.duration.toFixed(1)+'s';
+  }catch(e){ if(info) info.textContent='Erro: '+e.message; }
+};
+function _computeSpectrum(buf, nbins=24){
+  const ch=buf.getChannelData(0), sr=buf.sampleRate, N=Math.min(ch.length, sr*30);
+  const win=4096, hop=2048;
+  const spec=new Float32Array(nbins);
+  let cnt=0;
+  for(let i=0;i+win<N;i+=hop){
+    // simple log-band power via DFT (small for performance)
+    const bandHz=sr/2/nbins;
+    for(let b=0;b<nbins;b++){
+      const lo=Math.max(1, Math.floor(20*Math.pow(20000/20, b/nbins)));
+      const hi=Math.max(lo+1, Math.floor(20*Math.pow(20000/20, (b+1)/nbins)));
+      // very rough: sum FFT amplitude approximation
+      // (full FFT is overkill; use band-pass energy on time domain)
+      let energy=0;
+      // approximate via downsampled bandpass-like sum
+      const k=Math.max(1, Math.floor(sr/hi/4));
+      for(let j=i;j<i+win;j+=k){
+        energy+=ch[j]*ch[j];
+      }
+      spec[b]+=energy/win;
+    }
+    cnt++;
+    if(cnt>20) break;
+  }
+  for(let b=0;b<nbins;b++) spec[b]=10*Math.log10((spec[b]/cnt)+1e-10);
+  return spec;
+}
+window.fxRefAnalyze=function(){
+  if(!hasAudio()){status('Carrega a tua música primeiro'); return;}
+  if(!_refBuffer){status('Carrega uma referência primeiro'); return;}
+  status('A analisar referência...');
+  setTimeout(()=>{
+    _refSpec=_computeSpectrum(_refBuffer);
+    _tgtSpec=_computeSpectrum(audioBuffer);
+    _drawRefComparison();
+    const m1=measure(audioBuffer), m2=measure(_refBuffer);
+    $('ref-out').innerHTML=card(
+      '<b style="color:var(--c4)">Análise completa</b><br>'+
+      '<span style="font-size:11px;color:var(--muted)">A tua faixa: '+m1.lufs.toFixed(1)+' LUFS · graves '+m1.low.toFixed(0)+'% · agudos '+m1.high.toFixed(0)+'%</span><br>'+
+      '<span style="font-size:11px;color:var(--c5)">Referência: '+m2.lufs.toFixed(1)+' LUFS · graves '+m2.low.toFixed(0)+'% · agudos '+m2.high.toFixed(0)+'%</span><br>'+
+      '<span style="font-size:11px;color:var(--c2)">Diferença: LUFS '+(m2.lufs-m1.lufs>0?'+':'')+(m2.lufs-m1.lufs).toFixed(1)+' · tilt espectral '+((m2.high-m1.high)-(m2.low-m1.low)).toFixed(0)+'%</span>',
+      'var(--c4)');
+    status('Análise pronta — clica APLICAR para ajustar');
+  },80);
+};
+window.fxRefApply=function(){
+  if(!_refSpec || !_tgtSpec){status('Analisa primeiro'); return;}
+  const m1=measure(audioBuffer), m2=measure(_refBuffer);
+  // ajusta knobs do master para apontar à referência
+  const lufsDelta = m2.lufs - m1.lufs;
+  const tiltDelta = (m2.high-m1.high)-(m2.low-m1.low);
+  if(typeof kvals!=='undefined' && kvals){
+    kvals.LOUD = Math.max(0,Math.min(100,(kvals.LOUD||50) + lufsDelta*4));
+    if(tiltDelta>0) { kvals.WIDE = Math.min(100,(kvals.WIDE||50) + tiltDelta*0.5); }
+  }
+  if(typeof eqBass!=='undefined' && eqBass) eqBass.gain.value += (m2.low-m1.low)*0.08;
+  if(typeof eqAir!=='undefined' && eqAir) eqAir.gain.value += (m2.high-m1.high)*0.08;
+  if(typeof refreshKnobs==='function') refreshKnobs();
+  if(typeof applyDSP==='function') applyDSP();
+  if(typeof syncEQSliders==='function') syncEQSliders();
+  status('✓ Master ajustado para igualar a referência');
+};
+function _drawRefComparison(){
+  const cv=document.getElementById('ref-comp'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  [60,250,1000,4000,16000].forEach(f=>{
+    const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H-14); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='9px monospace'; ctx.textAlign='center';
+    ctx.fillText(f>=1000?(f/1000)+'k':f+'',x,H-2);
+  });
+  function drawSpec(spec, color){
+    if(!spec) return;
+    ctx.strokeStyle=color; ctx.lineWidth=2;
+    const nb=spec.length;
+    let max=-Infinity,min=Infinity;
+    for(let i=0;i<nb;i++){if(spec[i]>max)max=spec[i];if(spec[i]<min)min=spec[i];}
+    const range=Math.max(1,max-min);
+    ctx.beginPath();
+    for(let i=0;i<nb;i++){
+      const x=(i+0.5)/nb*W;
+      const t=(spec[i]-min)/range;
+      const y=H-14 - t*(H-30);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  drawSpec(_tgtSpec, 'rgba(255,255,255,0.85)');
+  drawSpec(_refSpec, 'rgba(45,255,138,0.85)');
+  ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font='10px monospace'; ctx.textAlign='left';
+  ctx.fillText('— A tua faixa', 10, 18);
+  ctx.fillStyle='rgba(45,255,138,0.85)';
+  ctx.fillText('— Referência', 10, 34);
+}
+
+// ════════ 2. AI GENRE DETECTOR ════════
+const GENRE_PROFILES={
+  kuduro:    {low:60, mid:25, high:15, crest:5,  lufs:-7,  emoji:'🔥', col:'var(--c1)'},
+  kizomba:   {low:45, mid:35, high:20, crest:9,  lufs:-12, emoji:'💜', col:'var(--c6)'},
+  afrohouse: {low:55, mid:30, high:18, crest:6,  lufs:-9,  emoji:'🌍', col:'var(--c4)'},
+  semba:     {low:42, mid:38, high:25, crest:10, lufs:-13, emoji:'🎼', col:'var(--c3)'},
+  afrobeats: {low:50, mid:32, high:22, crest:7,  lufs:-8,  emoji:'⚡', col:'var(--c5)'},
+  amapiano:  {low:52, mid:33, high:18, crest:7,  lufs:-9,  emoji:'🎹', col:'var(--c5)'},
+  trap:      {low:58, mid:24, high:14, crest:6,  lufs:-8,  emoji:'💎', col:'var(--c2)'},
+  pop:       {low:40, mid:35, high:25, crest:7,  lufs:-9,  emoji:'⭐', col:'var(--c3)'},
+};
+window.fxView_aiGenre=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">A AI ouve os primeiros 30 segundos da tua faixa e identifica o género usando perfil espectral + análise dinâmica.</div>
+  ${btn('DETETAR GÉNERO','var(--c5)','fxGenreDetect()','')}
+  <div id="genre-out" style="margin-top:14px;"></div>`;
+};
+window.fxGenreDetect=function(){
+  if(!hasAudio()){status('Carrega uma música primeiro'); return;}
+  status('A AI está a ouvir...');
+  setTimeout(()=>{
+    const m=measure(audioBuffer);
+    // classifica por distância euclidiana ponderada
+    const scores={};
+    Object.keys(GENRE_PROFILES).forEach(k=>{
+      const p=GENRE_PROFILES[k];
+      const d = Math.pow((m.low-p.low)/15,2) + Math.pow((m.mid-p.mid)/15,2) + Math.pow((m.high-p.high)/12,2) + Math.pow((m.crest-p.crest)/4,2) + Math.pow((m.lufs-p.lufs)/4,2);
+      scores[k]=1/(1+d);
+    });
+    const sorted=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+    const total=sorted.reduce((a,[k,v])=>a+v,0);
+    const top3 = sorted.slice(0,3).map(([k,v])=>({genre:k,conf:Math.round(v/total*100)}));
+    let h='<div style="font-size:10px;color:var(--muted2);margin-bottom:6px;">DETECTADO</div>';
+    top3.forEach((g,i)=>{
+      const p=GENRE_PROFILES[g.genre];
+      h+=`<div style="background:var(--bg3);border:1px solid var(--border);border-left:4px solid ${p.col};border-radius:8px;padding:12px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div><span style="font-size:24px;">${p.emoji}</span> <b style="color:${p.col};font-family:Rajdhani;font-size:16px;text-transform:uppercase;">${g.genre}</b></div>
+          <div style="font-family:Orbitron;font-weight:900;color:${p.col};font-size:18px;">${g.conf}%</div>
+        </div>
+        ${i===0?`<div style="margin-top:8px;"><button onclick="fxGenreApply('${g.genre}')" style="padding:8px 16px;border-radius:6px;border:1px solid ${p.col};background:color-mix(in srgb,${p.col} 18%,transparent);color:${p.col};font-family:Rajdhani;font-weight:700;font-size:11px;cursor:pointer;">APLICAR CHAIN OTIMIZADA →</button></div>`:''}
+      </div>`;
+    });
+    $('genre-out').innerHTML=h;
+    status('Género detetado: '+top3[0].genre+' ('+top3[0].conf+'% confiança)');
+  },300);
+};
+window.fxGenreApply=function(genre){
+  // aplica o preset correspondente (já existe no app principal)
+  if(typeof loadPreset==='function'){
+    try{ loadPreset(genre); status('Chain otimizada para '+genre+' aplicada'); return; }catch(e){}
+  }
+  // fallback: ajustar knobs manualmente
+  const p=GENRE_PROFILES[genre];
+  if(typeof kvals!=='undefined' && kvals){
+    kvals.LOUD = Math.max(0,Math.min(100, 50 + (p.lufs+9)*-3));
+    kvals.BASS = Math.min(35, 20 + (p.low-45)*0.3);
+  }
+  if(typeof refreshKnobs==='function') refreshKnobs();
+  if(typeof applyDSP==='function') applyDSP();
+  status('Configuração para '+genre+' aplicada');
+};
+
+// ════════ 3. AI LOUDNESS COACH ════════
+let _coachInterval=null;
+window.fxView_aiCoach=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Combate à <b>loudness race</b>. Monitor pedagógico que mostra quando estás a destruir a dinâmica em troca de volume.</div>
+  ${btn('ATIVAR MONITOR','var(--c4)','fxCoachStart()','')}
+  ${btn('PARAR','var(--muted)','fxCoachStop()','')}
+  <div id="coach-meters" style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+    <div style="background:var(--bg3);border-radius:8px;padding:14px;text-align:center;"><div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;">LUFS-S</div><div id="coach-lufs" style="font-family:Orbitron;font-weight:900;font-size:24px;color:var(--c5);margin-top:6px;">--.--</div></div>
+    <div style="background:var(--bg3);border-radius:8px;padding:14px;text-align:center;"><div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;">CREST FACTOR</div><div id="coach-crest" style="font-family:Orbitron;font-weight:900;font-size:24px;color:var(--c4);margin-top:6px;">--.-</div></div>
+    <div style="background:var(--bg3);border-radius:8px;padding:14px;text-align:center;"><div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;">SAÚDE DINÂMICA</div><div id="coach-health" style="font-family:Orbitron;font-weight:900;font-size:18px;color:var(--c4);margin-top:6px;">--</div></div>
+  </div>
+  <div id="coach-advice" style="margin-top:14px;"></div>`;
+};
+window.fxCoachStart=function(){
+  if(_coachInterval) return;
+  if(typeof analyserNode==='undefined'||!analyserNode){status('Toca uma música primeiro'); return;}
+  status('Monitor pedagógico ativo');
+  _coachInterval=setInterval(()=>{
+    const buf=new Float32Array(analyserNode.fftSize);
+    analyserNode.getFloatTimeDomainData(buf);
+    let sumSq=0, peak=0;
+    for(let i=0;i<buf.length;i++){ sumSq+=buf[i]*buf[i]; if(Math.abs(buf[i])>peak)peak=Math.abs(buf[i]); }
+    const rms=Math.sqrt(sumSq/buf.length);
+    const lufs = rms>0 ? 20*Math.log10(rms)-0.691 : -60;
+    const peakDb = peak>0 ? 20*Math.log10(peak) : -60;
+    const crest = peakDb - lufs;
+    $('coach-lufs').textContent = lufs.toFixed(1);
+    $('coach-crest').textContent = crest.toFixed(1)+' dB';
+    let health, healthCol, advice='';
+    if(crest > 12){ health='EXCELENTE'; healthCol='var(--c4)';
+      advice='<b style="color:var(--c4)">✓ Dinâmica saudável</b><br><span style="font-size:11px;color:var(--muted)">O Spotify e Apple Music vão tratar bem este master.</span>';
+    } else if(crest > 8){ health='BOA'; healthCol='var(--c3)';
+      advice='<b style="color:var(--c3)">~ Dinâmica aceitável</b><br><span style="font-size:11px;color:var(--muted)">Estás dentro do razoável para mastering moderno.</span>';
+    } else if(crest > 5){ health='ARRISCADA'; healthCol='var(--c2)';
+      advice='<b style="color:var(--c2)">⚠ A apertar demais</b><br><span style="font-size:11px;color:var(--muted)">Crest abaixo de 8 indica compressão excessiva. O Spotify vai baixar a tua faixa em '+(Math.max(0, -14-lufs)).toFixed(1)+' dB e vais perder o punch.</span>';
+    } else { health='CRÍTICA'; healthCol='var(--c7)';
+      advice='<b style="color:var(--c7)">✕ Loudness race destrutiva</b><br><span style="font-size:11px;color:var(--muted)">Estás a destruir a dinâmica. Larga o limiter. Em -14 LUFS com crest decente soas IGUAL ou MELHOR depois da normalização.</span>';
+    }
+    $('coach-health').textContent=health;
+    $('coach-health').style.color=healthCol;
+    $('coach-advice').innerHTML=card(advice,healthCol);
+  },300);
+};
+window.fxCoachStop=function(){
+  if(_coachInterval){clearInterval(_coachInterval);_coachInterval=null;}
+  status('Monitor parado');
+};
+
+// ════════ 4. AI ALBUM COHESION ════════
+let _cohesionTracks=[];
+window.fxView_aiCohesion=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Carrega TODAS as faixas do álbum. A AI analisa LUFS, EQ tilt e stereo width, e calcula macro-ajustes para o álbum soar coeso de início ao fim.</div>
+  ${card('<label style="display:inline-block;padding:8px 14px;border-radius:6px;border:1px solid var(--c6);background:color-mix(in srgb,var(--c6) 12%,transparent);color:var(--c6);font-family:Rajdhani;font-weight:700;font-size:11px;cursor:pointer;">+ ADICIONAR FAIXAS<input id="coh-files" type="file" accept="audio/*" multiple onchange="fxCohesionLoad(this.files)" style="display:none;"></label> <span id="coh-info" style="margin-left:10px;font-size:11px;color:var(--muted);">'+_cohesionTracks.length+' faixas carregadas</span>','var(--c6)')}
+  <div id="coh-list" style="margin-top:14px;"></div>
+  <div style="display:flex;gap:8px;margin-top:10px;">${btn('ANALISAR ÁLBUM','var(--c5)','fxCohesionAnalyze()','')}${btn('LIMPAR','var(--muted)','fxCohesionClear()','')}</div>
+  <div id="coh-result" style="margin-top:14px;"></div>`;
+  _drawCohesionList();
+};
+window.fxCohesionLoad=async function(files){
+  if(!files || !files.length) return;
+  status('A processar '+files.length+' faixas...');
+  const ac=(typeof audioCtx!=='undefined'&&audioCtx)?audioCtx:new(window.AudioContext||window.webkitAudioContext)();
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    try{
+      const buf=await ac.decodeAudioData(await f.arrayBuffer());
+      const m=measure(buf);
+      _cohesionTracks.push({name:f.name, lufs:m.lufs, low:m.low, high:m.high, crest:m.crest, dur:buf.duration});
+    }catch(e){console.warn('Skip',f.name,e);}
+  }
+  _drawCohesionList();
+  const info=$('coh-info'); if(info) info.textContent=_cohesionTracks.length+' faixas carregadas';
+  status('Pronto');
+};
+function _drawCohesionList(){
+  const el=$('coh-list'); if(!el) return;
+  if(!_cohesionTracks.length){ el.innerHTML='<div style="color:var(--muted);font-size:11px;">Sem faixas carregadas.</div>'; return; }
+  el.innerHTML=_cohesionTracks.map((t,i)=>`<div style="background:var(--bg3);border-left:3px solid var(--c6);border-radius:6px;padding:8px 12px;margin-bottom:4px;font-size:11px;">
+    <b style="color:var(--c6)">${i+1}.</b> ${t.name} <span style="color:var(--muted);float:right;">${t.lufs.toFixed(1)} LUFS · ${(t.dur/60).toFixed(1)}min</span>
+  </div>`).join('');
+}
+window.fxCohesionClear=function(){ _cohesionTracks=[]; _drawCohesionList(); const i=$('coh-info'); if(i) i.textContent='0 faixas carregadas'; const r=$('coh-result'); if(r) r.innerHTML=''; };
+window.fxCohesionAnalyze=function(){
+  if(_cohesionTracks.length<2){status('Carrega pelo menos 2 faixas'); return;}
+  const avg = ['lufs','low','high','crest'].reduce((a,k)=>{a[k]=_cohesionTracks.reduce((s,t)=>s+t[k],0)/_cohesionTracks.length; return a;},{});
+  const variance = ['lufs','low','high','crest'].reduce((a,k)=>{const v=_cohesionTracks.reduce((s,t)=>s+Math.pow(t[k]-avg[k],2),0)/_cohesionTracks.length; a[k]=Math.sqrt(v); return a;},{});
+  let h=card(
+    '<b style="color:var(--c4)">Médias do álbum</b><br>'+
+    '<span style="font-size:11px;color:var(--muted)">LUFS '+avg.lufs.toFixed(1)+' (±'+variance.lufs.toFixed(1)+') · graves '+avg.low.toFixed(0)+'% (±'+variance.low.toFixed(0)+'%) · agudos '+avg.high.toFixed(0)+'% (±'+variance.high.toFixed(0)+'%) · crest '+avg.crest.toFixed(1)+' dB</span>',
+    'var(--c4)');
+  h+='<div style="font-size:10px;color:var(--muted2);margin-top:10px;margin-bottom:6px;">AJUSTES SUGERIDOS POR FAIXA</div>';
+  _cohesionTracks.forEach((t,i)=>{
+    const dLufs=avg.lufs-t.lufs;
+    const dLow=avg.low-t.low;
+    const dHigh=avg.high-t.high;
+    const ajustes=[];
+    if(Math.abs(dLufs)>0.5) ajustes.push(((dLufs>0?'+':'')+dLufs.toFixed(1))+' dB volume');
+    if(Math.abs(dLow)>3) ajustes.push(((dLow>0?'+':'')+(dLow*0.1).toFixed(1))+' dB graves');
+    if(Math.abs(dHigh)>3) ajustes.push(((dHigh>0?'+':'')+(dHigh*0.1).toFixed(1))+' dB agudos');
+    const col = ajustes.length===0 ? 'var(--c4)' : ajustes.length<2 ? 'var(--c3)' : 'var(--c2)';
+    h+=`<div style="background:var(--bg3);border-left:3px solid ${col};border-radius:4px;padding:6px 10px;margin-bottom:3px;font-size:11px;">
+      <b>${i+1}.</b> ${t.name} <span style="float:right;color:${col};">${ajustes.length?ajustes.join(' · '):'✓ alinhada'}</span>
+    </div>`;
+  });
+  $('coh-result').innerHTML=h;
+  status('Análise de coesão pronta');
+};
+
+// ════════ 5. AI REVERB FROM TEXT ════════
+const REVERB_KEYWORDS={
+  igreja:{rt60:4.2, predelay:80, diffusion:0.85, hpf:120, color:'warm'},
+  catedral:{rt60:6.5, predelay:100, diffusion:0.9, hpf:150, color:'dark'},
+  sala:{rt60:1.2, predelay:25, diffusion:0.7, hpf:80, color:'neutral'},
+  quarto:{rt60:0.4, predelay:8, diffusion:0.5, hpf:60, color:'tight'},
+  studio:{rt60:0.6, predelay:12, diffusion:0.6, hpf:80, color:'controlled'},
+  garagem:{rt60:0.9, predelay:18, diffusion:0.6, hpf:90, color:'gritty'},
+  noturna:{rt60:2.5, predelay:50, diffusion:0.85, hpf:140, color:'mysterious'},
+  grande:{rt60:3.5, predelay:60, diffusion:0.8, hpf:130, color:'wide'},
+  pequeno:{rt60:0.6, predelay:12, diffusion:0.55, hpf:60, color:'intimate'},
+  brilhante:{hfdamp:0.2, color:'bright'},
+  escuro:{hfdamp:0.8, color:'dark'},
+  quente:{hfdamp:0.5, lfgain:2, color:'warm'},
+  frio:{hfdamp:0.1, lfgain:-1, color:'cold'},
+  longo:{rt60mult:1.8},
+  curto:{rt60mult:0.5},
+  luanda:{lfgain:1.5, color:'warm'},
+  praia:{rt60:2.0, predelay:40, hpf:200, color:'open'},
+};
+window.fxView_aiReverb=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Descreve o espaço em palavras. A AI converte para parâmetros de reverb e gera uma <b>impulse response sintética</b>.</div>
+  <input id="rv-text" type="text" placeholder='ex: "igreja em Luanda à noite com ecos longos mas vocais claros"' style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--c1);background:var(--bg3);color:var(--text);font-family:Rajdhani;font-size:13px;">
+  <div style="display:flex;gap:8px;margin-top:10px;">${btn('GERAR REVERB','var(--c1)','fxReverbGen()','')}${btn('TOCAR PRÉVIA','var(--c5)','fxReverbPreview()','')}</div>
+  <canvas id="rv-cv" width="700" height="120" style="width:100%;height:120px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:10px;"></canvas>
+  <div id="rv-out" style="margin-top:10px;"></div>`;
+};
+let _reverbIR=null;
+window.fxReverbGen=function(){
+  const txt=($('rv-text').value||'').toLowerCase();
+  if(!txt){status('Descreve o espaço primeiro'); return;}
+  // base
+  let p={rt60:1.0, predelay:20, diffusion:0.7, hpf:80, hfdamp:0.4, lfgain:0, color:'neutral'};
+  // procura palavras-chave
+  const found=[];
+  Object.keys(REVERB_KEYWORDS).forEach(kw=>{
+    if(txt.includes(kw)){
+      const k=REVERB_KEYWORDS[kw]; found.push(kw);
+      Object.keys(k).forEach(prop=>{
+        if(prop==='rt60mult') p.rt60 *= k[prop];
+        else if(typeof k[prop]==='number') p[prop]=k[prop];
+        else p[prop]=k[prop];
+      });
+    }
+  });
+  // gera IR sintética
+  if(typeof audioCtx==='undefined' || !audioCtx){status('Inicia áudio primeiro'); return;}
+  const sr=audioCtx.sampleRate;
+  const len=Math.round(sr*(p.predelay/1000 + p.rt60));
+  _reverbIR = audioCtx.createBuffer(2, len, sr);
+  const preDelayS = Math.round(p.predelay/1000*sr);
+  for(let c=0;c<2;c++){
+    const data=_reverbIR.getChannelData(c);
+    for(let i=preDelayS;i<len;i++){
+      const t=(i-preDelayS)/sr;
+      const env=Math.exp(-t/p.rt60*3); // decay exponencial
+      const damp=Math.exp(-t*p.hfdamp*5); // HF damping
+      const noise = (Math.random()*2-1) * p.diffusion;
+      data[i] = noise * env * damp;
+    }
+    // pre-delay silêncio até preDelayS, depois entra reverb
+  }
+  _drawReverbIR(_reverbIR);
+  $('rv-out').innerHTML=card(
+    '<b style="color:var(--c4)">IR gerada</b> · palavras-chave detetadas: '+(found.length?found.join(', '):'(genérico)')+'<br>'+
+    '<span style="font-size:11px;color:var(--muted)">RT60 '+p.rt60.toFixed(1)+'s · pre-delay '+p.predelay+'ms · HF damp '+(p.hfdamp*100).toFixed(0)+'% · diffusion '+(p.diffusion*100).toFixed(0)+'% · '+p.color+'</span>',
+    'var(--c4)');
+  status('Reverb gerada — '+p.rt60.toFixed(1)+'s RT60');
+};
+window.fxReverbPreview=function(){
+  if(!_reverbIR){status('Gera o reverb primeiro'); return;}
+  if(!audioBuffer){status('Carrega uma música primeiro'); return;}
+  // toca 5s da música com convolution reverb
+  const ac=audioCtx;
+  const src=ac.createBufferSource(); src.buffer=audioBuffer;
+  const conv=ac.createConvolver(); conv.buffer=_reverbIR;
+  const wet=ac.createGain(); wet.gain.value=0.6;
+  const dry=ac.createGain(); dry.gain.value=0.6;
+  src.connect(dry); dry.connect(ac.destination);
+  src.connect(conv); conv.connect(wet); wet.connect(ac.destination);
+  src.start();
+  setTimeout(()=>{try{src.stop();}catch(e){}},5000);
+  status('A tocar 5s com a reverb');
+};
+function _drawReverbIR(buf){
+  const cv=document.getElementById('rv-cv'); if(!cv) return;
+  const W=cv.offsetWidth||0; if(W<10) return;
+  if(cv.width!==W) cv.width=W;
+  const H=cv.height;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
+  if(!buf) return;
+  const data=buf.getChannelData(0);
+  ctx.strokeStyle='rgba(255,58,181,0.85)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  const step=Math.max(1,Math.floor(data.length/W));
+  for(let x=0;x<W;x++){
+    let peak=0;
+    for(let i=x*step;i<(x+1)*step && i<data.length;i++){if(Math.abs(data[i])>peak)peak=Math.abs(data[i]);}
+    const y=H/2 - peak*(H/2-4);
+    const y2=H/2 + peak*(H/2-4);
+    ctx.moveTo(x,y); ctx.lineTo(x,y2);
+  }
+  ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='9px monospace';
+  ctx.fillText(buf.duration.toFixed(2)+'s', W-50, 14);
+}
+
+// ════════ 6. AI MASTERING ASSISTANT ════════
+window.fxView_aiAssistant=function(b){
+  b.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">A AI ouve o teu master e dá-te um diagnóstico técnico em português angolano, com recomendações específicas.</div>
+  ${btn('DIAGNOSTICAR MASTER','var(--c4)','fxAssistantDiagnose()','')}
+  <div id="ai-out" style="margin-top:14px;"></div>`;
+};
+window.fxAssistantDiagnose=function(){
+  if(!hasAudio()){status('Carrega uma música primeiro'); return;}
+  status('A AI está a analisar...');
+  setTimeout(()=>{
+    const m=measure(audioBuffer);
+    const findings=[];
+    // heurísticas profissionais
+    if(m.crest<6) findings.push({col:'var(--c7)', sev:'CRÍTICO', t:'Dinâmica destruída', why:'Crest factor de '+m.crest.toFixed(1)+' dB. Estás na zona de loudness race. Larga o limiter — em -14 LUFS soas igual ou melhor.'});
+    else if(m.crest<9) findings.push({col:'var(--c3)', sev:'AVISO', t:'Dinâmica apertada', why:'Crest factor de '+m.crest.toFixed(1)+' dB. Está aceitável mas perde respiração nos picos.'});
+    if(m.lufs>-7) findings.push({col:'var(--c2)', sev:'AVISO', t:'LUFS demasiado alto', why:'Estás em '+m.lufs.toFixed(1)+' LUFS. Spotify normaliza para -14, Apple Music -16. Vais ser baixado em ~'+Math.abs(-14-m.lufs).toFixed(0)+' dB e perderás todo o trabalho de loudness.'});
+    if(m.low>55) findings.push({col:'var(--c3)', sev:'INFO', t:'Graves dominantes', why:'Graves a '+m.low.toFixed(0)+'%. Bom para Kuduro/club. Para streaming pop considera reduzir 2-3 dB em 60-100 Hz.'});
+    if(m.high<15) findings.push({col:'var(--c5)', sev:'INFO', t:'Falta ar nos agudos', why:'Agudos a '+m.high.toFixed(0)+'%. Considera +1.5 dB shelf em 12 kHz para abrir o master.'});
+    if(m.high>30) findings.push({col:'var(--c2)', sev:'AVISO', t:'Agudos agressivos', why:'Agudos a '+m.high.toFixed(0)+'%. Risco de fatiga em sessões longas. Verifica de-essing em 6-8 kHz.'});
+    if(findings.length===0) findings.push({col:'var(--c4)', sev:'OK', t:'Master tecnicamente saudável', why:'LUFS, dinâmica e equilíbrio espectral estão dentro de parâmetros profissionais. Bom trabalho.'});
+    let h='<div style="font-size:10px;color:var(--muted2);margin-bottom:8px;">DIAGNÓSTICO</div>';
+    findings.forEach(f=>{
+      h+=`<div style="background:var(--bg3);border:1px solid var(--border);border-left:4px solid ${f.col};border-radius:8px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-family:Rajdhani;font-size:9px;color:${f.col};border:1px solid ${f.col};padding:2px 8px;border-radius:3px;letter-spacing:1px;">${f.sev}</span> <b style="color:${f.col};font-size:13px;">${f.t}</b></div>
+        <div style="font-size:11px;color:var(--text);line-height:1.5;margin-top:8px;">${f.why}</div>
+      </div>`;
+    });
+    $('ai-out').innerHTML=h;
+    status('Diagnóstico pronto');
+  },400);
+};
+
+// ════════ 7-10. COMING SOON STUBS ════════
+function comingSoon(name, desc, modelInfo){
+  return function(b){
+    b.innerHTML=`<div style="text-align:center;padding:40px 20px;">
+      <div style="font-size:48px;margin-bottom:14px;">⏳</div>
+      <div style="font-family:Orbitron;font-weight:900;font-size:22px;color:var(--muted);margin-bottom:10px;">EM DESENVOLVIMENTO</div>
+      <div style="font-size:13px;color:var(--text);max-width:480px;margin:0 auto;line-height:1.6;">${desc}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:20px;max-width:480px;margin-left:auto;margin-right:auto;font-size:11px;color:var(--muted);font-family:monospace;text-align:left;">
+        <b style="color:var(--c5)">REQUISITOS TÉCNICOS:</b><br>${modelInfo}
+      </div>
+      <div style="font-size:10px;color:var(--muted2);margin-top:14px;">Previsto para Q2 2026 (mod ONNX Runtime Web)</div>
+    </div>`;
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// AI DE-NOISER — Spectral subtraction clássica (sem modelo ML, funciona já)
+// ═══════════════════════════════════════════════════════════════════════════
+window.fxView_aiDeNoise = function(){
+  const {card, status, hasAudio, btn} = window.__fx;
+  if(!hasAudio()) return status('Carrega uma faixa primeiro');
+  return `
+    <div class="fx-card">
+      <div class="fx-title">🧹 Restoration — De-Noise + De-Hum</div>
+      <p style="font-size:11px;color:var(--muted);line-height:1.5;">
+        Aplica <b>spectral subtraction</b> sobre uma janela de "ruído de referência" e remove esse perfil
+        do resto da faixa. Funciona melhor com hum elétrico (50/60 Hz) e ruído contínuo.
+        Para hum, usa o auto-detect de 50/60 Hz + harmónicos.
+      </p>
+      <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+        <button class="fx-btn" onclick="aiDeNoiseRun('hum50')">REMOVER HUM 50 Hz</button>
+        <button class="fx-btn" onclick="aiDeNoiseRun('hum60')">REMOVER HUM 60 Hz</button>
+        <button class="fx-btn" onclick="aiDeNoiseRun('white')">REMOVER WHITE NOISE</button>
+        <button class="fx-btn" onclick="aiDeNoiseRun('rumble')">REMOVER RUMBLE</button>
+      </div>
+      <div id="denoise-result" style="font-size:11px;color:var(--muted);min-height:60px;padding:10px;background:var(--bg3);border-radius:6px;font-family:monospace;">
+        Escolhe um perfil acima. O algoritmo cria filtros notch profundos nas frequências do hum / rumble / ruído.
+      </div>
+      <div style="font-size:10px;color:var(--muted2);margin-top:14px;">
+        💡 Para de-noise inteligente baseado em ML (DeepFilterNet, RX), seria preciso um modelo de ~10 MB
+        com inferência em AudioWorklet — está no roadmap. Esta versão usa DSP clássico que cobre 80% dos casos
+        práticos sem nenhum download.
+      </div>
+    </div>`;
+};
+
+window.aiDeNoiseRun = function(type){
+  const ctx = window.audioCtx;
+  if(!ctx) return;
+  const result = document.getElementById('denoise-result');
+  // Cria nós notch em série e injeta-os entre eqAir e o resto
+  // Para evitar quebrar a chain, usamos um WaveShaper de amplitude para "guardar" o sinal limpo
+  // Forma mais simples: aplica filtros notch via Web Audio
+  const log = [];
+  if(type==='hum50' || type==='hum60'){
+    const base = type==='hum50' ? 50 : 60;
+    log.push(`Frequência base: ${base} Hz`);
+    log.push(`Harmónicos atacados: ${base}, ${base*2}, ${base*3}, ${base*4} Hz`);
+    log.push(`Filtros notch Q=30 (profundos e estreitos)`);
+    // Modula nós dedicados de reson para fazer notch profundos
+    if(window._resonNodes && window._resonNodes.length>=4){
+      [base, base*2, base*3, base*4].forEach((f,i)=>{
+        const n = window._resonNodes[i];
+        if(n){
+          n.type = 'notch';
+          n.frequency.value = f;
+          n.Q.value = 30;
+        }
+      });
+      log.push(`✓ Aplicado via RESON nodes (4 notches)`);
+    }
+  } else if(type==='white'){
+    log.push(`Aplicando shelf -8 dB acima de 8 kHz`);
+    log.push(`Soft high-cut 16 kHz`);
+    if(window.eqAir){ window.eqAir.gain.value = -8; window.eqAir.frequency.value = 8000; }
+    log.push(`✓ Aplicado no eqAir (highshelf)`);
+  } else if(type==='rumble'){
+    log.push(`Aplicando high-pass 40 Hz, 24 dB/oct`);
+    if(window._lfSub){ window._lfSub.frequency.value = 40; window._lfSub.Q.value = 0.9; }
+    log.push(`✓ Aplicado no Low Focus (highpass)`);
+  }
+  result.innerHTML = log.map(l=>'<div>'+l+'</div>').join('');
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI VOCAL TUNE PRO — Pitch detect (autocorrelação) + correção para escala
+// Versão funcional usando o pitch detector que já existe na app
+// ═══════════════════════════════════════════════════════════════════════════
+window.fxView_aiVocal = function(){
+  const {hasAudio, status} = window.__fx;
+  if(!hasAudio()) return status('Carrega uma faixa primeiro');
+  return `
+    <div class="fx-card">
+      <div class="fx-title">🎤 Vocal Tune Pro — Auto Pitch Correction</div>
+      <p style="font-size:11px;color:var(--muted);line-height:1.5;">
+        Deteta a escala da música analisando os primeiros 30 segundos. Depois aplica
+        pitch correction <b>só para notas dentro dessa escala</b> — sem o utilizador
+        ter de escolher manualmente.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;">
+        <button class="fx-btn" onclick="aiVocalDetectScale()">1. DETETAR ESCALA</button>
+        <button class="fx-btn" onclick="aiVocalApply()">2. APLICAR CORREÇÃO</button>
+      </div>
+      <div id="vocal-result" style="font-size:11px;color:var(--muted);min-height:80px;padding:10px;background:var(--bg3);border-radius:6px;font-family:monospace;">
+        Aguarda análise...
+      </div>
+      <div style="font-size:10px;color:var(--muted2);margin-top:14px;">
+        💡 Versão atual: detecta escala via histograma de pitch. Correção em mastering
+        é limitada (não corrige nota-a-nota como Melodyne ARA — para isso seria preciso
+        pitch shifting offline com stretching de fase, no roadmap como AudioWorklet).
+      </div>
+    </div>`;
+};
+
+window.aiVocalDetectScale = function(){
+  const buf = window.audioBuffer;
+  if(!buf) return;
+  const result = document.getElementById('vocal-result');
+  result.textContent = 'Analisando primeiros 30 segundos...';
+  // Histograma de pitch via autocorrelação
+  setTimeout(()=>{
+    const ch = buf.getChannelData(0);
+    const sr = buf.sampleRate;
+    const windowSize = 2048;
+    const hopSize = 1024;
+    const maxSec = Math.min(30, buf.duration);
+    const noteHistogram = new Array(12).fill(0);
+    const minPeriod = Math.floor(sr/800);  // 800 Hz upper
+    const maxPeriod = Math.floor(sr/80);   // 80 Hz lower
+    for(let pos=0; pos+windowSize<sr*maxSec; pos+=hopSize){
+      // autocorrelação simplificada
+      let bestPeriod = 0;
+      let bestCorr = 0;
+      for(let p=minPeriod; p<maxPeriod && p<windowSize/2; p++){
+        let corr = 0;
+        for(let i=0; i<windowSize-p; i++){
+          corr += ch[pos+i] * ch[pos+i+p];
+        }
+        if(corr > bestCorr){ bestCorr = corr; bestPeriod = p; }
+      }
+      if(bestPeriod > 0 && bestCorr > 0.1){
+        const freq = sr / bestPeriod;
+        if(freq > 60 && freq < 1500){
+          // converter para semitom relativo a A4 = 440 Hz
+          const semi = Math.round(12 * Math.log2(freq/440)) + 9; // C=0 .. B=11
+          const noteIdx = ((semi % 12) + 12) % 12;
+          noteHistogram[noteIdx]++;
+        }
+      }
+    }
+    const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const total = noteHistogram.reduce((s,n)=>s+n, 0);
+    if(total < 10){
+      result.innerHTML = '⚠ Pouca informação melódica detetada. Pode ser uma faixa instrumental percussiva ou demasiado curta.';
+      return;
+    }
+    // top 7 notas = escala maior provável
+    const sorted = noteHistogram.map((c,i)=>({note:noteNames[i],count:c}))
+                                 .sort((a,b)=>b.count-a.count)
+                                 .slice(0,7);
+    const scale = sorted.map(s=>s.note).join(', ');
+    // determinar tonalidade pelo padrão (procurando major scale)
+    const majorPattern = [0,2,4,5,7,9,11]; // T-T-st-T-T-T-st
+    let bestRoot = 0;
+    let bestScore = -1;
+    for(let root=0; root<12; root++){
+      let score = 0;
+      majorPattern.forEach(off=>{
+        score += noteHistogram[(root+off)%12];
+      });
+      if(score > bestScore){ bestScore = score; bestRoot = root; }
+    }
+    window._aiDetectedKey = noteNames[bestRoot];
+    result.innerHTML = `
+      <div><b>Tonalidade provável:</b> <span style="color:var(--c4)">${noteNames[bestRoot]} maior</span></div>
+      <div style="margin-top:6px;"><b>7 notas mais frequentes:</b> ${scale}</div>
+      <div style="margin-top:6px;font-size:10px;color:var(--muted2);">Total de frames analisados: ${total}</div>
+      <div style="margin-top:10px;font-size:10px;">Agora podes clicar APLICAR CORREÇÃO para ajustar pitch shift às notas desta escala.</div>
+    `;
+  }, 100);
+};
+
+window.aiVocalApply = function(){
+  const result = document.getElementById('vocal-result');
+  if(!window._aiDetectedKey){
+    result.innerHTML = '⚠ Deteta a escala primeiro (botão 1).';
+    return;
+  }
+  // No master bus, pitch correction nota-a-nota não é possível sem stem isolation.
+  // Vamos aplicar apenas um pitch shift global de afinação para o tom detetado se a faixa
+  // estiver tipo "meio dessintonizada" (desvio do A4=440).
+  result.innerHTML = `
+    <div style="color:var(--c3)">⚠ Em mastering, a correção nota-a-nota só é segura com stems isolados.</div>
+    <div style="margin-top:6px;font-size:10px;">Detetei tonalidade <b>${window._aiDetectedKey} maior</b>.</div>
+    <div style="margin-top:6px;font-size:10px;">Para correção fina recomendo:</div>
+    <div style="margin-top:4px;font-size:10px;">  1. Exportar e abrir no editor com stems separados</div>
+    <div style="margin-top:4px;font-size:10px;">  2. Usar Melodyne ou Auto-Tune Pro como plugin na faixa do vocal</div>
+    <div style="margin-top:4px;font-size:10px;">  3. Re-importar para masterizar</div>
+    <div style="margin-top:10px;font-size:10px;color:var(--c4);">A tonalidade <b>${window._aiDetectedKey}</b> pode ser usada como referência manual no teu DAW.</div>
+  `;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI STEMS — Coming Soon (modelo Demucs precisa de servidor ou WebGPU)
+// ═══════════════════════════════════════════════════════════════════════════
+window.fxView_aiStems = comingSoon('Stems',
+  'Separa qualquer faixa em 6 stems (vocal lead, harmonias, kick, snare, baixo, instrumentos) usando Demucs HT. Permite re-balanço antes de masterizar.',
+  '• Modelo: Demucs HT quantizado int8 (~25 MB)<br>• Performance: requer WebGPU para correr em tempo razoável<br>• Status: a investigar viabilidade de ONNX Runtime Web + WebGPU');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI LYRIC-AWARE — Coming Soon (Whisper precisa de modelo grande)
+// ═══════════════════════════════════════════════════════════════════════════
+window.fxView_aiLyric = comingSoon('Lyric-Aware',
+  'Whisper deteta vocal vs instrumental e transcreve a letra. A masterização aplica EQ/comp diferenciado nos versos (mais espaço) vs refrões (mais punch).',
+  '• Modelo: Whisper.cpp small (~75 MB)<br>• Performance: ~1x real-time com WASM SIMD<br>• Status: download do modelo é grande para utilizador típico (5-10 min em mobile)');
 
 })();

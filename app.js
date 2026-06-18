@@ -1031,16 +1031,20 @@ function setLowFocusMode(m){
     const b=document.getElementById('lf-mode-'+x);
     if(b) b.classList.toggle('rs-mode-active', x===m);
   });
-  // Aplica valores padrão por modo para se notar a mudança
-  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  // Aplica valores padrão por modo
+  const set=(id,v)=>{
+    const e=document.getElementById(id);
+    if(e){
+      e.value=v;
+      // dispara evento para forçar UI refresh
+      try{ e.dispatchEvent(new Event('input',{bubbles:true})); }catch(err){}
+    }
+  };
   if(m==='tight'){
-    // Kuduro/Club: HP alto, tightness +, punch +, mono mais alto
-    set('lf-freq',55);  set('lf-tight',80);  set('lf-punch',60);  set('lf-mono',130);
+    set('lf-freq',55);  set('lf-tight',80);  set('lf-punch',65);  set('lf-mono',140);
   } else if(m==='warm'){
-    // Kizomba/Zouk: HP baixo, tightness baixo, punch suave, mono baixo
-    set('lf-freq',35);  set('lf-tight',30);  set('lf-punch',25);  set('lf-mono',80);
+    set('lf-freq',30);  set('lf-tight',25);  set('lf-punch',20);  set('lf-mono',75);
   } else {
-    // Balanced
     set('lf-freq',45);  set('lf-tight',55);  set('lf-punch',40);  set('lf-mono',100);
   }
   updateLowFocus();
@@ -1145,16 +1149,19 @@ function setHighFocusMode(m){
     const b=document.getElementById('hf-mode-'+x);
     if(b) b.classList.toggle('rs-mode-active', x===m);
   });
-  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  const set=(id,v)=>{
+    const e=document.getElementById(id);
+    if(e){
+      e.value=v;
+      try{ e.dispatchEvent(new Event('input',{bubbles:true})); }catch(err){}
+    }
+  };
   if(m==='vinyl'){
-    // VINYL: ar baixo, de-ess forte (proteção do lacquer), presence média
-    set('hf-freq',10000); set('hf-air',20); set('hf-deess',65); set('hf-pres',30);
+    set('hf-freq',10000); set('hf-air',20); set('hf-deess',70); set('hf-pres',30);
   } else if(m==='club'){
-    // CLUB: ar médio, de-ess baixo, presence muito forte (corta no PA)
-    set('hf-freq',14000); set('hf-air',55); set('hf-deess',15); set('hf-pres',70);
+    set('hf-freq',14000); set('hf-air',55); set('hf-deess',15); set('hf-pres',75);
   } else {
-    // OPEN (Spotify/Apple): ar alto, de-ess baixo, presence média
-    set('hf-freq',13000); set('hf-air',60); set('hf-deess',25); set('hf-pres',40);
+    set('hf-freq',13000); set('hf-air',65); set('hf-deess',25); set('hf-pres',45);
   }
   updateHighFocus();
 }
@@ -1276,30 +1283,32 @@ function _startDynEQLoop(){
       const f=parseInt(document.getElementById('deq'+idx+'-f')?.value||1000);
       const g=parseFloat(document.getElementById('deq'+idx+'-g')?.value||0);
       const t=parseInt(document.getElementById('deq'+idx+'-t')?.value||-20);
-      // medir energia na banda (de eqAir, não do master — evita feedback)
+      // Se gain é 0, o módulo está efetivamente desligado para esta banda
+      if(Math.abs(g) < 0.05){
+        if(_deqNodes[i]) _deqNodes[i].gain.setTargetAtTime(0, audioCtx.currentTime, 0.04);
+        continue;
+      }
       const an=_dynEQNodes.analysers[i];
       const data=new Float32Array(an.frequencyBinCount);
       an.getFloatFrequencyData(data);
       const bandHz=audioCtx.sampleRate/2/an.frequencyBinCount;
       const targetBin=Math.round(f/bandHz);
-      let avg=-Infinity;
-      for(let b=Math.max(0,targetBin-4); b<Math.min(an.frequencyBinCount,targetBin+4); b++){
-        if(data[b]>-Infinity) avg = avg===-Infinity ? data[b] : Math.max(avg,data[b]);
+      // janela mais ampla para detectar energia da banda
+      let peak=-Infinity;
+      const winR = Math.max(4, Math.round(targetBin*0.15));
+      for(let b=Math.max(0,targetBin-winR); b<Math.min(an.frequencyBinCount,targetBin+winR); b++){
+        if(data[b]>-Infinity && data[b]>peak) peak=data[b];
       }
-      // ratio = quanto a banda ultrapassa o threshold (0 a 1)
-      const ratio = avg>t ? Math.min(1, (avg-t)/12) : 0;
+      // ratio mais agressiva: atinge 100% quando supera threshold em 6dB (não 12)
+      const ratio = peak>t ? Math.min(1, (peak-t)/6) : 0;
       const applied = g * ratio;
-      // Atualiza nó dedicado
       if(_deqNodes[i]){
         _deqNodes[i].frequency.setTargetAtTime(f, audioCtx.currentTime, 0.04);
         _deqNodes[i].Q.setTargetAtTime(1.5, audioCtx.currentTime, 0.04);
         _deqNodes[i].gain.setTargetAtTime(applied, audioCtx.currentTime, 0.04);
       }
-      // mostrar valor aplicado no label
-      const v=document.getElementById('deq'+idx+'-applied');
-      if(v) v.textContent = applied.toFixed(1)+' dB';
     }
-  }, 100);
+  }, 80);
 }
 let _dynEQBaseEQ=null;
 function _drawDynEQ(){
@@ -1569,7 +1578,13 @@ function setSpectralMode(m){
   ['balanced','vocal','bright','warm'].forEach(x=>{
     const b=document.getElementById('sp-m-'+x); if(b) b.classList.toggle('rs-mode-active', x===m);
   });
-  const set=(id,v)=>{const e=document.getElementById(id); if(e){e.value=v;}};
+  const set=(id,v)=>{
+    const e=document.getElementById(id);
+    if(e){
+      e.value=v;
+      try{ e.dispatchEvent(new Event('input',{bubbles:true})); }catch(err){}
+    }
+  };
   if(m==='vocal'){
     set('sp-tilt',-4); set('sp-smooth',60); set('sp-amount',55); set('sp-speed',300);
   } else if(m==='bright'){
