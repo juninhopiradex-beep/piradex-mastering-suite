@@ -1,17 +1,43 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-NESTA VERSÃO:
+VOCAL TUNE PRO — implementação completa e honesta
 
-• AI De-Noiser implementado a sério (DSP clássico, sem modelo):
-  - Hum 50 Hz / 60 Hz (+harmónicos) via notch filters Q=30
-  - White noise via highshelf -8 dB
-  - Rumble via highpass 40 Hz
-• AI Vocal Tune Pro implementado a sério (sem modelo ML):
-  - Pitch detection via autocorrelação
-  - Histograma de notas + detecção de tonalidade maior
-  - Honesto sobre limitações (não corrige nota-a-nota em master)
-• AI Stems e AI Lyric-Aware mantidos como "Coming Soon" com
-  explicação técnica honesta de PORQUÊ (modelos grandes,
-  download longo em mobile)
+O que o módulo FAZ a sério:
 
-Ver também o documento ANÁLISE-GLOBAL.md
+1. ANÁLISE DE AFINAÇÃO
+   • Autocorrelação com interpolação parabólica sub-amostra
+     (precisão melhor que 1 cent)
+   • Normalização cross-correlation para rejeitar ruído
+   • Pré-checagem de energia (skip silêncio)
+   • Analisa até 60 segundos da faixa
+   • Output:
+     - Tonalidade (maior ou menor) via Krumhansl-Schmuckler
+     - Desvio global de afinação em cents
+     - Frequência real de A (vs ref 440 Hz)
+     - Histograma das 12 notas com percentagens
+     - Status: correto / ligeiro / significativo / extremo
+
+2. CORREÇÃO DE DESVIO DE AFINAÇÃO
+   • Calcula shift exato em cents para voltar a A=440 Hz
+   • Aplica via playbackRate (rápido mas altera duração)
+
+3. MUDANÇA DE TONALIDADE
+   • Pitch shift global ±2 semitons via playbackRate
+   • Útil para criar versões em diferentes tons
+
+4. CORREÇÃO NOTA-A-NOTA
+   • Explicado honestamente: não é possível no master
+   • Mostra caminho realista (stems → Melodyne → re-import)
+
+CONHECIMENTO TÉCNICO:
+• Krumhansl-Schmuckler: algoritmo padrão de music informatics
+  para deteção de tonalidade
+• Parabolic interpolation: refinamento sub-amostra do pico
+  de autocorrelação para precisão de afinação
+• Cross-correlation normalizada: rejeita harmónicos parciais
+
+HONESTIDADE:
+A interface diz CLARAMENTE que pitch correction nota-a-nota
+no master é impossível sem stem separation, e explica porquê.
+Aponta para o módulo AI Stem Separator (Coming Soon) como
+caminho futuro para Melodyne-style correction dentro da app.

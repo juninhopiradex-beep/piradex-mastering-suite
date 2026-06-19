@@ -2436,113 +2436,337 @@ window.fxView_aiVocal = function(){
   if(!hasAudio()) return status('Carrega uma faixa primeiro');
   return `
     <div class="fx-card">
-      <div class="fx-title">🎤 Vocal Tune Pro — Auto Pitch Correction</div>
-      <p style="font-size:11px;color:var(--muted);line-height:1.5;">
-        Deteta a escala da música analisando os primeiros 30 segundos. Depois aplica
-        pitch correction <b>só para notas dentro dessa escala</b> — sem o utilizador
-        ter de escolher manualmente.
+      <div class="fx-title">🎤 Vocal Tune Pro — Análise de Afinação</div>
+      <p style="font-size:11px;color:var(--muted);line-height:1.55;">
+        Analisa a tonalidade da música, detecta desvios globais de afinação (A=440 Hz reference),
+        e aplica pitch shift global ao master. <b>Não é Auto-Tune nem Melodyne</b> — esses precisam de
+        stem isolado para funcionar bem.
       </p>
+
+      <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:10px 12px;margin:14px 0;">
+        <div style="font-size:11px;color:var(--c3);font-weight:700;margin-bottom:4px;">⚠ Aviso técnico</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.5;">
+          Pitch correction nota-a-nota num master é impossível sem stem separation primeiro
+          (vocal isolado do resto). Quem te promete isso está a mentir. O que esta ferramenta
+          faz a sério: detecta tonalidade, mede desvio global, e permite afinar a faixa toda.
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;">
-        <button class="fx-btn" onclick="aiVocalDetectScale()">1. DETETAR ESCALA</button>
-        <button class="fx-btn" onclick="aiVocalApply()">2. APLICAR CORREÇÃO</button>
+        <button class="fx-btn" onclick="aiVocalAnalyze()" style="background:var(--bg3);border:1px solid var(--c4);color:var(--c4);">1. ANALISAR AFINAÇÃO</button>
+        <button class="fx-btn" onclick="aiVocalShowApply()" style="background:var(--bg3);border:1px solid var(--c5);color:var(--c5);">2. AJUSTAR (após análise)</button>
       </div>
-      <div id="vocal-result" style="font-size:11px;color:var(--muted);min-height:80px;padding:10px;background:var(--bg3);border-radius:6px;font-family:monospace;">
-        Aguarda análise...
-      </div>
-      <div style="font-size:10px;color:var(--muted2);margin-top:14px;">
-        💡 Versão atual: detecta escala via histograma de pitch. Correção em mastering
-        é limitada (não corrige nota-a-nota como Melodyne ARA — para isso seria preciso
-        pitch shifting offline com stretching de fase, no roadmap como AudioWorklet).
+
+      <div id="vocal-result" style="font-size:11px;color:var(--muted);min-height:120px;padding:14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+        Aguarda análise — clica "1. ANALISAR AFINAÇÃO"
       </div>
     </div>`;
 };
 
-window.aiVocalDetectScale = function(){
+// ═══════════════════════════════════════════════════════════════════════════
+// ANÁLISE COMPLETA: tonalidade + desvio de afinação + cents off
+// ═══════════════════════════════════════════════════════════════════════════
+window.aiVocalAnalyze = function(){
   const buf = window.audioBuffer;
   if(!buf) return;
   const result = document.getElementById('vocal-result');
-  result.textContent = 'Analisando primeiros 30 segundos...';
-  // Histograma de pitch via autocorrelação
+  result.innerHTML = '<div style="color:var(--c5);">A analisar... (autocorrelação + análise espectral)</div>';
+
   setTimeout(()=>{
     const ch = buf.getChannelData(0);
     const sr = buf.sampleRate;
     const windowSize = 2048;
     const hopSize = 1024;
-    const maxSec = Math.min(30, buf.duration);
+    const maxSec = Math.min(60, buf.duration);  // analisa até 60s
     const noteHistogram = new Array(12).fill(0);
-    const minPeriod = Math.floor(sr/800);  // 800 Hz upper
-    const maxPeriod = Math.floor(sr/80);   // 80 Hz lower
+    const centsHistogram = new Array(101).fill(0);  // -50 a +50 cents
+    const minPeriod = Math.floor(sr/1000);
+    const maxPeriod = Math.floor(sr/65);
+    let totalFramesAnalyzed = 0;
+    let totalCentsSum = 0;
+    let totalCentsCount = 0;
+
     for(let pos=0; pos+windowSize<sr*maxSec; pos+=hopSize){
-      // autocorrelação simplificada
+      // Pré-checagem de energia (skip silêncio)
+      let energy = 0;
+      for(let i=pos; i<pos+windowSize; i++) energy += ch[i]*ch[i];
+      energy /= windowSize;
+      if(energy < 0.0001) continue;
+
+      // Autocorrelação para detecção de pitch
       let bestPeriod = 0;
       let bestCorr = 0;
       for(let p=minPeriod; p<maxPeriod && p<windowSize/2; p++){
         let corr = 0;
+        let normA = 0, normB = 0;
         for(let i=0; i<windowSize-p; i++){
           corr += ch[pos+i] * ch[pos+i+p];
+          normA += ch[pos+i] * ch[pos+i];
+          normB += ch[pos+i+p] * ch[pos+i+p];
         }
-        if(corr > bestCorr){ bestCorr = corr; bestPeriod = p; }
+        const normCorr = corr / (Math.sqrt(normA*normB) + 1e-10);
+        if(normCorr > bestCorr){ bestCorr = normCorr; bestPeriod = p; }
       }
-      if(bestPeriod > 0 && bestCorr > 0.1){
+
+      if(bestPeriod > 0 && bestCorr > 0.4){  // só aceita pitch com correlação alta
+        // Refinamento parabólico do período para precisão sub-amostra
+        if(bestPeriod > minPeriod+1 && bestPeriod < maxPeriod-1){
+          // recomputa corr nos vizinhos para parabolic interp
+          const computeCorr = (p)=>{
+            let c=0, na=0, nb=0;
+            for(let i=0;i<windowSize-p;i++){
+              c += ch[pos+i]*ch[pos+i+p];
+              na += ch[pos+i]*ch[pos+i]; nb += ch[pos+i+p]*ch[pos+i+p];
+            }
+            return c / (Math.sqrt(na*nb)+1e-10);
+          };
+          const y0 = computeCorr(bestPeriod-1);
+          const y1 = bestCorr;
+          const y2 = computeCorr(bestPeriod+1);
+          const denom = (y0 - 2*y1 + y2);
+          if(Math.abs(denom) > 1e-6){
+            const delta = 0.5 * (y0 - y2) / denom;
+            if(Math.abs(delta) < 1){
+              bestPeriod += delta;
+            }
+          }
+        }
+
         const freq = sr / bestPeriod;
-        if(freq > 60 && freq < 1500){
-          // converter para semitom relativo a A4 = 440 Hz
-          const semi = Math.round(12 * Math.log2(freq/440)) + 9; // C=0 .. B=11
-          const noteIdx = ((semi % 12) + 12) % 12;
+        if(freq > 65 && freq < 1200){
+          // Calcula semitom EXATO em relação a A4=440
+          const semitonesFromA4 = 12 * Math.log2(freq/440);
+          const nearestSemi = Math.round(semitonesFromA4);
+          const centsOff = (semitonesFromA4 - nearestSemi) * 100;
+
+          // Note index: A4=0, B4=2, C5=3 ... → para 0..11 (C=0)
+          const noteIdx = ((nearestSemi + 9 + 12000) % 12);
           noteHistogram[noteIdx]++;
+
+          // Histograma de cents (-50 a +50)
+          const centsBin = Math.round(centsOff) + 50;
+          if(centsBin >= 0 && centsBin <= 100){
+            centsHistogram[centsBin]++;
+          }
+          totalCentsSum += centsOff;
+          totalCentsCount++;
+          totalFramesAnalyzed++;
         }
       }
     }
+
     const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
     const total = noteHistogram.reduce((s,n)=>s+n, 0);
-    if(total < 10){
-      result.innerHTML = '⚠ Pouca informação melódica detetada. Pode ser uma faixa instrumental percussiva ou demasiado curta.';
+
+    if(total < 30){
+      result.innerHTML = `
+        <div style="color:var(--c3);">⚠ Pouca informação melódica detectada.</div>
+        <div style="margin-top:8px;color:var(--muted);font-size:10px;">
+          Possíveis causas: faixa instrumental muito percussiva, demasiado ruído,
+          ou os instrumentos estão a competir pela mesma frequência.<br>
+          Frames analisados: ${totalFramesAnalyzed} (mínimo recomendado: 30)
+        </div>`;
       return;
     }
-    // top 7 notas = escala maior provável
-    const sorted = noteHistogram.map((c,i)=>({note:noteNames[i],count:c}))
-                                 .sort((a,b)=>b.count-a.count)
-                                 .slice(0,7);
-    const scale = sorted.map(s=>s.note).join(', ');
-    // determinar tonalidade pelo padrão (procurando major scale)
-    const majorPattern = [0,2,4,5,7,9,11]; // T-T-st-T-T-T-st
-    let bestRoot = 0;
-    let bestScore = -1;
+
+    // Desvio médio de afinação
+    const avgCentsOff = totalCentsSum / totalCentsCount;
+
+    // Detecção de tonalidade (Krumhansl-Schmuckler simplificado)
+    const majorProfile = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
+    const minorProfile = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+
+    let bestKey = 0, bestMode = 'maior', bestCorr = -1;
     for(let root=0; root<12; root++){
-      let score = 0;
-      majorPattern.forEach(off=>{
-        score += noteHistogram[(root+off)%12];
-      });
-      if(score > bestScore){ bestScore = score; bestRoot = root; }
+      // Major correlation
+      let corrMaj = 0;
+      for(let i=0; i<12; i++) corrMaj += noteHistogram[(root+i)%12] * majorProfile[i];
+      if(corrMaj > bestCorr){ bestCorr = corrMaj; bestKey = root; bestMode = 'maior'; }
+      // Minor correlation
+      let corrMin = 0;
+      for(let i=0; i<12; i++) corrMin += noteHistogram[(root+i)%12] * minorProfile[i];
+      if(corrMin > bestCorr){ bestCorr = corrMin; bestKey = root; bestMode = 'menor'; }
     }
-    window._aiDetectedKey = noteNames[bestRoot];
+
+    // Concert pitch real (A frequency)
+    const realA = 440 * Math.pow(2, avgCentsOff/1200);
+
+    window._aiVocalAnalysis = {
+      key: noteNames[bestKey],
+      mode: bestMode,
+      avgCentsOff: avgCentsOff,
+      realA: realA,
+      framesAnalyzed: totalFramesAnalyzed,
+      noteHistogram: noteHistogram,
+    };
+
+    // Top notes for display
+    const topNotes = noteHistogram.map((c,i)=>({note:noteNames[i],count:c, pct: (c/total*100).toFixed(1)}))
+                                   .sort((a,b)=>b.count-a.count).slice(0,7);
+
+    // Avaliação do desvio
+    let tuningStatus, tuningColor;
+    const absCents = Math.abs(avgCentsOff);
+    if(absCents < 5){
+      tuningStatus = '✓ Afinação correta (A=440 Hz)';
+      tuningColor = 'var(--c4)';
+    } else if(absCents < 15){
+      tuningStatus = '~ Desvio ligeiro — talvez intencional';
+      tuningColor = 'var(--c3)';
+    } else if(absCents < 35){
+      tuningStatus = '⚠ Desvio significativo — pode estar fora de afinação';
+      tuningColor = 'var(--c2)';
+    } else {
+      tuningStatus = '✕ Desvio extremo — verifica sample rate ou pitch shift indesejado';
+      tuningColor = 'var(--c7)';
+    }
+
+    // Desenha histograma de notas (12 notas)
+    const histRows = topNotes.map(n=>{
+      const w = Math.round(n.count/topNotes[0].count*100);
+      return `<div style="display:flex;align-items:center;margin:2px 0;font-family:monospace;font-size:10px;">
+        <span style="width:30px;color:var(--c4);font-weight:700;">${n.note}</span>
+        <div style="background:var(--bg4);height:10px;width:200px;border-radius:2px;overflow:hidden;">
+          <div style="background:var(--c4);height:100%;width:${w}%;"></div>
+        </div>
+        <span style="margin-left:8px;color:var(--muted);">${n.pct}%</span>
+      </div>`;
+    }).join('');
+
     result.innerHTML = `
-      <div><b>Tonalidade provável:</b> <span style="color:var(--c4)">${noteNames[bestRoot]} maior</span></div>
-      <div style="margin-top:6px;"><b>7 notas mais frequentes:</b> ${scale}</div>
-      <div style="margin-top:6px;font-size:10px;color:var(--muted2);">Total de frames analisados: ${total}</div>
-      <div style="margin-top:10px;font-size:10px;">Agora podes clicar APLICAR CORREÇÃO para ajustar pitch shift às notas desta escala.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">TONALIDADE</div>
+          <div style="font-family:Orbitron,monospace;font-weight:900;font-size:28px;color:var(--c4);">${noteNames[bestKey]} ${bestMode}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">${totalFramesAnalyzed} frames analisados</div>
+
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:18px;margin-bottom:6px;">AFINAÇÃO GLOBAL</div>
+          <div style="font-family:Orbitron,monospace;font-weight:900;font-size:22px;color:${tuningColor};">${avgCentsOff>=0?'+':''}${avgCentsOff.toFixed(1)} cents</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">A real ≈ ${realA.toFixed(2)} Hz (ref: 440.00)</div>
+          <div style="font-size:10px;color:${tuningColor};margin-top:6px;">${tuningStatus}</div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">7 NOTAS MAIS FREQUENTES</div>
+          ${histRows}
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:10px;font-size:10px;color:var(--muted);">
+        💡 Clica "2. AJUSTAR" para opções de correção (pitch shift global, mudança de tom, etc.)
+      </div>
     `;
   }, 100);
 };
 
-window.aiVocalApply = function(){
+// ═══════════════════════════════════════════════════════════════════════════
+// AJUSTAR: 3 opções reais que dá para fazer no master
+// ═══════════════════════════════════════════════════════════════════════════
+window.aiVocalShowApply = function(){
   const result = document.getElementById('vocal-result');
-  if(!window._aiDetectedKey){
-    result.innerHTML = '⚠ Deteta a escala primeiro (botão 1).';
+  const a = window._aiVocalAnalysis;
+  if(!a){
+    result.innerHTML = '<div style="color:var(--c3);">⚠ Analisa primeiro (botão 1).</div>';
     return;
   }
-  // No master bus, pitch correction nota-a-nota não é possível sem stem isolation.
-  // Vamos aplicar apenas um pitch shift global de afinação para o tom detetado se a faixa
-  // estiver tipo "meio dessintonizada" (desvio do A4=440).
+
   result.innerHTML = `
-    <div style="color:var(--c3)">⚠ Em mastering, a correção nota-a-nota só é segura com stems isolados.</div>
-    <div style="margin-top:6px;font-size:10px;">Detetei tonalidade <b>${window._aiDetectedKey} maior</b>.</div>
-    <div style="margin-top:6px;font-size:10px;">Para correção fina recomendo:</div>
-    <div style="margin-top:4px;font-size:10px;">  1. Exportar e abrir no editor com stems separados</div>
-    <div style="margin-top:4px;font-size:10px;">  2. Usar Melodyne ou Auto-Tune Pro como plugin na faixa do vocal</div>
-    <div style="margin-top:4px;font-size:10px;">  3. Re-importar para masterizar</div>
-    <div style="margin-top:10px;font-size:10px;color:var(--c4);">A tonalidade <b>${window._aiDetectedKey}</b> pode ser usada como referência manual no teu DAW.</div>
+    <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:10px;">AJUSTES POSSÍVEIS NO MASTER</div>
+
+    <div style="background:var(--bg2);border:1px solid var(--c4);border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="color:var(--c4);font-weight:700;font-size:13px;">A. Corrigir desvio de afinação</div>
+          <div style="color:var(--muted);font-size:10px;margin-top:3px;">Aplica shift de ${(-a.avgCentsOff).toFixed(1)} cents para voltar a A=440 Hz exato</div>
+        </div>
+        <button onclick="aiVocalCorrectTuning()" style="padding:8px 14px;background:var(--c4);color:var(--bg);border:0;border-radius:5px;font-weight:700;font-size:10px;cursor:pointer;">APLICAR</button>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--c5);border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="margin-bottom:8px;">
+        <div style="color:var(--c5);font-weight:700;font-size:13px;">B. Mudar tonalidade da música</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;">Pitch shift global em semitons (ex: ${a.key} maior → C maior)</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button onclick="aiVocalPitchShift(-2)" style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;font-size:10px;cursor:pointer;">-2</button>
+        <button onclick="aiVocalPitchShift(-1)" style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;font-size:10px;cursor:pointer;">-1 semi</button>
+        <button onclick="aiVocalPitchShift(0)" style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;font-size:10px;cursor:pointer;">RESET</button>
+        <button onclick="aiVocalPitchShift(1)" style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;font-size:10px;cursor:pointer;">+1 semi</button>
+        <button onclick="aiVocalPitchShift(2)" style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:4px;font-size:10px;cursor:pointer;">+2</button>
+      </div>
+      <div style="color:var(--c3);font-size:9px;margin-top:6px;">⚠ Note: shift global altera TUDO (kick, baixo, instrumentos). Útil para versões em tons diferentes.</div>
+    </div>
+
+    <div style="background:var(--bg2);border:1px solid var(--muted);border-radius:8px;padding:12px;">
+      <div style="color:var(--muted);font-weight:700;font-size:13px;">C. Pitch correction nota-a-nota</div>
+      <div style="color:var(--muted);font-size:10px;margin-top:6px;line-height:1.5;">
+        Não é tecnicamente possível no master. Para Melodyne-style correction:
+      </div>
+      <div style="color:var(--muted);font-size:10px;margin-top:4px;line-height:1.6;">
+        1. Exporta os stems (vocais isolados)<br>
+        2. Aplica Melodyne ARA ou Auto-Tune Pro ao stem vocal<br>
+        3. Volta a importar para masterizar
+      </div>
+      <div style="color:var(--c4);font-size:10px;margin-top:8px;">
+        💡 Quando o módulo <b>AI Stem Separator</b> sair (Coming Soon), poderás isolar o vocal e fazer pitch correction a sério dentro da app.
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--muted);margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+      📊 Tonalidade detectada: <b style="color:var(--c4)">${a.key} ${a.mode}</b> ·
+      Desvio: <b style="color:var(--c5)">${a.avgCentsOff>=0?'+':''}${a.avgCentsOff.toFixed(1)} cents</b>
+    </div>
   `;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A. CORRIGIR DESVIO: aplica pitch shift global negativo para voltar a A=440
+// ═══════════════════════════════════════════════════════════════════════════
+window.aiVocalCorrectTuning = function(){
+  const result = document.getElementById('vocal-result');
+  const a = window._aiVocalAnalysis;
+  if(!a) return;
+  const cents = -a.avgCentsOff;
+  // Aplica pitch shift via re-encode do audioBuffer
+  // Como o master usa playbackRate, simulamos shift via gain do filtro de modulação
+  // No browser, a forma mais segura é mudar o playbackRate do source ativo
+  if(window.audioSource && window.audioSource.playbackRate){
+    const ratio = Math.pow(2, cents/1200);
+    try{
+      window.audioSource.playbackRate.setValueAtTime(ratio, audioCtx.currentTime);
+      result.innerHTML = `
+        <div style="color:var(--c4);font-weight:700;font-size:13px;">✓ Correção aplicada</div>
+        <div style="margin-top:8px;font-size:11px;">Pitch shift global: ${cents>=0?'+':''}${cents.toFixed(1)} cents</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted);">Rácio de velocidade: ${ratio.toFixed(5)}×</div>
+        <div style="margin-top:10px;font-size:10px;color:var(--c3);">⚠ Atenção: alterar playbackRate ALTERA TAMBÉM A DURAÇÃO da faixa (${(ratio>1?'mais curta':'mais longa')}).</div>
+        <div style="margin-top:4px;font-size:10px;color:var(--c3);">Para correção sem alterar duração, é preciso pitch shifting offline (PSOLA / phase vocoder) — o módulo Afinação de Voz tem isso para faixas individuais.</div>
+      `;
+    }catch(e){
+      result.innerHTML = `<div style="color:var(--c7);">Erro: ${e.message}</div>`;
+    }
+  } else {
+    result.innerHTML = `<div style="color:var(--c3);">⚠ Inicia a reprodução primeiro para aplicar o ajuste.</div>`;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B. MUDAR TONALIDADE: pitch shift global em semitons
+// ═══════════════════════════════════════════════════════════════════════════
+window.aiVocalPitchShift = function(semis){
+  const result = document.getElementById('vocal-result');
+  if(window.audioSource && window.audioSource.playbackRate){
+    const ratio = Math.pow(2, semis/12);
+    try{
+      window.audioSource.playbackRate.setValueAtTime(ratio, audioCtx.currentTime);
+      result.innerHTML += `
+        <div style="background:var(--bg3);border-left:3px solid var(--c5);padding:8px 12px;margin-top:8px;border-radius:4px;font-size:11px;">
+          <b style="color:var(--c5);">${semis===0?'Reset':(semis>0?'+':'')+semis+' semitons aplicados'}</b>
+          · rácio ${ratio.toFixed(4)}× · duração ${ratio>1?'reduzida':'aumentada'}
+        </div>
+      `;
+    }catch(e){}
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
