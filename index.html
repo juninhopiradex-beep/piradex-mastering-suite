@@ -922,7 +922,16 @@
           <div id="vl-dv-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">0%</div>
           <button id="vl-detail-btn-5" onclick="vlToggleDetail(5)" style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ DETALHE</button>
           <div id="vl-detail-5" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
-            <div style="font-size:9px;color:var(--c5);font-weight:700;letter-spacing:1px;margin-bottom:5px;">— REVERB —</div>
+            <!-- REVERB com bypass -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <div style="font-size:9px;color:var(--c5);font-weight:700;letter-spacing:1px;">— REVERB —</div>
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:8px;color:var(--muted);">
+                <input type="checkbox" id="vl-reverb-bypass" style="accent-color:var(--c7);width:10px;height:10px;" onchange="vlUpdatePreview()"> BYPASS
+              </label>
+            </div>
+            <div class="plabel">MIX</div>
+            <input type="range" id="vl-reverb-mix-detail" min="0" max="80" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rvm-v').textContent=this.value+'%';vlUpdatePreview()">
+            <div id="vl-rvm-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">0%</div>
             <div class="plabel">PRE-DELAY (ms)</div>
             <input type="range" id="vl-reverb-predelay" min="0" max="100" value="20" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rpd-v').textContent=this.value+'ms';vlUpdatePreview()">
             <div id="vl-rpd-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">20ms</div>
@@ -935,7 +944,16 @@
             <div class="plabel">DAMPING HF</div>
             <input type="range" id="vl-reverb-damp" min="0" max="100" value="40" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rdmp-v').textContent=this.value+'%'">
             <div id="vl-rdmp-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:8px;">40%</div>
-            <div style="font-size:9px;color:var(--c2);font-weight:700;letter-spacing:1px;margin-bottom:5px;">— DELAY —</div>
+            <!-- DELAY com bypass -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <div style="font-size:9px;color:var(--c2);font-weight:700;letter-spacing:1px;">— DELAY —</div>
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:8px;color:var(--muted);">
+                <input type="checkbox" id="vl-delay-bypass" style="accent-color:var(--c7);width:10px;height:10px;" onchange="vlUpdatePreview()"> BYPASS
+              </label>
+            </div>
+            <div class="plabel">MIX</div>
+            <input type="range" id="vl-delay-mix-detail" min="0" max="60" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dvm-v').textContent=this.value+'%';vlUpdatePreview()">
+            <div id="vl-dvm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0%</div>
             <div class="plabel">BPM</div>
             <input type="range" id="vl-delay-bpm" min="60" max="200" value="120" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dbpm-v').textContent=this.value+' bpm';vlUpdatePreview()">
             <div id="vl-dbpm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">120 bpm</div>
@@ -948,10 +966,7 @@
             </select>
             <div class="plabel">FEEDBACK</div>
             <input type="range" id="vl-delay-fb" min="0" max="80" value="40" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dfb-v').textContent=this.value+'%';vlUpdatePreview()">
-            <div id="vl-dfb-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">40%</div>
-            <div class="plabel">STEREO WIDTH</div>
-            <input type="range" id="vl-delay-width" min="0" max="100" value="60" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-dw-v').textContent=this.value+'%'">
-            <div id="vl-dw-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;">60%</div>
+            <div id="vl-dfb-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;">40%</div>
           </div>
         </div>
 
@@ -982,18 +997,20 @@
           <canvas id="va-guide-canvas" height="40" style="width:100%;background:rgba(45,255,138,0.03);border:1px solid var(--border);border-radius:3px;display:block;"></canvas>
         </div>
         <div id="va-tracks"></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;">
           <button onclick="document.getElementById('va-track-file').click()" style="background:rgba(45,212,255,0.08);border:1px solid var(--c5);color:var(--c5);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">+ PISTA</button>
           <input type="file" id="va-track-file" accept="audio/*" style="display:none;" onchange="vaAddTrack(this.files[0])">
+          <button onclick="vaAutoAlign()" id="va-btn-align" style="background:rgba(255,227,53,0.1);border:1px solid var(--c3);color:var(--c3);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">⚡ AUTO-ALIGN</button>
           <button onclick="vaPlay()" style="background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;">▶ MIX</button>
           <button onclick="vaStop()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--muted);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;">⬛</button>
+          <button onclick="vaExportAll()" id="va-btn-export-all" style="background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">⬇ EXPORTAR TODAS</button>
           <div style="margin-left:auto;display:flex;gap:3px;align-items:center;">
             <span style="font-size:8px;color:var(--muted);letter-spacing:1px;">ZOOM</span>
             <button onclick="vaZoom(-1)" style="background:var(--bg3);border:1px solid var(--border2);color:var(--muted2);border-radius:3px;padding:2px 7px;font-size:11px;cursor:pointer;">−</button>
             <button onclick="vaZoom(1)" style="background:var(--bg3);border:1px solid var(--border2);color:var(--muted2);border-radius:3px;padding:2px 7px;font-size:11px;cursor:pointer;">+</button>
           </div>
         </div>
-        <div style="font-size:8px;color:var(--muted);margin-top:6px;">Arrasta a pista ← → para ajustar offset. ⬇ exporta a pista alinhada em WAV.</div>
+        <div style="font-size:8px;color:var(--muted);margin-top:5px;">Arrasta ← → para ajustar offset. ⚡ AUTO-ALIGN detecta o melhor ponto de sincronismo. ⬇ exporta pista individual.</div>
       </div>
 
     </div>
@@ -1421,10 +1438,9 @@
       </div>
 
       <!-- EXPORTAR -->
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px;">
         <button onclick="vtExport()" id="vt-export-wav" disabled style="padding:11px;background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1.5px;cursor:pointer;">⬇ EXPORTAR WAV AFINADO</button>
-        <button onclick="vtSendToMaster()" id="vt-send-master" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c5);color:var(--c5);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">→ MASTER</button>
-        <button onclick="vtSendToVoiceLab()" id="vt-send-vl" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c1);color:var(--c1);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">→ VOICE LAB</button>
+        <button onclick="vtSendToMaster()" id="vt-send-master" disabled style="padding:10px;background:rgba(45,212,255,0.08);border:1px solid var(--c5);color:var(--c5);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1.5px;cursor:pointer;">→ ENVIAR PARA MASTER</button>
       </div>
 
       <div id="vt-status" style="font-size:9px;color:var(--muted);font-family:monospace;min-height:12px;margin-top:8px;"></div>

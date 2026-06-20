@@ -91,9 +91,8 @@
       setBtn('vt-play-orig', false);
       setBtn('vt-play-preview', false);
       setBtn('vt-play-tuned', true);
-      setBtn('vt-export-wav', true);
-      setBtn('vt-send-master', true);
-      setBtn('vt-send-vl', true);
+      setBtn('vt-export-wav', false);
+      setBtn('vt-send-master', false);
 
       vtStatus('✓ Carregado — usa PREVIEW para ouvir pitch shift em tempo real', 'var(--c4)');
       _drawWaveform();
@@ -270,8 +269,7 @@
         setBtn('vt-play-tuned', false);
         setBtn('vt-export-wav', false);
         setBtn('vt-send-master', false);
-        setBtn('vt-send-vl', false);
-        vtStatus('✓ Auto-Tune aplicado — ouve AFINADO', 'var(--c4)');
+          vtStatus('✓ Auto-Tune aplicado — ouve AFINADO', 'var(--c4)');
         _drawPianoRoll();
       } catch(e) {
         vtStatus('Erro: '+e.message,'var(--c7)'); console.error(e);
@@ -362,17 +360,27 @@
   window.vtSendToMaster = function() {
     var buf = vtTunedBuffer || vtBuffer;
     if(!buf){vtStatus('Carrega um ficheiro primeiro','var(--c7)');return;}
+    // Injector no player da suite
     window.audioBuffer = buf;
     if (typeof initAudio === 'function') initAudio();
+    // Mostrar waveform, esconder drop
     var ww = document.getElementById('waveform-wrap');
     var dz = document.getElementById('drop-zone');
     if (ww) ww.style.display = 'flex';
     if (dz) dz.style.display = 'none';
+    // Actualizar UI da suite
+    var trackName = document.getElementById('track-name');
+    if (trackName) trackName.textContent = 'Voice Tune';
     if (typeof drawWaveform === 'function') drawWaveform();
     if (typeof applyDSP === 'function') applyDSP();
-    var masterTab = document.querySelector('.tab-primary[onclick*="master"]');
-    if (typeof openTab === 'function') openTab('master', masterTab);
-    vtStatus('✓ Enviado para MASTER — a reproduzir','var(--c5)');
+    // Navegar para MASTER usando openVoiceTune's sister function logic
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+    var masterTab = document.querySelector('.tab-primary');
+    if (masterTab) masterTab.classList.add('active');
+    var masterPanel = document.getElementById('tab-master');
+    if (masterPanel) masterPanel.classList.add('active');
+    vtStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
   window.vtSendToVoiceLab = function() {

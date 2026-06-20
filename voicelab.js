@@ -464,8 +464,8 @@
       // Tune
       pitchSemis:g('vl-pitch-semis',0),
       // Space
-      reverbMix:g('vl-reverb-mix',0), preDelay:g('vl-reverb-predelay',20), decay:g('vl-reverb-decay',1.5),
-      delayMix:g('vl-delay-mix',0), delayBpm:g('vl-delay-bpm',120), delayDiv:g('vl-delay-div',4), delayFb:g('vl-delay-fb',40),
+      reverbMix:gc('vl-reverb-bypass')?0:(g('vl-reverb-mix-detail',0)||g('vl-reverb-mix',0)), preDelay:g('vl-reverb-predelay',20), decay:g('vl-reverb-decay',1.5),
+      delayMix:gc('vl-delay-bypass')?0:(g('vl-delay-mix-detail',0)||g('vl-delay-mix',0)), delayBpm:g('vl-delay-bpm',120), delayDiv:g('vl-delay-div',4), delayFb:g('vl-delay-fb',40),
     };
   }
 
@@ -703,9 +703,15 @@
     // Redesenha waveform e aplica DSP
     if (typeof drawWaveform === 'function') drawWaveform();
     if (typeof applyDSP === 'function') applyDSP();
-    // Muda para tab MASTER
-    var masterTab = document.querySelector('.tab-primary[onclick*="master"]');
-    if (typeof openTab === 'function') openTab('master', masterTab);
+    // Navegar para MASTER directamente (sem depender de openTab chain)
+    var tn = document.getElementById('track-name');
+    if (tn) tn.textContent = 'Voice Lab';
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+    var masterTab = document.querySelector('.tab-primary');
+    if (masterTab) masterTab.classList.add('active');
+    var masterPanel = document.getElementById('tab-master');
+    if (masterPanel) masterPanel.classList.add('active');
     vlStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
@@ -766,19 +772,38 @@
   }
   window.vaRemoveTrack=function(i){aligner.tracks.splice(i,1);_vaRenderTracks();_vaDrawAll();};
   function _vaDrawAll(){_vaDrawGuide();aligner.tracks.forEach(function(_,i){_vaDrawTrack(i);});}
-  function _vaDrawGuide(){var cv=document.getElementById('va-guide-canvas');if(!cv||!aligner.guide)return;_vaDrawWave(cv,aligner.guide,'var(--c4)',0,null);}
-  function _vaDrawTrack(i){var cv=document.getElementById('va-canvas-'+i);if(!cv)return;_vaDrawWave(cv,aligner.tracks[i].buffer,'var(--c5)',aligner.tracks[i].offset,aligner.guide);}
-  function _vaDrawWave(cv,buffer,color,offsetSec,refBuf){
+  function _vaDrawGuide(){var cv=document.getElementById('va-guide-canvas');if(!cv||!aligner.guide)return;_vaDrawWave(cv,aligner.guide,'#2dff8a',0,null,true);}
+  function _vaDrawTrack(i){var cv=document.getElementById('va-canvas-'+i);if(!cv)return;_vaDrawWave(cv,aligner.tracks[i].buffer,'#2ddcff',aligner.tracks[i].offset,aligner.guide,false);}
+  function _vaDrawWave(cv,buffer,color,offsetSec,refBuf,isGuide){
     var totalDur=refBuf?refBuf.duration:buffer.duration;
     var W=cv.offsetWidth||cv.parentElement.offsetWidth||600;cv.width=W;var H=cv.height;
-    var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+    var ctx=cv.getContext('2d');
+    // Fundo com gradiente subtil
+    var bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'rgba(0,0,0,0.6)');bg.addColorStop(1,'rgba(0,0,0,0.3)');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
     var data=buffer.getChannelData(0),pxPerSec=(W/totalDur)*aligner.zoom;
     var samplesPerPx=Math.max(1,Math.floor(data.length/(W*aligner.zoom)));
     var offsetPx=offsetSec*pxPerSec;
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.globalAlpha=0.85;ctx.beginPath();
-    for(var x=0;x<W;x++){var sStart=Math.floor((x-offsetPx)*samplesPerPx*(1/aligner.zoom));var mx=0;for(var j=0;j<samplesPerPx;j++){var idx=sStart+j;if(idx>=0&&idx<data.length)mx=Math.max(mx,Math.abs(data[idx]));}var y=H/2-mx*(H/2-2);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-    ctx.stroke();ctx.globalAlpha=1;
-    ctx.strokeStyle='rgba(255,255,255,0.07)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+    // Linha de centro
+    ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+    // Waveform fill (espelho)
+    ctx.globalAlpha=0.18;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var sStart=Math.floor((x-offsetPx)*samplesPerPx*(1/aligner.zoom));var mx=0;for(var j=0;j<samplesPerPx;j++){var idx=sStart+j;if(idx>=0&&idx<data.length)mx=Math.max(mx,Math.abs(data[idx]));}var y=H/2-mx*(H/2-3);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.lineTo(W,H/2);ctx.closePath();ctx.fill();
+    // Waveform fill inferior (espelho)
+    ctx.beginPath();ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var sStart=Math.floor((x-offsetPx)*samplesPerPx*(1/aligner.zoom));var mx=0;for(var j=0;j<samplesPerPx;j++){var idx=sStart+j;if(idx>=0&&idx<data.length)mx=Math.max(mx,Math.abs(data[idx]));}var y=H/2+mx*(H/2-3);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.lineTo(W,H/2);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=1;
+    // Linha principal
+    ctx.strokeStyle=color;ctx.lineWidth=isGuide?2:1.5;ctx.shadowColor=color;ctx.shadowBlur=isGuide?6:3;ctx.beginPath();
+    for(var x=0;x<W;x++){var sStart=Math.floor((x-offsetPx)*samplesPerPx*(1/aligner.zoom));var mx=0;for(var j=0;j<samplesPerPx;j++){var idx=sStart+j;if(idx>=0&&idx<data.length)mx=Math.max(mx,Math.abs(data[idx]));}var y=H/2-mx*(H/2-3);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();
+    // Linha inferior (espelho)
+    ctx.beginPath();
+    for(var x=0;x<W;x++){var sStart=Math.floor((x-offsetPx)*samplesPerPx*(1/aligner.zoom));var mx=0;for(var j=0;j<samplesPerPx;j++){var idx=sStart+j;if(idx>=0&&idx<data.length)mx=Math.max(mx,Math.abs(data[idx]));}var y=H/2+mx*(H/2-3);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();ctx.shadowBlur=0;
   }
   function _vaBindDrag(i){
     var cv=document.getElementById('va-canvas-'+i);if(!cv)return;
@@ -790,6 +815,65 @@
     window.addEventListener('touchmove',function(e){if(!drag)return;var dur=aligner.guide?aligner.guide.duration:10;var dSec=(e.touches[0].clientX-sX)/((cv.offsetWidth||600)/dur);aligner.tracks[i].offset=Math.max(-aligner.tracks[i].buffer.duration,Math.min(dur,sOff+dSec));var el=document.getElementById('va-offset-'+i);if(el)el.textContent=Math.round(aligner.tracks[i].offset*1000);_vaDrawTrack(i);},{passive:true});
     window.addEventListener('touchend',function(){drag=false;});
   }
+  // AUTO-ALIGN: cross-correlação para encontrar melhor offset
+  window.vaAutoAlign = function() {
+    if (!aligner.guide) { vlStatus('Carrega a guia primeiro','var(--c7)'); return; }
+    if (!aligner.tracks.length) { vlStatus('Adiciona pistas para alinhar','var(--c7)'); return; }
+    vlStatus('⏳ A calcular alinhamento...','var(--c5)');
+    setTimeout(function(){
+      var gData = aligner.guide.getChannelData(0);
+      var sr = aligner.guide.sampleRate;
+      aligner.tracks.forEach(function(t, i){
+        var tData = t.buffer.getChannelData(0);
+        // Correlação em janelas de 512 amostras, salto de 256
+        var winSz = Math.min(4096, Math.floor(sr * 0.2));
+        var maxLag = Math.floor(sr * 2.0); // máx 2 segundos de offset
+        var bestLag = 0, bestCorr = -Infinity;
+        var step = Math.max(64, Math.floor(sr * 0.01));
+        // Usa RMS para encontrar janela activa na guia
+        var gStart = 0;
+        for (var s = 0; s < gData.length - winSz; s += winSz) {
+          var rms = 0; for (var k = 0; k < winSz; k++) rms += gData[s+k]*gData[s+k];
+          if (rms/winSz > 0.001) { gStart = s; break; }
+        }
+        for (var lag = -maxLag; lag <= maxLag; lag += step) {
+          var corr = 0;
+          for (var k = 0; k < winSz; k++) {
+            var gi = gStart + k; var ti = gStart + k + lag;
+            if (gi >= 0 && gi < gData.length && ti >= 0 && ti < tData.length) {
+              corr += gData[gi] * tData[ti];
+            }
+          }
+          if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+        }
+        t.offset = -bestLag / sr;
+        var el = document.getElementById('va-offset-'+i);
+        if (el) el.textContent = Math.round(t.offset*1000);
+        _vaDrawTrack(i);
+      });
+      vlStatus('✓ Auto-align concluído — verifica e ajusta manualmente se necessário','var(--c4)');
+    }, 30);
+  };
+
+  // EXPORTAR TODAS as pistas com offsets aplicados
+  window.vaExportAll = function() {
+    if (!aligner.tracks.length) { vlStatus('Sem pistas para exportar','var(--c7)'); return; }
+    var delay = 0;
+    aligner.tracks.forEach(function(t, i){
+      setTimeout(function(){
+        var blob = _bufToWav(t.buffer);
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'aligned_' + (i+1) + '_' + t.name.replace(/\s/g,'_');
+        a.click();
+        setTimeout(function(){URL.revokeObjectURL(url);}, 1000);
+      }, delay);
+      delay += 400;
+    });
+    vlStatus('✓ A exportar ' + aligner.tracks.length + ' pistas...','var(--c4)');
+  };
+
   window.vaPlay=function(){
     vaStop();if(!aligner.guide){vlStatus('Carrega a guia primeiro','var(--c7)');return;}
     var ctx=getCtx(),gSrc=ctx.createBufferSource();gSrc.buffer=aligner.guide;gSrc.connect(ctx.destination);gSrc.start();
