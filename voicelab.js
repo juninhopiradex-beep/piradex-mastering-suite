@@ -114,8 +114,6 @@
 
       vlStatus('✓ Ficheiro carregado — ajusta os passos, usa PREVIEW para ouvir, depois PROCESSAR', 'var(--c4)');
       _drawDropWave();
-      // Trigger Genre DNA + Mastering Memory
-      document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: vlBuffer }));
     } catch (e) {
       vlStatus('Erro ao carregar: ' + e.message, 'var(--c7)');
       console.error('[VoiceLab]', e);
