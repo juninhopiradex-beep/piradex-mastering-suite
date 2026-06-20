@@ -128,37 +128,39 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * PREVIEW EM TEMPO REAL — playbackRate para pitch shift simples
    * ══════════════════════════════════════════════════════════════════════════ */
-  window.vtPlayPreview = function() {
-    if (!vtBuffer) { vtStatus('Carrega um ficheiro primeiro','var(--c7)'); return; }
-    vtStop();
+  function _startVtPreview() {
+    if (!vtBuffer) return;
     var ctx = getCtx();
+    if (vtPreviewSource) { try { vtPreviewSource.stop(); } catch(e){} vtPreviewSource = null; }
     vtPreviewSource = ctx.createBufferSource();
     vtPreviewSource.buffer = vtBuffer;
-
-    var semis = parseFloat(document.getElementById('vt-pitch-semis').value) || 0;
-    var cents = parseFloat(document.getElementById('vt-pitch-cents').value) || 0;
-    var totalSemis = semis + cents / 100;
-    vtPreviewSource.playbackRate.value = Math.pow(2, totalSemis / 12);
-
+    vtPreviewSource.loop = true; // LOOP até parar
+    var semis = parseFloat((document.getElementById('vt-pitch-semis')||{value:0}).value) || 0;
+    var cents = parseFloat((document.getElementById('vt-pitch-cents')||{value:0}).value) || 0;
+    vtPreviewSource.playbackRate.value = Math.pow(2, (semis + cents/100) / 12);
     vtPreviewSource.connect(ctx.destination);
     vtPreviewSource.start();
-    vtPreviewActive = true;
+  }
 
+  window.vtPlayPreview = function() {
+    if (!vtBuffer) { vtStatus('Carrega um ficheiro primeiro','var(--c7)'); return; }
+    if (vtPreviewActive) { vtStop(); return; } // toggle
+    vtStop();
+    _startVtPreview();
+    vtPreviewActive = true;
     var btn = document.getElementById('vt-play-preview');
-    if (btn) { btn.style.background = 'rgba(255,227,53,0.2)'; btn.style.borderColor = 'var(--c3)'; }
-    vtStatus('▶ PREVIEW — pitch shift em tempo real (playbackRate)', 'var(--c3)');
-    vtPreviewSource.onended = function() {
-      vtPreviewActive = false;
-      if (btn) { btn.style.background = 'rgba(255,227,53,0.07)'; }
-      vtStatus('■ Parado', 'var(--muted)');
-    };
+    if (btn) { btn.style.background = 'rgba(255,227,53,0.25)'; btn.style.borderColor = 'var(--c3)'; btn.textContent = '⬛ PARAR'; }
+    vtStatus('▶ PREVIEW em loop — move os sliders para ouvir o efeito · clica de novo para parar', 'var(--c3)');
   };
 
   window.vtUpdatePreview = function() {
-    if (!vtPreviewActive || !vtPreviewSource) return;
-    var semis = parseFloat(document.getElementById('vt-pitch-semis').value) || 0;
-    var cents = parseFloat(document.getElementById('vt-pitch-cents').value) || 0;
-    vtPreviewSource.playbackRate.value = Math.pow(2, (semis + cents/100) / 12);
+    if (!vtPreviewActive) return;
+    // playbackRate pode ser mudado em tempo real na mesma source
+    if (vtPreviewSource) {
+      var semis = parseFloat((document.getElementById('vt-pitch-semis')||{value:0}).value) || 0;
+      var cents = parseFloat((document.getElementById('vt-pitch-cents')||{value:0}).value) || 0;
+      vtPreviewSource.playbackRate.value = Math.pow(2, (semis + cents/100) / 12);
+    }
   };
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -341,7 +343,7 @@
     if (vtPreviewSource){try{vtPreviewSource.stop();}catch(e){}vtPreviewSource=null;}
     vtPreviewActive=false;
     var btn=document.getElementById('vt-play-preview');
-    if(btn){btn.style.background='rgba(255,227,53,0.07)';}
+    if(btn){btn.style.background='rgba(255,227,53,0.07)';btn.style.borderColor='var(--c3)';btn.textContent='▶ PREVIEW';}
   };
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -368,8 +370,8 @@
     if (dz) dz.style.display = 'none';
     if (typeof drawWaveform === 'function') drawWaveform();
     if (typeof applyDSP === 'function') applyDSP();
-    var masterTab = document.querySelector('.tab-primary[onclick*="'master'"]');
-    if (typeof openTab === 'function') openTab('master', masterTab || document.querySelector('.tab-primary'));
+    var masterTab = document.querySelector('.tab-primary[onclick*="master"]');
+    if (typeof openTab === 'function') openTab('master', masterTab);
     vtStatus('✓ Enviado para MASTER — a reproduzir','var(--c5)');
   };
 
@@ -380,7 +382,7 @@
     if(window.vlReceiveTuned) window.vlReceiveTuned(buf);
     else window.audioBuffer=buf;
     vtStatus('✓ Enviado para Voice Lab','var(--c1)');
-    if(window.openTab) openTab('voicelab',null);
+    if(window.openVoiceLab) openVoiceLab();
   };
 
   function _bufToWav(buffer){
@@ -554,28 +556,24 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * INIT — hook openTab
    * ══════════════════════════════════════════════════════════════════════════ */
-  var _origOpenTab = window.openTab;
-  window.openTab = function(name, el) {
-    if (_origOpenTab) _origOpenTab(name, el);
-    if (name === 'voicetune') {
+  // Ouve evento de navegação em vez de override openTab
+  document.addEventListener('piradex:tab', function(e){
+    if (e.detail === 'voicetune') {
       setTimeout(function(){
         vtInitDrop();
         _drawPianoRoll();
         _drawScaleKeys();
-        if(vtBuffer) _drawWaveform();
+        if (vtBuffer) _drawWaveform();
       }, 60);
     }
-  };
+  });
 
-  // Expor para voicelab enviar buffer
-  window.vlReceiveTuned = function(buf) {
-    // Voice Lab recebe de volta buffer afinado
-    if(window.vlLoadBuffer) window.vlLoadBuffer(buf);
-  };
-
+  // Também init se o painel já estiver activo no load
   setTimeout(function(){
-    var p=document.getElementById('tab-voicetune');
-    if(p&&p.style.display!=='none'){ vtInitDrop(); _drawPianoRoll(); _drawScaleKeys(); }
-  },200);
+    var p = document.getElementById('tab-voicetune');
+    if (p && p.classList.contains('active')) {
+      vtInitDrop(); _drawPianoRoll(); _drawScaleKeys();
+    }
+  }, 300);
 
 })();

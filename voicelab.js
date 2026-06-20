@@ -298,38 +298,31 @@
     }
   }
 
-  window.vlPlayPreview = function () {
-    if (!vlBuffer) { vlStatus('Carrega um ficheiro primeiro', 'var(--c7)'); return; }
-    vlStop();
+  function _startVlPreview() {
+    if (!vlBuffer) return;
     var ctx = getCtx();
+    if (vlPreviewSource) { try { vlPreviewSource.stop(); } catch(e){} vlPreviewSource = null; }
     vlPreviewNodes = _buildPreviewChain();
     _applyPreviewParams(vlPreviewNodes);
-
-    // Pitch shift via playbackRate (altera velocidade + pitch)
-    var semis = parseFloat((document.getElementById('vl-pitch-semis') || {value: 0}).value) || 0;
-    var stepOn4 = document.getElementById('vl-step-on-4');
-    var useShift = stepOn4 && stepOn4.checked && Math.abs(semis) > 0.1;
-
     vlPreviewSource = ctx.createBufferSource();
     vlPreviewSource.buffer = vlBuffer;
-    vlPreviewSource.playbackRate.value = useShift ? Math.pow(2, semis / 12) : 1;
+    vlPreviewSource.loop = true; // LOOP até parar
     vlPreviewSource.connect(vlPreviewNodes._chain[0]);
-    vlPreviewSource.loop = false;
     vlPreviewSource.start();
+  }
+
+  window.vlPlayPreview = function () {
+    if (!vlBuffer) { vlStatus('Carrega um ficheiro primeiro', 'var(--c7)'); return; }
+    if (vlPreviewActive) { vlStop(); return; } // toggle — clica de novo para parar
+    vlStop();
+    _startVlPreview();
     vlPreviewActive = true;
-
     var prevBtn = document.getElementById('vl-play-preview');
-    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.2)'; }
-
-    vlStatus('▶ PREVIEW — ouvindo com ajustes actuais (sem processar)', 'var(--c3)');
-    vlPreviewSource.onended = function () {
-      vlPreviewActive = false;
-      if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.08)'; }
-      vlStatus('■ Preview parado', 'var(--muted)');
-    };
+    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.25)'; prevBtn.textContent = '⬛ PARAR'; }
+    vlStatus('▶ PREVIEW em loop — ajusta os sliders e ouve o efeito · clica de novo para parar', 'var(--c3)');
   };
 
-  // Actualiza parâmetros dos nós durante preview (sem reiniciar)
+  // Actualiza parâmetros dos nós durante preview em loop (sem reiniciar)
   window.vlUpdatePreview = function () {
     if (vlPreviewActive && vlPreviewNodes) {
       _applyPreviewParams(vlPreviewNodes);
@@ -678,7 +671,7 @@
     if (vlPreviewSource) { try { vlPreviewSource.stop(); } catch (e) {} vlPreviewSource = null; }
     vlPreviewActive = false;
     var prevBtn = document.getElementById('vl-play-preview');
-    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.08)'; }
+    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.08)'; prevBtn.textContent = '▶ PREVIEW'; }
   };
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -712,7 +705,7 @@
     if (typeof applyDSP === 'function') applyDSP();
     // Muda para tab MASTER
     var masterTab = document.querySelector('.tab-primary[onclick*="master"]');
-    if (typeof openTab === 'function') openTab('master', masterTab || document.querySelector('.tab-primary'));
+    if (typeof openTab === 'function') openTab('master', masterTab);
     vlStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
@@ -830,11 +823,16 @@
     vlStatus('✓ Recebido do Voice Tune — pronto para processar', 'var(--c6)');
   };
 
-  var _origOpenTab=window.openTab;
-  window.openTab=function(name,el){
-    if(_origOpenTab)_origOpenTab(name,el);
-    if(name==='voicelab')setTimeout(function(){vlInitDrop();_vaDrawGuide();},60);
-  };
-  setTimeout(function(){var p=document.getElementById('tab-voicelab');if(p&&p.style.display!=='none')vlInitDrop();},200);
+  // Ouve evento de navegação
+  document.addEventListener('piradex:tab', function(e){
+    if (e.detail === 'voicelab') {
+      setTimeout(function(){ vlInitDrop(); _vaDrawGuide(); }, 60);
+    }
+  });
+
+  setTimeout(function(){
+    var p=document.getElementById('tab-voicelab');
+    if(p&&p.classList.contains('active')) vlInitDrop();
+  },300);
 
 })();

@@ -133,7 +133,10 @@ function openTab(name, el) {
     if(typeof fxRenderHub==='function') fxRenderHub();
   },60);
   if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
-  if(name==='voicetune')setTimeout(()=>{ if(typeof vtInitDrop==='function'){vtInitDrop();} if(typeof _vtDrawAll==='function')_vtDrawAll(); },60);
+  // Notifica módulos externos (voicelab, voicetune) via evento
+  setTimeout(function(){
+    document.dispatchEvent(new CustomEvent('piradex:tab', {detail: name}));
+  }, 80);
   if(name==='reson')setTimeout(()=>{ if(typeof _ensureResonAnalyser==='function'){ _ensureResonAnalyser(); _startResonLoop(); } updateReson(); },60);
   if(name==='image')setTimeout(()=>{ if(typeof _ensureVectorscope==='function') _ensureVectorscope(); updateImager(); },60);
   if(name==='lowfocus')setTimeout(()=>{ if(typeof updateLowFocus==='function') updateLowFocus(); },60);
@@ -5716,4 +5719,33 @@ function _setupV6(){
     setTimeout(()=>_captureBeforeStats(), 2000);
   };
   console.log('[Piradex v6] All 10 features initialized');
+}
+
+// ── Navegação Voice Lab / Voice Tune ──
+function openVoiceTune() {
+  // Remove active de todos os tabs e paineis
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+  // Activa o tab e o painel
+  var tab = document.querySelector('.tab-primary[onclick*="voicetune"]');
+  if (tab) tab.classList.add('active');
+  var panel = document.getElementById('tab-voicetune');
+  if (panel) panel.classList.add('active');
+  // Init voicetune
+  setTimeout(function(){
+    if (typeof vtInitDrop === 'function') vtInitDrop();
+    document.dispatchEvent(new CustomEvent('piradex:tab', {detail: 'voicetune'}));
+  }, 80);
+}
+function openVoiceLab() {
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+  var tab = document.querySelector('.tab-primary[onclick*="voicelab"]');
+  if (tab) tab.classList.add('active');
+  var panel = document.getElementById('tab-voicelab');
+  if (panel) panel.classList.add('active');
+  setTimeout(function(){
+    if (typeof vlInitDrop === 'function') vlInitDrop();
+    document.dispatchEvent(new CustomEvent('piradex:tab', {detail: 'voicelab'}));
+  }, 80);
 }
