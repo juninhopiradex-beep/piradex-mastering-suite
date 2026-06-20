@@ -776,6 +776,15 @@
 
       <div id="vl-info" style="display:none;background:var(--bg3);border-left:3px solid var(--c4);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-family:monospace;font-size:10px;"></div>
 
+      <!-- PLAYER A/B/PREVIEW — topo, sempre visível -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+        <button onclick="vlPlay('original')" id="vl-play-orig" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1px;cursor:pointer;">▶ ORIGINAL</button>
+        <button onclick="vlPlayPreview()" id="vl-play-preview" disabled style="padding:10px;background:rgba(255,227,53,0.08);border:1px solid var(--c3);color:var(--c3);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1px;cursor:pointer;" title="Ouve com os ajustes actuais sem processar">▶ PREVIEW</button>
+        <button onclick="vlPlay('result')" id="vl-play-result" disabled style="padding:10px;background:rgba(45,255,138,0.06);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1px;cursor:pointer;">▶ RESULTADO</button>
+        <button onclick="vlStop()" style="padding:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--muted);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1px;cursor:pointer;">⬛ STOP</button>
+      </div>
+      <div style="font-size:8px;color:var(--muted2);margin-bottom:10px;text-align:center;letter-spacing:1px;">ORIGINAL = sem efeitos · PREVIEW = ouvir ajustes em tempo real · RESULTADO = após processar</div>
+
       <!-- PIPELINE: 5 PASSOS -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px;">
 
@@ -788,11 +797,11 @@
           <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c1);letter-spacing:1px;margin-bottom:2px;">CLEAN</div>
           <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">Gate · De-ess · HPF</div>
           <div class="plabel">HPF</div>
-          <input type="range" id="vl-hpf" min="40" max="300" value="80" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-hpf-v').textContent=this.value+'Hz'">
+          <input type="range" id="vl-hpf" min="40" max="300" value="80" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-hpf-v').textContent=this.value+'Hz';vlUpdatePreview()">
           <div id="vl-hpf-v" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:4px;">80Hz</div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <span class="plabel">DE-ESS</span>
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" id="vl-deess-on" style="accent-color:var(--c1);width:11px;height:11px;"><span style="font-size:8px;color:var(--muted);">ON</span></label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" id="vl-deess-on" style="accent-color:var(--c1);width:11px;height:11px;" onchange="vlUpdatePreview()"><span style="font-size:8px;color:var(--muted);">ON</span></label>
           </div>
           <button id="vl-detail-btn-1" onclick="vlToggleDetail(1)" style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ DETALHE</button>
           <div id="vl-detail-1" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
@@ -800,11 +809,17 @@
             <input type="range" id="vl-gate" min="-80" max="-20" value="-60" style="width:100%;accent-color:var(--c7);" oninput="document.getElementById('vl-gate-v').textContent=this.value+'dB'">
             <div id="vl-gate-v" style="font-size:8px;color:var(--muted);font-family:monospace;text-align:right;margin-bottom:4px;">-60dB</div>
             <div class="plabel">DE-ESS FREQ</div>
-            <input type="range" id="vl-deess-freq" min="3000" max="14000" value="7000" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-deess-fv').textContent=Math.round(this.value/100)/10+'kHz'">
+            <input type="range" id="vl-deess-freq" min="3000" max="14000" value="7000" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-deess-fv').textContent=Math.round(this.value/100)/10+'kHz';vlUpdatePreview()">
             <div id="vl-deess-fv" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:4px;">7.0kHz</div>
-            <div class="plabel">INTENSIDADE</div>
-            <input type="range" id="vl-deess-amt" min="0" max="100" value="50" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-deess-av').textContent=this.value+'%'">
-            <div id="vl-deess-av" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;">50%</div>
+            <div class="plabel">INTENSIDADE DE-ESS</div>
+            <input type="range" id="vl-deess-amt" min="0" max="100" value="50" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-deess-av').textContent=this.value+'%';vlUpdatePreview()">
+            <div id="vl-deess-av" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:4px;">50%</div>
+            <div class="plabel">ATAQUE GATE (ms)</div>
+            <input type="range" id="vl-gate-att" min="1" max="50" value="5" style="width:100%;accent-color:var(--c7);" oninput="document.getElementById('vl-gatt-v').textContent=this.value+'ms'">
+            <div id="vl-gatt-v" style="font-size:8px;color:var(--muted);font-family:monospace;text-align:right;margin-bottom:4px;">5ms</div>
+            <div class="plabel">RELEASE GATE (ms)</div>
+            <input type="range" id="vl-gate-rel" min="20" max="300" value="80" style="width:100%;accent-color:var(--c7);" oninput="document.getElementById('vl-grel-v').textContent=this.value+'ms'">
+            <div id="vl-grel-v" style="font-size:8px;color:var(--muted);font-family:monospace;text-align:right;">80ms</div>
           </div>
         </div>
 
@@ -817,14 +832,37 @@
           <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c2);letter-spacing:1px;margin-bottom:2px;">SHAPE</div>
           <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">EQ 4 bandas</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;">
-            <div><div class="plabel">LOW</div><input type="range" id="vl-eq-low" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eql-v').textContent=(this.value>0?'+':'')+this.value"><div id="vl-eql-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
-            <div><div class="plabel">MID</div><input type="range" id="vl-eq-mid" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqm-v').textContent=(this.value>0?'+':'')+this.value"><div id="vl-eqm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
-            <div><div class="plabel">HIGH</div><input type="range" id="vl-eq-high" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqh-v').textContent=(this.value>0?'+':'')+this.value"><div id="vl-eqh-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
-            <div><div class="plabel" style="color:var(--c5);">AIR+</div><input type="range" id="vl-eq-air" min="-6" max="12" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-eqa-v').textContent=(this.value>0?'+':'')+this.value"><div id="vl-eqa-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
+            <div><div class="plabel">LOW</div><input type="range" id="vl-eq-low" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eql-v').textContent=(this.value>0?'+':'')+this.value;vlUpdatePreview()"><div id="vl-eql-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
+            <div><div class="plabel">MID</div><input type="range" id="vl-eq-mid" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqm-v').textContent=(this.value>0?'+':'')+this.value;vlUpdatePreview()"><div id="vl-eqm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
+            <div><div class="plabel">HIGH</div><input type="range" id="vl-eq-high" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqh-v').textContent=(this.value>0?'+':'')+this.value;vlUpdatePreview()"><div id="vl-eqh-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
+            <div><div class="plabel" style="color:var(--c5);">AIR+</div><input type="range" id="vl-eq-air" min="-6" max="12" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-eqa-v').textContent=(this.value>0?'+':'')+this.value;vlUpdatePreview()"><div id="vl-eqa-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:center;margin-bottom:3px;">0</div></div>
           </div>
           <button id="vl-detail-btn-2" onclick="vlToggleDetail(2)" style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;margin-top:4px;">⚙ DETALHE</button>
           <div id="vl-detail-2" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
-            <div style="font-size:8px;color:var(--muted2);line-height:1.6;">Low ~120Hz · Mid ~1.2kHz<br>High ~5kHz · Air ~12kHz<br>Cada banda: shelf suave.</div>
+            <div class="plabel" style="color:var(--c2);">SUB (60Hz)</div>
+            <input type="range" id="vl-eq-sub" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqs-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqs-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c2);">LOW BODY (120Hz)</div>
+            <input type="range" id="vl-eq-low-detail" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eql2-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eql2-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c2);">LOW-MID (500Hz)</div>
+            <input type="range" id="vl-eq-lowmid" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqlm-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqlm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c2);">MID PRESENCE (1.2kHz)</div>
+            <input type="range" id="vl-eq-mid-detail" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqmd-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqmd-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c2);">HIGH-MID (3kHz)</div>
+            <input type="range" id="vl-eq-highmid" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqhm-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqhm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c2);">HIGH (5kHz)</div>
+            <input type="range" id="vl-eq-high-detail" min="-12" max="12" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-eqhd-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqhd-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c5);">AIR+ (12kHz)</div>
+            <input type="range" id="vl-eq-air-detail" min="-6" max="12" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-eqad-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqad-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">0dB</div>
+            <div class="plabel" style="color:var(--c5);">PRESENCE (16kHz)</div>
+            <input type="range" id="vl-eq-presence" min="-6" max="12" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-eqpr-v').textContent=(this.value>0?'+':'')+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-eqpr-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;">0dB</div>
           </div>
         </div>
 
@@ -837,22 +875,25 @@
           <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c4);letter-spacing:1px;margin-bottom:2px;">CONTROL</div>
           <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">Compressor</div>
           <div class="plabel">THRESHOLD</div>
-          <input type="range" id="vl-comp-thresh" min="-40" max="0" value="-20" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-ct-v').textContent=this.value+'dB'">
+          <input type="range" id="vl-comp-thresh" min="-40" max="0" value="-20" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-ct-v').textContent=this.value+'dB';vlUpdatePreview()">
           <div id="vl-ct-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;margin-bottom:4px;">-20dB</div>
           <div class="plabel">RATIO</div>
-          <input type="range" id="vl-comp-ratio" min="1" max="20" value="3" step="0.5" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-cr-v').textContent=this.value+':1'">
+          <input type="range" id="vl-comp-ratio" min="1" max="20" value="3" step="0.5" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-cr-v').textContent=this.value+':1';vlUpdatePreview()">
           <div id="vl-cr-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;margin-bottom:4px;">3:1</div>
           <button id="vl-detail-btn-3" onclick="vlToggleDetail(3)" style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ DETALHE</button>
           <div id="vl-detail-3" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
             <div class="plabel">ATTACK (ms)</div>
-            <input type="range" id="vl-comp-attack" min="1" max="100" value="10" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-ca-v').textContent=this.value+'ms'">
+            <input type="range" id="vl-comp-attack" min="1" max="100" value="10" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-ca-v').textContent=this.value+'ms';vlUpdatePreview()">
             <div id="vl-ca-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;margin-bottom:4px;">10ms</div>
             <div class="plabel">RELEASE (ms)</div>
-            <input type="range" id="vl-comp-release" min="20" max="500" value="100" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-crel-v').textContent=this.value+'ms'">
+            <input type="range" id="vl-comp-release" min="20" max="500" value="100" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-crel-v').textContent=this.value+'ms';vlUpdatePreview()">
             <div id="vl-crel-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;margin-bottom:4px;">100ms</div>
             <div class="plabel">MAKEUP GAIN</div>
-            <input type="range" id="vl-comp-makeup" min="0" max="24" value="0" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-cm-v').textContent='+'+this.value+'dB'">
-            <div id="vl-cm-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;">+0dB</div>
+            <input type="range" id="vl-comp-makeup" min="0" max="24" value="0" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-cm-v').textContent='+'+this.value+'dB';vlUpdatePreview()">
+            <div id="vl-cm-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;margin-bottom:4px;">+0dB</div>
+            <div class="plabel">KNEE</div>
+            <input type="range" id="vl-comp-knee" min="0" max="40" value="10" style="width:100%;accent-color:var(--c4);" oninput="document.getElementById('vl-ck-v').textContent=this.value+'dB';vlUpdatePreview()">
+            <div id="vl-ck-v" style="font-size:8px;color:var(--c4);font-family:monospace;text-align:right;">10dB</div>
           </div>
         </div>
 
@@ -865,24 +906,29 @@
           <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c1);letter-spacing:1px;margin-bottom:2px;">TUNE</div>
           <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">Correção de tom</div>
           <div class="plabel">PITCH (semitons)</div>
-          <input type="range" id="vl-pitch-semis" min="-12" max="12" value="0" step="1" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-pt-v').textContent=(this.value>0?'+':'')+this.value+' st'">
+          <input type="range" id="vl-pitch-semis" min="-12" max="12" value="0" step="1" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-pt-v').textContent=(this.value>0?'+':'')+this.value+' st';vlUpdatePreview()">
           <div id="vl-pt-v" style="font-size:9px;color:var(--c1);font-family:monospace;text-align:right;font-weight:700;margin-bottom:6px;">0 st</div>
+          <div class="plabel">FORMANT (st)</div>
+          <input type="range" id="vl-formant" min="-6" max="6" value="0" step="1" style="width:100%;accent-color:var(--c6);" oninput="document.getElementById('vl-fm-v').textContent=(this.value>0?'+':'')+this.value">
+          <div id="vl-fm-v" style="font-size:8px;color:var(--c6);font-family:monospace;text-align:right;margin-bottom:4px;">0</div>
           <button id="vl-detail-btn-4" onclick="vlToggleDetail(4)" style="width:100%;background:rgba(255,58,181,0.08);border:1px solid var(--c1);color:var(--c1);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ AUTO-TUNE</button>
           <div id="vl-detail-4" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
-            <div style="font-size:8px;color:var(--muted2);margin-bottom:6px;line-height:1.5;">Motor phase vocoder. Detecta escala, snap nota-a-nota. Processa independentemente.</div>
+            <div style="font-size:8px;color:var(--muted2);margin-bottom:6px;line-height:1.5;">Motor phase vocoder completo. Detecta escala, snap nota-a-nota. Processa de forma independente.</div>
             <div style="background:var(--bg2);border-radius:4px;padding:6px;text-align:center;margin-bottom:6px;">
-              <div class="plabel">ESCALA</div>
-              <div id="vl-tune-key" style="font-family:'Orbitron',monospace;font-weight:900;font-size:16px;color:var(--c4);">—</div>
+              <div class="plabel">ESCALA DETECTADA</div>
+              <div id="vl-tune-key" style="font-family:'Orbitron',monospace;font-weight:900;font-size:18px;color:var(--c4);">—</div>
+              <div id="vl-key-info" style="font-size:8px;color:var(--muted);margin-top:2px;">aguarda análise</div>
             </div>
             <div class="plabel">SNAP STRENGTH</div>
             <input type="range" id="vl-at-strength" min="0" max="100" value="100" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-ats-v').textContent=this.value+'%'">
             <div id="vl-ats-v" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:4px;">100%</div>
             <div class="plabel">RETUNE SPEED</div>
             <input type="range" id="vl-at-speed" min="0" max="200" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-atsp-v').textContent=this.value+'ms'">
-            <div id="vl-atsp-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:7px;">0ms</div>
+            <div id="vl-atsp-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0ms (T-Pain snap)</div>
+            <canvas id="vl-pianoroll" height="120" style="width:100%;background:var(--bg);border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:7px;"></canvas>
             <div style="display:flex;gap:5px;">
-              <button onclick="vlAnalyze()" style="flex:1;padding:6px;background:rgba(45,212,255,0.1);border:1px solid var(--c5);color:var(--c5);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">ANALISAR</button>
-              <button onclick="vlApplyAutotune()" id="vl-btn-autotune" disabled style="flex:1;padding:6px;background:rgba(255,58,181,0.1);border:1px solid var(--c1);color:var(--c1);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;opacity:.5;">APLICAR</button>
+              <button onclick="vlAnalyze()" style="flex:1;padding:8px;background:rgba(45,212,255,0.1);border:1px solid var(--c5);color:var(--c5);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:1px;">1. ANALISAR</button>
+              <button onclick="vlApplyAutotune()" id="vl-btn-autotune" disabled style="flex:1;padding:8px;background:rgba(255,58,181,0.1);border:1px solid var(--c1);color:var(--c1);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:1px;opacity:.5;">2. APLICAR</button>
             </div>
           </div>
         </div>
@@ -896,48 +942,54 @@
           <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c5);letter-spacing:1px;margin-bottom:2px;">SPACE</div>
           <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">Reverb · Delay</div>
           <div class="plabel">REVERB MIX</div>
-          <input type="range" id="vl-reverb-mix" min="0" max="80" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rv-v').textContent=this.value+'%'">
+          <input type="range" id="vl-reverb-mix" min="0" max="80" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rv-v').textContent=this.value+'%';vlUpdatePreview()">
           <div id="vl-rv-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">0%</div>
           <div class="plabel">DELAY MIX</div>
-          <input type="range" id="vl-delay-mix" min="0" max="60" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-dv-v').textContent=this.value+'%'">
+          <input type="range" id="vl-delay-mix" min="0" max="60" value="0" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-dv-v').textContent=this.value+'%';vlUpdatePreview()">
           <div id="vl-dv-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">0%</div>
           <button id="vl-detail-btn-5" onclick="vlToggleDetail(5)" style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ DETALHE</button>
           <div id="vl-detail-5" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
-            <div style="font-size:8px;color:var(--c5);font-weight:700;letter-spacing:1px;margin-bottom:4px;">REVERB</div>
-            <div class="plabel">PRE-DELAY</div>
-            <input type="range" id="vl-reverb-predelay" min="0" max="100" value="20" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rpd-v').textContent=this.value+'ms'">
+            <div style="font-size:9px;color:var(--c5);font-weight:700;letter-spacing:1px;margin-bottom:5px;">— REVERB —</div>
+            <div class="plabel">PRE-DELAY (ms)</div>
+            <input type="range" id="vl-reverb-predelay" min="0" max="100" value="20" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rpd-v').textContent=this.value+'ms';vlUpdatePreview()">
             <div id="vl-rpd-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">20ms</div>
-            <div class="plabel">DECAY</div>
-            <input type="range" id="vl-reverb-decay" min="0.3" max="6" value="1.5" step="0.1" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rdc-v').textContent=parseFloat(this.value).toFixed(1)+'s'">
-            <div id="vl-rdc-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:6px;">1.5s</div>
-            <div style="font-size:8px;color:var(--c5);font-weight:700;letter-spacing:1px;margin-bottom:4px;">DELAY</div>
+            <div class="plabel">DECAY (s)</div>
+            <input type="range" id="vl-reverb-decay" min="0.3" max="6" value="1.5" step="0.1" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rdc-v').textContent=parseFloat(this.value).toFixed(1)+'s';vlUpdatePreview()">
+            <div id="vl-rdc-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">1.5s</div>
+            <div class="plabel">ROOM SIZE</div>
+            <input type="range" id="vl-reverb-size" min="0" max="100" value="50" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rsz-v').textContent=this.value+'%';vlUpdatePreview()">
+            <div id="vl-rsz-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:4px;">50%</div>
+            <div class="plabel">DAMPING HF</div>
+            <input type="range" id="vl-reverb-damp" min="0" max="100" value="40" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-rdmp-v').textContent=this.value+'%'">
+            <div id="vl-rdmp-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;margin-bottom:8px;">40%</div>
+            <div style="font-size:9px;color:var(--c2);font-weight:700;letter-spacing:1px;margin-bottom:5px;">— DELAY —</div>
             <div class="plabel">BPM</div>
-            <input type="range" id="vl-delay-bpm" min="60" max="200" value="120" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dbpm-v').textContent=this.value+' bpm'">
+            <input type="range" id="vl-delay-bpm" min="60" max="200" value="120" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dbpm-v').textContent=this.value+' bpm';vlUpdatePreview()">
             <div id="vl-dbpm-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">120 bpm</div>
             <div class="plabel">DIVISÃO</div>
-            <select id="vl-delay-div" style="width:100%;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:3px;font-size:9px;margin-bottom:4px;">
+            <select id="vl-delay-div" onchange="vlUpdatePreview()" style="width:100%;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:3px;font-size:9px;margin-bottom:4px;">
               <option value="2">1/2 mínima</option>
               <option value="4" selected>1/4 colcheia</option>
               <option value="8">1/8 semicolcheia</option>
               <option value="6">1/4T tercina</option>
             </select>
             <div class="plabel">FEEDBACK</div>
-            <input type="range" id="vl-delay-fb" min="0" max="80" value="40" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dfb-v').textContent=this.value+'%'">
-            <div id="vl-dfb-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;">40%</div>
+            <input type="range" id="vl-delay-fb" min="0" max="80" value="40" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-dfb-v').textContent=this.value+'%';vlUpdatePreview()">
+            <div id="vl-dfb-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">40%</div>
+            <div class="plabel">STEREO WIDTH</div>
+            <input type="range" id="vl-delay-width" min="0" max="100" value="60" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vl-dw-v').textContent=this.value+'%'">
+            <div id="vl-dw-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;">60%</div>
           </div>
         </div>
 
       </div><!-- fim 5 passos -->
 
       <!-- ACÇÕES -->
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
-        <button id="vl-btn-process" onclick="vlProcess()" disabled style="padding:12px;background:rgba(255,58,181,0.15);border:1px solid var(--c1);color:var(--c1);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:800;font-size:11px;letter-spacing:2px;cursor:pointer;">▶ PROCESSAR</button>
-        <button onclick="vlPlay('original')" id="vl-play-orig" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">▶ ORIG</button>
-        <button onclick="vlPlay('result')" id="vl-play-result" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">▶ RESULT</button>
-        <button onclick="vlStop()" style="padding:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--muted);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">⬛ STOP</button>
-        <button onclick="vlExport()" id="vl-export-wav" disabled style="padding:10px;background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">⬇ WAV</button>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <button id="vl-btn-process" onclick="vlProcess()" disabled style="padding:12px;background:rgba(255,58,181,0.15);border:1px solid var(--c1);color:var(--c1);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:800;font-size:11px;letter-spacing:2px;cursor:pointer;">▶ PROCESSAR OFFLINE</button>
+        <button onclick="vlExport()" id="vl-export-wav" disabled style="padding:10px;background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">⬇ EXPORT WAV</button>
+        <button onclick="vlSendToMaster()" id="vl-send-master" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c5);color:var(--c5);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1.5px;cursor:pointer;">→ MASTER</button>
       </div>
-      <button onclick="vlSendToMaster()" id="vl-send-master" disabled style="width:100%;padding:9px;background:var(--bg3);border:1px solid var(--c5);color:var(--c5);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1.5px;cursor:pointer;margin-bottom:8px;">→ ENVIAR PARA MASTER</button>
 
       <div id="vl-status" style="font-size:9px;color:var(--muted);font-family:monospace;min-height:12px;margin-bottom:14px;"></div>
 
@@ -947,8 +999,6 @@
           <div class="module-title" style="color:var(--c5);">VOCAL ALIGNER</div>
           <span style="font-size:8px;color:var(--muted);">Alinha coros e doublings à guia</span>
         </div>
-
-        <!-- GUIA -->
         <div style="background:var(--bg3);border:1px solid var(--c4);border-radius:5px;padding:8px 10px;margin-bottom:6px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
             <span style="font-size:9px;color:var(--c4);font-weight:700;letter-spacing:1px;width:70px;min-width:70px;">📌 GUIA</span>
@@ -958,11 +1008,7 @@
           </div>
           <canvas id="va-guide-canvas" height="40" style="width:100%;background:rgba(45,255,138,0.03);border:1px solid var(--border);border-radius:3px;display:block;"></canvas>
         </div>
-
-        <!-- PISTAS -->
         <div id="va-tracks"></div>
-
-        <!-- CONTROLOS -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
           <button onclick="document.getElementById('va-track-file').click()" style="background:rgba(45,212,255,0.08);border:1px solid var(--c5);color:var(--c5);border-radius:4px;padding:7px 11px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">+ PISTA</button>
           <input type="file" id="va-track-file" accept="audio/*" style="display:none;" onchange="vaAddTrack(this.files[0])">
