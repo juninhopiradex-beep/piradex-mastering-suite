@@ -143,6 +143,7 @@
     <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
     <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
     <div class="tab tab-primary" onclick="openTab('voicelab',this)" style="color:var(--c1);">VOICE LAB</div>
+    <div class="tab tab-primary" onclick="openTab('voicetune',this)" style="color:var(--c6);">VOICE TUNE</div>
     <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
   </div>
   <div class="tabs tabs-effects">
@@ -897,40 +898,12 @@
           </div>
         </div>
 
-        <!-- 4 TUNE -->
-        <div id="vl-step-4" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px;transition:border-color .2s;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-            <span class="vl-step-badge" style="font-family:'Orbitron',monospace;font-size:9px;font-weight:900;border:1px solid var(--border2);color:var(--muted);padding:1px 5px;border-radius:3px;">4</span>
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" id="vl-step-on-4" style="accent-color:var(--c1);width:11px;height:11px;"><span style="font-size:8px;color:var(--muted);">ON</span></label>
-          </div>
-          <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c1);letter-spacing:1px;margin-bottom:2px;">TUNE</div>
-          <div style="font-size:8px;color:var(--muted);margin-bottom:7px;">Correção de tom</div>
-          <div class="plabel">PITCH (semitons)</div>
-          <input type="range" id="vl-pitch-semis" min="-12" max="12" value="0" step="1" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-pt-v').textContent=(this.value>0?'+':'')+this.value+' st';vlUpdatePreview()">
-          <div id="vl-pt-v" style="font-size:9px;color:var(--c1);font-family:monospace;text-align:right;font-weight:700;margin-bottom:6px;">0 st</div>
-          <div class="plabel">FORMANT (st)</div>
-          <input type="range" id="vl-formant" min="-6" max="6" value="0" step="1" style="width:100%;accent-color:var(--c6);" oninput="document.getElementById('vl-fm-v').textContent=(this.value>0?'+':'')+this.value">
-          <div id="vl-fm-v" style="font-size:8px;color:var(--c6);font-family:monospace;text-align:right;margin-bottom:4px;">0</div>
-          <button id="vl-detail-btn-4" onclick="vlToggleDetail(4)" style="width:100%;background:rgba(255,58,181,0.08);border:1px solid var(--c1);color:var(--c1);font-size:8px;padding:3px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',monospace;letter-spacing:1px;">⚙ AUTO-TUNE</button>
-          <div id="vl-detail-4" style="display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border);">
-            <div style="font-size:8px;color:var(--muted2);margin-bottom:6px;line-height:1.5;">Motor phase vocoder completo. Detecta escala, snap nota-a-nota. Processa de forma independente.</div>
-            <div style="background:var(--bg2);border-radius:4px;padding:6px;text-align:center;margin-bottom:6px;">
-              <div class="plabel">ESCALA DETECTADA</div>
-              <div id="vl-tune-key" style="font-family:'Orbitron',monospace;font-weight:900;font-size:18px;color:var(--c4);">—</div>
-              <div id="vl-key-info" style="font-size:8px;color:var(--muted);margin-top:2px;">aguarda análise</div>
-            </div>
-            <div class="plabel">SNAP STRENGTH</div>
-            <input type="range" id="vl-at-strength" min="0" max="100" value="100" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vl-ats-v').textContent=this.value+'%'">
-            <div id="vl-ats-v" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:4px;">100%</div>
-            <div class="plabel">RETUNE SPEED</div>
-            <input type="range" id="vl-at-speed" min="0" max="200" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vl-atsp-v').textContent=this.value+'ms'">
-            <div id="vl-atsp-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:4px;">0ms (T-Pain snap)</div>
-            <canvas id="vl-pianoroll" height="120" style="width:100%;background:var(--bg);border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:7px;"></canvas>
-            <div style="display:flex;gap:5px;">
-              <button onclick="vlAnalyze()" style="flex:1;padding:8px;background:rgba(45,212,255,0.1);border:1px solid var(--c5);color:var(--c5);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:1px;">1. ANALISAR</button>
-              <button onclick="vlApplyAutotune()" id="vl-btn-autotune" disabled style="flex:1;padding:8px;background:rgba(255,58,181,0.1);border:1px solid var(--c1);color:var(--c1);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:1px;opacity:.5;">2. APLICAR</button>
-            </div>
-          </div>
+        <!-- 4 TUNE — redireccionado para tab próprio -->
+        <div id="vl-step-4" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px;transition:border-color .2s;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;">
+          <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c6);letter-spacing:1px;margin-bottom:4px;">4 · TUNE</div>
+          <div style="font-size:8px;color:var(--muted);text-align:center;margin-bottom:10px;line-height:1.5;">Pitch · Auto-Tune<br>Piano Roll</div>
+          <button onclick="openTab('voicetune',null)" style="width:100%;padding:8px;background:rgba(184,85,247,0.12);border:1px solid var(--c6);color:var(--c6);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:800;font-size:9px;cursor:pointer;letter-spacing:1.5px;">↗ ABRIR TUNE</button>
+          <div style="font-size:8px;color:var(--muted2);margin-top:6px;text-align:center;">janela dedicada</div>
         </div>
 
         <!-- 5 SPACE -->
@@ -1320,6 +1293,142 @@
           <input type="file" accept=".json" onchange="importUserPresets(this.files[0])" style="display:none;">
         </label>
       </div>
+    </div>
+  </div>
+
+  <!-- VOICE TUNE TAB — janela dedicada -->
+  <div class="tab-panel" id="tab-voicetune">
+    <div class="module-panel" style="background:linear-gradient(180deg,rgba(184,85,247,0.05) 0%,var(--bg2) 70%);">
+
+      <div class="module-title-row">
+        <div class="module-title" style="color:var(--c6);">VOICE TUNE — Afinação &amp; Auto-Tune</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button onclick="openTab('voicelab',null)" style="background:rgba(255,58,181,0.08);border:1px solid var(--c1);color:var(--c1);padding:3px 10px;border-radius:3px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;cursor:pointer;letter-spacing:1px;">← VOICE LAB</button>
+        </div>
+      </div>
+
+      <!-- CARREGAR / INFO -->
+      <div id="vt-drop-row" style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+        <div id="vt-dropzone" onclick="document.getElementById('vt-file').click()" style="border:1px dashed var(--c6);background:rgba(184,85,247,0.04);border-radius:6px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;flex:1;">
+          <input type="file" id="vt-file" accept="audio/*" style="display:none;" onchange="vtLoadFile(this.files[0])">
+          <span style="font-size:18px;">🎵</span>
+          <div>
+            <div style="font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;color:var(--c6);letter-spacing:2px;">CARREGAR VOZ ISOLADA</div>
+            <div style="font-size:8px;color:var(--muted);margin-top:2px;">WAV · MP3 · FLAC</div>
+          </div>
+        </div>
+        <div id="vt-info" style="font-size:9px;color:var(--muted);font-family:monospace;flex:1;"></div>
+      </div>
+
+      <!-- PLAYER 3 modos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:6px;">
+        <button onclick="vtPlay('orig')" id="vt-play-orig" disabled style="padding:9px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">▶ ORIGINAL</button>
+        <button onclick="vtPlayPreview()" id="vt-play-preview" disabled style="padding:9px;background:rgba(255,227,53,0.07);border:1px solid var(--c3);color:var(--c3);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">▶ PREVIEW</button>
+        <button onclick="vtPlay('tuned')" id="vt-play-tuned" disabled style="padding:9px;background:rgba(45,255,138,0.06);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">▶ AFINADO</button>
+        <button onclick="vtStop()" style="padding:9px;background:var(--bg3);border:1px solid var(--border2);color:var(--muted);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">⬛ STOP</button>
+      </div>
+      <div style="font-size:8px;color:var(--muted2);text-align:center;margin-bottom:12px;letter-spacing:1px;">ORIGINAL = puro · PREVIEW = pitch shift simples em tempo real · AFINADO = auto-tune offline aplicado</div>
+
+      <!-- GRID PRINCIPAL: controlos esquerda + piano roll direita -->
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:12px;margin-bottom:12px;">
+
+        <!-- COLUNA ESQUERDA: controlos -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+
+          <!-- PITCH SHIFT SIMPLES -->
+          <div style="background:var(--bg3);border:1px solid var(--c6);border-radius:6px;padding:10px 12px;">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c6);letter-spacing:1.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">PITCH SHIFT</div>
+            <div class="plabel">SEMITONS</div>
+            <input type="range" id="vt-pitch-semis" min="-24" max="24" value="0" step="1" style="width:100%;accent-color:var(--c6);" oninput="document.getElementById('vt-ps-v').textContent=(this.value>0?'+':'')+this.value+' st';vtUpdatePreview()">
+            <div id="vt-ps-v" style="font-family:'Orbitron',monospace;font-size:18px;font-weight:900;color:var(--c6);text-align:center;margin:4px 0 8px;">0 st</div>
+            <div class="plabel">CENTS (afinação fina)</div>
+            <input type="range" id="vt-pitch-cents" min="-50" max="50" value="0" step="1" style="width:100%;accent-color:var(--c6);" oninput="document.getElementById('vt-pc-v').textContent=(this.value>0?'+':'')+this.value+' ct';vtUpdatePreview()">
+            <div id="vt-pc-v" style="font-size:8px;color:var(--c6);font-family:monospace;text-align:right;margin-bottom:8px;">0 ct</div>
+            <div class="plabel">FORMANT SHIFT</div>
+            <input type="range" id="vt-formant" min="-6" max="6" value="0" step="0.5" style="width:100%;accent-color:var(--c5);" oninput="document.getElementById('vt-fm-v').textContent=(this.value>0?'+':'')+parseFloat(this.value).toFixed(1)+' st'">
+            <div id="vt-fm-v" style="font-size:8px;color:var(--c5);font-family:monospace;text-align:right;">0.0 st</div>
+          </div>
+
+          <!-- ESCALA DETECTADA -->
+          <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:10px 12px;">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c4);letter-spacing:1.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">ESCALA DETECTADA</div>
+            <div style="text-align:center;margin-bottom:8px;">
+              <div id="vt-key-display" style="font-family:'Orbitron',monospace;font-weight:900;font-size:28px;color:var(--c4);">—</div>
+              <div id="vt-key-info" style="font-size:9px;color:var(--muted);margin-top:3px;">aguarda análise</div>
+            </div>
+            <!-- Teclado piano mini para escala -->
+            <canvas id="vt-scale-keys" height="36" style="width:100%;background:var(--bg);border-radius:4px;border:1px solid var(--border);display:block;margin-bottom:8px;"></canvas>
+            <div class="plabel">ESCALA MANUAL</div>
+            <select id="vt-scale-root" style="width:100%;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:4px;font-size:9px;margin-bottom:4px;">
+              <option value="-1">— Auto (detectar) —</option>
+              <option value="0">C</option><option value="1">C#</option><option value="2">D</option>
+              <option value="3">D#</option><option value="4">E</option><option value="5">F</option>
+              <option value="6">F#</option><option value="7">G</option><option value="8">G#</option>
+              <option value="9">A</option><option value="10">A#</option><option value="11">B</option>
+            </select>
+            <select id="vt-scale-mode" style="width:100%;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:3px;padding:4px;font-size:9px;">
+              <option value="maior">Maior</option>
+              <option value="menor">Menor</option>
+              <option value="penta_maior">Pentatónica Maior</option>
+              <option value="penta_menor">Pentatónica Menor</option>
+              <option value="blues">Blues</option>
+              <option value="cromatica">Cromática</option>
+            </select>
+          </div>
+
+          <!-- AUTO-TUNE -->
+          <div style="background:var(--bg3);border:1px solid var(--c1);border-radius:6px;padding:10px 12px;">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--c1);letter-spacing:1.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">AUTO-TUNE</div>
+            <div class="plabel">SNAP STRENGTH</div>
+            <input type="range" id="vt-at-strength" min="0" max="100" value="100" style="width:100%;accent-color:var(--c1);" oninput="document.getElementById('vt-ats-v').textContent=this.value+'%'">
+            <div id="vt-ats-v" style="font-size:8px;color:var(--c1);font-family:monospace;text-align:right;margin-bottom:8px;">100%</div>
+            <div class="plabel">RETUNE SPEED</div>
+            <input type="range" id="vt-at-speed" min="0" max="500" value="0" style="width:100%;accent-color:var(--c2);" oninput="document.getElementById('vt-atsp-v').textContent=this.value==='0'?'0ms (T-Pain)':this.value+'ms'">
+            <div id="vt-atsp-v" style="font-size:8px;color:var(--c2);font-family:monospace;text-align:right;margin-bottom:8px;">0ms (T-Pain)</div>
+            <div class="plabel">MODO</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;">
+              <button id="vt-mode-snap" onclick="vtSetMode('snap')" style="padding:5px;background:rgba(255,58,181,0.15);border:1px solid var(--c1);color:var(--c1);border-radius:3px;font-family:'Rajdhani',monospace;font-size:9px;font-weight:700;cursor:pointer;letter-spacing:1px;">SNAP</button>
+              <button id="vt-mode-smooth" onclick="vtSetMode('smooth')" style="padding:5px;background:var(--bg2);border:1px solid var(--border2);color:var(--muted);border-radius:3px;font-family:'Rajdhani',monospace;font-size:9px;font-weight:700;cursor:pointer;letter-spacing:1px;">SMOOTH</button>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <button onclick="vtAnalyze()" style="flex:1;padding:8px;background:rgba(45,212,255,0.1);border:1px solid var(--c5);color:var(--c5);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;">1. ANALISAR</button>
+              <button onclick="vtApplyAutotune()" id="vt-btn-apply" disabled style="flex:1;padding:8px;background:rgba(255,58,181,0.1);border:1px solid var(--c1);color:var(--c1);border-radius:4px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;cursor:pointer;letter-spacing:1px;opacity:.5;">2. APLICAR</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- COLUNA DIREITA: piano roll grande -->
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px;flex:1;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--muted2);letter-spacing:1.5px;">PIANO ROLL</div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:8px;color:rgba(160,160,180,0.7);">● original</span>
+                <span style="font-size:8px;color:rgba(255,58,181,0.9);">● afinado</span>
+                <span style="font-size:8px;color:rgba(45,255,138,0.7);">▬ escala</span>
+              </div>
+            </div>
+            <canvas id="vt-pianoroll" height="280" style="width:100%;background:var(--bg);border-radius:4px;border:1px solid var(--border);display:block;"></canvas>
+          </div>
+          <!-- Waveform / progresso -->
+          <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px;">
+            <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;">WAVEFORM</div>
+            <canvas id="vt-waveform" height="36" style="width:100%;background:var(--bg);border-radius:3px;display:block;"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- EXPORTAR -->
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;">
+        <button onclick="vtExport()" id="vt-export-wav" disabled style="padding:11px;background:rgba(45,255,138,0.08);border:1px solid var(--c4);color:var(--c4);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:10px;letter-spacing:1.5px;cursor:pointer;">⬇ EXPORTAR WAV AFINADO</button>
+        <button onclick="vtSendToMaster()" id="vt-send-master" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c5);color:var(--c5);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">→ MASTER</button>
+        <button onclick="vtSendToVoiceLab()" id="vt-send-vl" disabled style="padding:10px;background:var(--bg3);border:1px solid var(--c1);color:var(--c1);border-radius:5px;font-family:'Rajdhani',monospace;font-weight:700;font-size:9px;letter-spacing:1px;cursor:pointer;">→ VOICE LAB</button>
+      </div>
+
+      <div id="vt-status" style="font-size:9px;color:var(--muted);font-family:monospace;min-height:12px;margin-top:8px;"></div>
+
     </div>
   </div>
 
@@ -1851,5 +1960,6 @@
 <script src="app.js"></script>
 <script src="features.js"></script>
 <script src="voicelab.js"></script>
+<script src="voicetune.js"></script>
 </body>
 </html>
