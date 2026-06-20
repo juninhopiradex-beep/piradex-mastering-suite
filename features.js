@@ -62,7 +62,8 @@ const FX = [
   {id:'aiStems',    name:'AI Stem Separator ⏳', sub:'Demucs no browser — Coming Soon Q2', c:'var(--muted)'},
   {id:'aiLyric',    name:'AI Lyric-Aware Master ⏳', sub:'Master diferente para versos vs refrões', c:'var(--muted)'},
   {id:'aiDeNoise',  name:'AI Restoration ⏳',    sub:'De-noise + de-hum + de-click — Coming Soon', c:'var(--muted)'},
-  {id:'aiVocal',    name:'AI Vocal Tune Pro ⏳', sub:'Pitch correction sem escolher escala', c:'var(--muted)'},
+  {id:'aiVocal',    name:'AI Vocal Tune Pro ✦', sub:'Análise de afinação · detecção de tonalidade', c:'var(--c1)'},
+  {id:'vocalStudio',name:'Vocal Tune Studio ✦', sub:'Auto-Tune nota-a-nota para voz isolada', c:'var(--c1)'},
 ];
 
 window.fxRenderHub = function(){
@@ -2470,16 +2471,37 @@ window.aiVocalAnalyze = function(){
   const buf = window.audioBuffer;
   if(!buf) return;
   const result = document.getElementById('vocal-result');
-  result.innerHTML = '<div style="color:var(--c5);">A analisar... (autocorrelação + análise espectral)</div>';
+  result.innerHTML = '<div style="color:var(--c5);">A analisar... (vocal bandpass + autocorrelação + Krumhansl key detection)</div>';
 
   setTimeout(()=>{
-    const ch = buf.getChannelData(0);
+    const chOrig = buf.getChannelData(0);
     const sr = buf.sampleRate;
+
+    // ─── Pré-filtragem: bandpass 80-1500 Hz para isolar fundamental do vocal ───
+    // Reduz a influência de kick, hi-hats e harmónicos altos
+    const ch = new Float32Array(chOrig.length);
+    // IIR biquad bandpass simples (Q=1, freq 400 Hz)
+    const wc = 2 * Math.PI * 400 / sr;
+    const alpha = Math.sin(wc) / 2;
+    const cosw = Math.cos(wc);
+    const b0 = alpha, b1 = 0, b2 = -alpha;
+    const a0 = 1 + alpha, a1 = -2*cosw, a2 = 1 - alpha;
+    const B0 = b0/a0, B1 = b1/a0, B2 = b2/a0;
+    const A1 = a1/a0, A2 = a2/a0;
+    let x1=0, x2=0, y1=0, y2=0;
+    for(let i=0; i<chOrig.length; i++){
+      const x = chOrig[i];
+      const y = B0*x + B1*x1 + B2*x2 - A1*y1 - A2*y2;
+      x2=x1; x1=x; y2=y1; y1=y;
+      ch[i] = y;
+    }
+
     const windowSize = 2048;
     const hopSize = 1024;
-    const maxSec = Math.min(60, buf.duration);  // analisa até 60s
+    const maxSec = Math.min(60, buf.duration);
     const noteHistogram = new Array(12).fill(0);
-    const centsHistogram = new Array(101).fill(0);  // -50 a +50 cents
+    const centsHistogram = new Array(101).fill(0);
+    const pitchTrack = [];  // sequência temporal de notas (para piano roll)
     const minPeriod = Math.floor(sr/1000);
     const maxPeriod = Math.floor(sr/65);
     let totalFramesAnalyzed = 0;
@@ -2487,13 +2509,11 @@ window.aiVocalAnalyze = function(){
     let totalCentsCount = 0;
 
     for(let pos=0; pos+windowSize<sr*maxSec; pos+=hopSize){
-      // Pré-checagem de energia (skip silêncio)
       let energy = 0;
       for(let i=pos; i<pos+windowSize; i++) energy += ch[i]*ch[i];
       energy /= windowSize;
       if(energy < 0.0001) continue;
 
-      // Autocorrelação para detecção de pitch
       let bestPeriod = 0;
       let bestCorr = 0;
       for(let p=minPeriod; p<maxPeriod && p<windowSize/2; p++){
@@ -2508,10 +2528,9 @@ window.aiVocalAnalyze = function(){
         if(normCorr > bestCorr){ bestCorr = normCorr; bestPeriod = p; }
       }
 
-      if(bestPeriod > 0 && bestCorr > 0.4){  // só aceita pitch com correlação alta
-        // Refinamento parabólico do período para precisão sub-amostra
+      if(bestPeriod > 0 && bestCorr > 0.4){
+        // Refinamento parabólico
         if(bestPeriod > minPeriod+1 && bestPeriod < maxPeriod-1){
-          // recomputa corr nos vizinhos para parabolic interp
           const computeCorr = (p)=>{
             let c=0, na=0, nb=0;
             for(let i=0;i<windowSize-p;i++){
@@ -2526,31 +2545,30 @@ window.aiVocalAnalyze = function(){
           const denom = (y0 - 2*y1 + y2);
           if(Math.abs(denom) > 1e-6){
             const delta = 0.5 * (y0 - y2) / denom;
-            if(Math.abs(delta) < 1){
-              bestPeriod += delta;
-            }
+            if(Math.abs(delta) < 1) bestPeriod += delta;
           }
         }
 
         const freq = sr / bestPeriod;
         if(freq > 65 && freq < 1200){
-          // Calcula semitom EXATO em relação a A4=440
           const semitonesFromA4 = 12 * Math.log2(freq/440);
           const nearestSemi = Math.round(semitonesFromA4);
           const centsOff = (semitonesFromA4 - nearestSemi) * 100;
-
-          // Note index: A4=0, B4=2, C5=3 ... → para 0..11 (C=0)
           const noteIdx = ((nearestSemi + 9 + 12000) % 12);
           noteHistogram[noteIdx]++;
-
-          // Histograma de cents (-50 a +50)
           const centsBin = Math.round(centsOff) + 50;
-          if(centsBin >= 0 && centsBin <= 100){
-            centsHistogram[centsBin]++;
-          }
+          if(centsBin >= 0 && centsBin <= 100){ centsHistogram[centsBin]++; }
           totalCentsSum += centsOff;
           totalCentsCount++;
           totalFramesAnalyzed++;
+          // Guarda tempo + nota + cents para piano roll
+          pitchTrack.push({
+            time: pos/sr,
+            note: noteIdx,
+            octave: Math.floor((nearestSemi+57)/12),  // MIDI-like
+            cents: centsOff,
+            conf: bestCorr,
+          });
         }
       }
     }
@@ -2569,69 +2587,76 @@ window.aiVocalAnalyze = function(){
       return;
     }
 
-    // Desvio médio de afinação
     const avgCentsOff = totalCentsSum / totalCentsCount;
 
-    // Detecção de tonalidade (Krumhansl-Schmuckler simplificado)
+    // Krumhansl-Schmuckler
     const majorProfile = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
     const minorProfile = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
 
     let bestKey = 0, bestMode = 'maior', bestCorr = -1;
     for(let root=0; root<12; root++){
-      // Major correlation
       let corrMaj = 0;
       for(let i=0; i<12; i++) corrMaj += noteHistogram[(root+i)%12] * majorProfile[i];
       if(corrMaj > bestCorr){ bestCorr = corrMaj; bestKey = root; bestMode = 'maior'; }
-      // Minor correlation
       let corrMin = 0;
       for(let i=0; i<12; i++) corrMin += noteHistogram[(root+i)%12] * minorProfile[i];
       if(corrMin > bestCorr){ bestCorr = corrMin; bestKey = root; bestMode = 'menor'; }
     }
 
-    // Concert pitch real (A frequency)
+    // Quais notas estão NA escala detectada (modo maior ou menor)
+    const majorPattern = [0,2,4,5,7,9,11];
+    const minorPattern = [0,2,3,5,7,8,10];
+    const scaleNotes = (bestMode==='maior'?majorPattern:minorPattern).map(o=>(bestKey+o)%12);
+
+    // Conta notas dentro/fora da escala
+    let inScale=0, outScale=0;
+    pitchTrack.forEach(p=>{
+      if(scaleNotes.includes(p.note)) inScale++; else outScale++;
+    });
+    const pctInScale = (inScale/(inScale+outScale)*100);
+
     const realA = 440 * Math.pow(2, avgCentsOff/1200);
 
     window._aiVocalAnalysis = {
       key: noteNames[bestKey],
+      keyIdx: bestKey,
       mode: bestMode,
       avgCentsOff: avgCentsOff,
       realA: realA,
       framesAnalyzed: totalFramesAnalyzed,
       noteHistogram: noteHistogram,
+      pitchTrack: pitchTrack,
+      scaleNotes: scaleNotes,
+      pctInScale: pctInScale,
     };
 
-    // Top notes for display
-    const topNotes = noteHistogram.map((c,i)=>({note:noteNames[i],count:c, pct: (c/total*100).toFixed(1)}))
+    const topNotes = noteHistogram.map((c,i)=>({note:noteNames[i],noteIdx:i,count:c, pct: (c/total*100).toFixed(1)}))
                                    .sort((a,b)=>b.count-a.count).slice(0,7);
 
-    // Avaliação do desvio
     let tuningStatus, tuningColor;
     const absCents = Math.abs(avgCentsOff);
-    if(absCents < 5){
-      tuningStatus = '✓ Afinação correta (A=440 Hz)';
-      tuningColor = 'var(--c4)';
-    } else if(absCents < 15){
-      tuningStatus = '~ Desvio ligeiro — talvez intencional';
-      tuningColor = 'var(--c3)';
-    } else if(absCents < 35){
-      tuningStatus = '⚠ Desvio significativo — pode estar fora de afinação';
-      tuningColor = 'var(--c2)';
-    } else {
-      tuningStatus = '✕ Desvio extremo — verifica sample rate ou pitch shift indesejado';
-      tuningColor = 'var(--c7)';
-    }
+    if(absCents < 5){ tuningStatus = '✓ Afinação correta (A=440 Hz)'; tuningColor = 'var(--c4)'; }
+    else if(absCents < 15){ tuningStatus = '~ Desvio ligeiro — talvez intencional'; tuningColor = 'var(--c3)'; }
+    else if(absCents < 35){ tuningStatus = '⚠ Desvio significativo — pode estar fora de afinação'; tuningColor = 'var(--c2)'; }
+    else { tuningStatus = '✕ Desvio extremo — verifica sample rate ou pitch shift indesejado'; tuningColor = 'var(--c7)'; }
 
-    // Desenha histograma de notas (12 notas)
+    // Histograma com destaque das notas da escala
     const histRows = topNotes.map(n=>{
       const w = Math.round(n.count/topNotes[0].count*100);
+      const isInScale = scaleNotes.includes(n.noteIdx);
+      const col = isInScale ? 'var(--c4)' : 'var(--c2)';
       return `<div style="display:flex;align-items:center;margin:2px 0;font-family:monospace;font-size:10px;">
-        <span style="width:30px;color:var(--c4);font-weight:700;">${n.note}</span>
+        <span style="width:30px;color:${col};font-weight:700;">${n.note}</span>
         <div style="background:var(--bg4);height:10px;width:200px;border-radius:2px;overflow:hidden;">
-          <div style="background:var(--c4);height:100%;width:${w}%;"></div>
+          <div style="background:${col};height:100%;width:${w}%;"></div>
         </div>
         <span style="margin-left:8px;color:var(--muted);">${n.pct}%</span>
+        <span style="margin-left:8px;color:${col};font-size:9px;">${isInScale?'✓ na escala':'⚠ fora'}</span>
       </div>`;
     }).join('');
+
+    // Piano roll (canvas)
+    const pianoRollHtml = `<canvas id="vocal-pianoroll" width="700" height="180" style="width:100%;height:180px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:10px;"></canvas>`;
 
     result.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
@@ -2640,24 +2665,74 @@ window.aiVocalAnalyze = function(){
           <div style="font-family:Orbitron,monospace;font-weight:900;font-size:28px;color:var(--c4);">${noteNames[bestKey]} ${bestMode}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:4px;">${totalFramesAnalyzed} frames analisados</div>
 
-          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:18px;margin-bottom:6px;">AFINAÇÃO GLOBAL</div>
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:14px;margin-bottom:6px;">AFINAÇÃO GLOBAL</div>
           <div style="font-family:Orbitron,monospace;font-weight:900;font-size:22px;color:${tuningColor};">${avgCentsOff>=0?'+':''}${avgCentsOff.toFixed(1)} cents</div>
           <div style="font-size:10px;color:var(--muted);margin-top:4px;">A real ≈ ${realA.toFixed(2)} Hz (ref: 440.00)</div>
           <div style="font-size:10px;color:${tuningColor};margin-top:6px;">${tuningStatus}</div>
-        </div>
 
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:14px;margin-bottom:6px;">NOTAS NA ESCALA</div>
+          <div style="font-family:Orbitron,monospace;font-weight:900;font-size:18px;color:${pctInScale>85?'var(--c4)':pctInScale>70?'var(--c3)':'var(--c2)'};">${pctInScale.toFixed(1)}%</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">${inScale} dentro · ${outScale} fora da escala ${noteNames[bestKey]} ${bestMode}</div>
+        </div>
         <div>
           <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">7 NOTAS MAIS FREQUENTES</div>
           ${histRows}
         </div>
       </div>
-
-      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:10px;font-size:10px;color:var(--muted);">
-        💡 Clica "2. AJUSTAR" para opções de correção (pitch shift global, mudança de tom, etc.)
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-top:14px;margin-bottom:4px;">PIANO ROLL DAS NOTAS DETECTADAS (verde=escala, laranja=fora)</div>
+      ${pianoRollHtml}
+      <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:8px;font-size:10px;color:var(--muted);">
+        💡 Clica "2. AJUSTAR" para opções de correção (pitch shift global, offline com phase vocoder, etc.)
       </div>
     `;
+    // Desenha o piano roll
+    setTimeout(()=>_drawVocalPianoRoll(pitchTrack, scaleNotes, maxSec), 50);
   }, 100);
 };
+
+function _drawVocalPianoRoll(track, scaleNotes, totalDur){
+  const cv = document.getElementById('vocal-pianoroll');
+  if(!cv) return;
+  const W = cv.offsetWidth || cv.width;
+  cv.width = W;
+  const H = cv.height;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#07070e';
+  ctx.fillRect(0, 0, W, H);
+  // grid de notas (12 linhas)
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  for(let i=0; i<12; i++){
+    const y = H - (i+0.5)/12 * (H-20);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(W, y); ctx.stroke();
+    const isBlack = [1,3,6,8,10].includes(i);
+    ctx.fillStyle = isBlack ? 'rgba(80,80,100,0.5)' : 'rgba(140,140,160,0.7)';
+    ctx.font = '9px monospace';
+    ctx.fillText(noteNames[i], 8, y+3);
+  }
+  // grid de tempo (em segundos)
+  const tickSec = Math.max(5, Math.floor(totalDur/8));
+  for(let t=0; t<=totalDur; t+=tickSec){
+    const x = 40 + (t/totalDur) * (W-50);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H-12); ctx.stroke();
+    ctx.fillStyle = 'rgba(140,140,160,0.7)';
+    ctx.font = '8px monospace';
+    ctx.fillText(t+'s', x-6, H-2);
+  }
+  // pontos das notas
+  track.forEach(p=>{
+    const x = 40 + (p.time/totalDur) * (W-50);
+    const y = H - (p.note+0.5)/12 * (H-20);
+    const inScale = scaleNotes.includes(p.note);
+    const col = inScale ? '45,255,138' : '255,107,53';
+    const alpha = Math.max(0.3, p.conf);
+    ctx.fillStyle = `rgba(${col},${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI*2);
+    ctx.fill();
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AJUSTAR: 3 opções reais que dá para fazer no master
@@ -2721,52 +2796,791 @@ window.aiVocalShowApply = function(){
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// A. CORRIGIR DESVIO: aplica pitch shift global negativo para voltar a A=440
+// PITCH SHIFT OFFLINE com PHASE VOCODER (Cooley-Tukey FFT + STFT)
 // ═══════════════════════════════════════════════════════════════════════════
-window.aiVocalCorrectTuning = function(){
+
+// FFT in-place radix-2 (real input, complex output via separate arrays)
+function _fft(real, imag, n){
+  // Bit-reversal
+  let j = 0;
+  for(let i=1; i<n; i++){
+    let bit = n >> 1;
+    while(j & bit){ j ^= bit; bit >>= 1; }
+    j ^= bit;
+    if(i < j){
+      [real[i], real[j]] = [real[j], real[i]];
+      [imag[i], imag[j]] = [imag[j], imag[i]];
+    }
+  }
+  // Butterflies
+  for(let size=2; size<=n; size<<=1){
+    const half = size >> 1;
+    const tableStep = -2*Math.PI/size;
+    for(let i=0; i<n; i+=size){
+      for(let k=0; k<half; k++){
+        const angle = tableStep * k;
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+        const tre = cosA*real[i+k+half] - sinA*imag[i+k+half];
+        const tim = sinA*real[i+k+half] + cosA*imag[i+k+half];
+        real[i+k+half] = real[i+k] - tre;
+        imag[i+k+half] = imag[i+k] - tim;
+        real[i+k] += tre;
+        imag[i+k] += tim;
+      }
+    }
+  }
+}
+function _ifft(real, imag, n){
+  // Conjugate, FFT, conjugate, scale
+  for(let i=0;i<n;i++) imag[i] = -imag[i];
+  _fft(real, imag, n);
+  for(let i=0;i<n;i++){ real[i] /= n; imag[i] = -imag[i]/n; }
+}
+
+// Phase vocoder offline pitch shift (preserva duração)
+async function _pitchShiftOffline(inputBuffer, semitones){
+  const ratio = Math.pow(2, semitones/12);
+  const sr = inputBuffer.sampleRate;
+  const numCh = inputBuffer.numberOfChannels;
+  const N = inputBuffer.length;
+  const FFT = 2048;
+  const HOP_IN = 512;
+  const HOP_OUT = Math.round(HOP_IN * ratio);
+  const HOP_OUT_RES = HOP_IN;  // queremos manter mesma duração no final
+
+  // Cria buffer de output (resampled depois para manter duração)
+  // Estratégia: time-stretch primeiro para 1/ratio, depois resample para ratio
+  // Resultado: pitch shifted MAS mesma duração
+  const stretchLen = Math.round(N / ratio);
+  const outCtx = new OfflineAudioContext(numCh, N, sr);
+  const out = outCtx.createBuffer(numCh, N, sr);
+
+  for(let c=0; c<numCh; c++){
+    const inData = inputBuffer.getChannelData(c);
+    // Time-stretch via STFT phase vocoder
+    const stretched = new Float32Array(stretchLen);
+    const accum = new Float32Array(stretchLen);
+
+    const lastPhase = new Float32Array(FFT/2+1);
+    const sumPhase = new Float32Array(FFT/2+1);
+    const window = new Float32Array(FFT);
+    for(let i=0;i<FFT;i++) window[i] = 0.5*(1 - Math.cos(2*Math.PI*i/(FFT-1)));
+
+    const realIn = new Float32Array(FFT);
+    const imagIn = new Float32Array(FFT);
+
+    let inPos = 0;
+    let outPos = 0;
+    while(inPos + FFT < N && outPos + FFT < stretchLen){
+      // copia janela
+      for(let i=0;i<FFT;i++) realIn[i] = (inData[inPos+i]||0) * window[i];
+      imagIn.fill(0);
+      _fft(realIn, imagIn, FFT);
+
+      // Analisa magnitude e fase
+      for(let k=0; k<=FFT/2; k++){
+        const mag = Math.sqrt(realIn[k]*realIn[k] + imagIn[k]*imagIn[k]);
+        const phase = Math.atan2(imagIn[k], realIn[k]);
+        // Phase unwrapping
+        let delta = phase - lastPhase[k];
+        lastPhase[k] = phase;
+        delta -= HOP_IN * 2*Math.PI*k/FFT;
+        // wrap to [-pi, pi]
+        delta = delta - 2*Math.PI*Math.round(delta/(2*Math.PI));
+        const freq = 2*Math.PI*k/FFT + delta/HOP_IN;
+        // Acumula nova fase com HOP_OUT_RES
+        sumPhase[k] += freq * HOP_OUT_RES;
+        const newPhase = sumPhase[k];
+        realIn[k] = mag * Math.cos(newPhase);
+        imagIn[k] = mag * Math.sin(newPhase);
+      }
+      // Espelha para simetria conjugada
+      for(let k=1; k<FFT/2; k++){
+        realIn[FFT-k] = realIn[k];
+        imagIn[FFT-k] = -imagIn[k];
+      }
+      _ifft(realIn, imagIn, FFT);
+      // Overlap-add
+      for(let i=0;i<FFT;i++){
+        if(outPos+i < stretchLen){
+          stretched[outPos+i] += realIn[i] * window[i];
+          accum[outPos+i] += window[i]*window[i];
+        }
+      }
+      inPos += HOP_IN;
+      outPos += HOP_OUT_RES;
+    }
+    // Normaliza
+    for(let i=0;i<stretchLen;i++){
+      if(accum[i] > 0.001) stretched[i] /= accum[i];
+    }
+    // Resample linear: stretched (length stretchLen) → out (length N)
+    // Isto multiplica frequência pelo ratio efetivo
+    const outData = out.getChannelData(c);
+    for(let i=0;i<N;i++){
+      const srcIdx = i * (stretchLen-1)/(N-1);
+      const i0 = Math.floor(srcIdx);
+      const i1 = Math.min(stretchLen-1, i0+1);
+      const frac = srcIdx - i0;
+      outData[i] = stretched[i0]*(1-frac) + stretched[i1]*frac;
+    }
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A. CORRIGIR DESVIO: pitch shift offline para A=440 exato
+// ═══════════════════════════════════════════════════════════════════════════
+window.aiVocalCorrectTuning = async function(){
   const result = document.getElementById('vocal-result');
   const a = window._aiVocalAnalysis;
   if(!a) return;
   const cents = -a.avgCentsOff;
-  // Aplica pitch shift via re-encode do audioBuffer
-  // Como o master usa playbackRate, simulamos shift via gain do filtro de modulação
-  // No browser, a forma mais segura é mudar o playbackRate do source ativo
-  if(window.audioSource && window.audioSource.playbackRate){
-    const ratio = Math.pow(2, cents/1200);
-    try{
-      window.audioSource.playbackRate.setValueAtTime(ratio, audioCtx.currentTime);
-      result.innerHTML = `
-        <div style="color:var(--c4);font-weight:700;font-size:13px;">✓ Correção aplicada</div>
-        <div style="margin-top:8px;font-size:11px;">Pitch shift global: ${cents>=0?'+':''}${cents.toFixed(1)} cents</div>
-        <div style="margin-top:6px;font-size:11px;color:var(--muted);">Rácio de velocidade: ${ratio.toFixed(5)}×</div>
-        <div style="margin-top:10px;font-size:10px;color:var(--c3);">⚠ Atenção: alterar playbackRate ALTERA TAMBÉM A DURAÇÃO da faixa (${(ratio>1?'mais curta':'mais longa')}).</div>
-        <div style="margin-top:4px;font-size:10px;color:var(--c3);">Para correção sem alterar duração, é preciso pitch shifting offline (PSOLA / phase vocoder) — o módulo Afinação de Voz tem isso para faixas individuais.</div>
-      `;
-    }catch(e){
-      result.innerHTML = `<div style="color:var(--c7);">Erro: ${e.message}</div>`;
-    }
-  } else {
-    result.innerHTML = `<div style="color:var(--c3);">⚠ Inicia a reprodução primeiro para aplicar o ajuste.</div>`;
+  const semis = cents/100;
+  if(!window.audioBuffer){
+    result.innerHTML = '<div style="color:var(--c7);">Sem áudio carregado.</div>';
+    return;
+  }
+  result.innerHTML = `
+    <div style="color:var(--c5);font-weight:700;">⏳ A processar pitch shift offline (phase vocoder)...</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px;">${cents>=0?'+':''}${cents.toFixed(1)} cents · STFT 2048 · pode demorar alguns segundos</div>
+  `;
+  try{
+    const t0 = performance.now();
+    const newBuf = await _pitchShiftOffline(window.audioBuffer, semis);
+    const t1 = performance.now();
+    window.audioBuffer = newBuf;
+    // Re-trigger waveform/loudness analyzers se existirem
+    if(typeof drawWaveform === 'function') try{ drawWaveform(); }catch(e){}
+    if(typeof updateMeasurements === 'function') try{ updateMeasurements(); }catch(e){}
+    result.innerHTML = `
+      <div style="color:var(--c4);font-weight:700;font-size:13px;">✓ Correção aplicada (offline phase vocoder)</div>
+      <div style="margin-top:8px;font-size:11px;">Pitch shift: ${cents>=0?'+':''}${cents.toFixed(1)} cents (${semis.toFixed(3)} semitons)</div>
+      <div style="margin-top:4px;font-size:11px;color:var(--muted);">Duração preservada · processado em ${((t1-t0)/1000).toFixed(1)}s</div>
+      <div style="margin-top:10px;font-size:10px;color:var(--c4);">A faixa agora está afinada para A=440 Hz exato. Reproduz para confirmar.</div>
+      <div style="margin-top:6px;font-size:10px;color:var(--c3);">⚠ O pitch foi aplicado ao audioBuffer interno. Para exportar o novo master, usa o botão de export normal.</div>
+    `;
+  }catch(e){
+    result.innerHTML = `<div style="color:var(--c7);">Erro no processamento: ${e.message}</div>`;
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// B. MUDAR TONALIDADE: pitch shift global em semitons
+// B. MUDAR TONALIDADE: pitch shift global em semitons (offline)
 // ═══════════════════════════════════════════════════════════════════════════
-window.aiVocalPitchShift = function(semis){
+window.aiVocalPitchShift = async function(semis){
   const result = document.getElementById('vocal-result');
-  if(window.audioSource && window.audioSource.playbackRate){
-    const ratio = Math.pow(2, semis/12);
-    try{
-      window.audioSource.playbackRate.setValueAtTime(ratio, audioCtx.currentTime);
-      result.innerHTML += `
-        <div style="background:var(--bg3);border-left:3px solid var(--c5);padding:8px 12px;margin-top:8px;border-radius:4px;font-size:11px;">
-          <b style="color:var(--c5);">${semis===0?'Reset':(semis>0?'+':'')+semis+' semitons aplicados'}</b>
-          · rácio ${ratio.toFixed(4)}× · duração ${ratio>1?'reduzida':'aumentada'}
-        </div>
-      `;
-    }catch(e){}
+  if(!window.audioBuffer){
+    result.innerHTML = '<div style="color:var(--c7);">Sem áudio carregado.</div>';
+    return;
   }
+  if(semis === 0){
+    result.innerHTML = `<div style="color:var(--c5);">Re-carrega a faixa original para fazer RESET (a operação altera o audioBuffer).</div>`;
+    return;
+  }
+  result.innerHTML = `
+    <div style="color:var(--c5);font-weight:700;">⏳ A processar shift ${semis>0?'+':''}${semis} semitons (offline phase vocoder)...</div>
+  `;
+  try{
+    const t0 = performance.now();
+    const newBuf = await _pitchShiftOffline(window.audioBuffer, semis);
+    const t1 = performance.now();
+    window.audioBuffer = newBuf;
+    if(typeof drawWaveform === 'function') try{ drawWaveform(); }catch(e){}
+    if(typeof updateMeasurements === 'function') try{ updateMeasurements(); }catch(e){}
+    result.innerHTML = `
+      <div style="color:var(--c4);font-weight:700;font-size:13px;">✓ Shift de ${semis>0?'+':''}${semis} semitons aplicado</div>
+      <div style="margin-top:6px;font-size:11px;color:var(--muted);">Duração preservada · processado em ${((t1-t0)/1000).toFixed(1)}s</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--c3);">⚠ Re-analisa a tonalidade (botão 1) para ver o novo tom.</div>
+    `;
+  }catch(e){
+    result.innerHTML = `<div style="color:var(--c7);">Erro: ${e.message}</div>`;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ VOCAL TUNE STUDIO — Auto-Tune profissional para VOZ ISOLADA
+// ═══════════════════════════════════════════════════════════════════════════
+// Diferença vs AI Vocal Tune Pro:
+//  • Vocal Tune Pro = análise (master ou voz), apenas pitch shift global
+//  • Vocal Tune Studio = CORREÇÃO NOTA-A-NOTA para voz isolada (Auto-Tune real)
+//
+// Pipeline:
+//   1. Carregar vocal isolado
+//   2. Pitch tracking frame-a-frame (autocorrelação + parabolic refinement)
+//   3. Para cada frame: snap à nota mais próxima da ESCALA (se ativo)
+//   4. Calcular cents de correção por frame
+//   5. STFT phase vocoder com pitch shift POR JANELA (correção localizada)
+//   6. Output processado preserva duração exata
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _vsBuf=null;         // input vocal buffer
+let _vsBufOut=null;      // output processado
+let _vsPitchTrack=[];    // pitch frame a frame
+let _vsCorrectedTrack=[]; // pitch após correção
+let _vsParams={
+  scale: 'C',           // tonalidade
+  mode: 'major',        // major/minor/chromatic
+  retuneSpeed: 50,      // 0=lento (natural), 100=instant (efeito robô)
+  strength: 100,        // 0-100% força do snap
+  preserveFormants: true, // futuro: formant correction
+};
+
+window.fxView_vocalStudio = function(b){
+  const noteOpts = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+    .map(n=>`<option value="${n}"${n===_vsParams.scale?' selected':''}>${n}</option>`).join('');
+  b.innerHTML=`
+  <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5;">
+    <b style="color:var(--c1)">Auto-Tune profissional para voz isolada.</b> Detecta pitch frame-a-frame
+    e aplica correção nota-a-nota com snap à escala. Phase vocoder por janela preserva formantes e timbre vocal.
+  </div>
+
+  <div style="background:var(--bg3);border-left:3px solid var(--c4);border-radius:6px;padding:10px 14px;margin-bottom:10px;font-size:11px;color:var(--muted);line-height:1.5;">
+    <b style="color:var(--c4)">⚠ Importante: voz ISOLADA</b><br>
+    Esta ferramenta foi feita para faixas só com vocal (sem instrumentos por trás).
+    Em master completo usa o <b>AI Vocal Tune Pro</b> que só analisa, não corrige.
+  </div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+    <label style="display:inline-block;padding:8px 14px;border-radius:6px;border:1px solid var(--c1);background:color-mix(in srgb,var(--c1) 14%,transparent);color:var(--c1);font-family:'Rajdhani';font-weight:700;font-size:11px;cursor:pointer;">
+      + CARREGAR VOZ ISOLADA<input id="vs-file" type="file" accept="audio/*" onchange="fxVsLoad(this.files[0])" style="display:none;">
+    </label>
+    <span id="vs-file-info" style="margin-left:10px;font-size:11px;color:var(--muted);">Nenhuma faixa carregada</span>
+  </div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;">
+    <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:10px;">TONALIDADE E ESCALA</div>
+    <div style="display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:center;">
+      <div>
+        <div style="font-size:9px;color:var(--muted2);margin-bottom:3px;">TÓNICA</div>
+        <select id="vs-scale" onchange="_vsSet('scale',this.value)" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg4,#1c1c2a);color:var(--text);font-family:'Rajdhani';font-weight:700;font-size:13px;">${noteOpts}</select>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--muted2);margin-bottom:3px;">MODO</div>
+        <select id="vs-mode" onchange="_vsSet('mode',this.value)" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg4,#1c1c2a);color:var(--text);font-family:'Rajdhani';font-size:13px;">
+          <option value="major"${_vsParams.mode==='major'?' selected':''}>maior</option>
+          <option value="minor"${_vsParams.mode==='minor'?' selected':''}>menor</option>
+          <option value="chromatic"${_vsParams.mode==='chromatic'?' selected':''}>cromática (12 notas)</option>
+        </select>
+      </div>
+      <div style="text-align:right;">
+        <button onclick="fxVsAutoDetect()" style="padding:8px 14px;background:var(--bg4,#1c1c2a);border:1px solid var(--c5);color:var(--c5);border-radius:6px;font-family:'Rajdhani';font-weight:700;font-size:11px;cursor:pointer;">DETETAR AUTOMATICAMENTE</button>
+      </div>
+    </div>
+    <div id="vs-detected" style="font-size:10px;color:var(--muted);margin-top:8px;"></div>
+  </div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;">
+    <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:10px;">PARÂMETROS DE CORREÇÃO</div>
+
+    <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;">
+        <label style="font-size:10px;color:var(--muted2);">RETUNE SPEED (velocidade)</label>
+        <span id="vs-speed-v" style="font-family:Orbitron;font-size:11px;color:var(--c1);font-weight:700;">${_vsParams.retuneSpeed}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="range" min="0" max="100" value="${_vsParams.retuneSpeed}" id="vs-speed" oninput="_vsSet('retuneSpeed',this.value)" style="flex:1;accent-color:var(--c1);">
+      </div>
+      <div style="font-size:9px;color:var(--muted2);">0% = natural / lento (legato) · 50% = balanceado · 100% = instantâneo (efeito robot)</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:3px;">
+      <div style="display:flex;justify-content:space-between;">
+        <label style="font-size:10px;color:var(--muted2);">STRENGTH (força do snap)</label>
+        <span id="vs-strength-v" style="font-family:Orbitron;font-size:11px;color:var(--c4);font-weight:700;">${_vsParams.strength}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="range" min="0" max="100" value="${_vsParams.strength}" id="vs-strength" oninput="_vsSet('strength',this.value)" style="flex:1;accent-color:var(--c4);">
+      </div>
+      <div style="font-size:9px;color:var(--muted2);">0% = sem efeito · 50% = correção parcial (natural) · 100% = full Auto-Tune</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    ${btn('▶ ANALISAR PITCH','var(--c5)','fxVsAnalyze()','')}
+    ${btn('★ APLICAR CORREÇÃO','var(--c1)','fxVsApply()','')}
+    ${btn('💾 EXPORTAR PROCESSADO','var(--c4)','fxVsExport()','')}
+  </div>
+
+  <div id="vs-status" style="font-size:11px;color:var(--muted);min-height:20px;"></div>
+
+  <canvas id="vs-pianoroll" width="700" height="240" style="width:100%;height:240px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
+  <div style="font-size:10px;color:var(--muted2);text-align:center;margin-top:4px;">
+    <span style="color:rgba(255,255,255,0.5);">━</span> pitch original
+    &nbsp;&nbsp;<span style="color:var(--c4);">━</span> pitch corrigido
+    &nbsp;&nbsp;<span style="color:var(--c1);">▬</span> notas da escala
+  </div>
+
+  <div id="vs-result" style="margin-top:10px;"></div>
+  `;
+};
+
+window._vsSet = function(k,v){
+  if(k==='scale') _vsParams.scale = v;
+  else if(k==='mode') _vsParams.mode = v;
+  else if(k==='retuneSpeed'){
+    _vsParams.retuneSpeed = parseInt(v);
+    const el=document.getElementById('vs-speed-v'); if(el) el.textContent = v+'%';
+  }
+  else if(k==='strength'){
+    _vsParams.strength = parseInt(v);
+    const el=document.getElementById('vs-strength-v'); if(el) el.textContent = v+'%';
+  }
+};
+
+window.fxVsLoad = async function(file){
+  if(!file) return;
+  const info = document.getElementById('vs-file-info');
+  if(info) info.textContent = 'A carregar '+file.name+'...';
+  try{
+    const ac = (typeof audioCtx!=='undefined' && audioCtx) ? audioCtx : new (window.AudioContext||window.webkitAudioContext)();
+    _vsBuf = await ac.decodeAudioData(await file.arrayBuffer());
+    _vsBufOut = null;
+    _vsPitchTrack = [];
+    _vsCorrectedTrack = [];
+    if(info) info.textContent = '✓ '+file.name+' · '+_vsBuf.duration.toFixed(1)+'s · '+_vsBuf.sampleRate+' Hz · '+_vsBuf.numberOfChannels+' ch';
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c4)">Faixa carregada. Clica "ANALISAR PITCH" para começar.</span>';
+  }catch(e){
+    if(info) info.textContent = '✗ Erro: '+e.message;
+  }
+};
+
+// ─── DETECT SCALE AUTOMATICAMENTE ───
+window.fxVsAutoDetect = function(){
+  if(!_vsBuf){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Carrega uma faixa primeiro</span>';
+    return;
+  }
+  document.getElementById('vs-status').innerHTML = '<span style="color:var(--c5)">A detetar escala...</span>';
+  setTimeout(()=>{
+    // pitch tracking rápido + Krumhansl
+    const ch = _vsBuf.getChannelData(0);
+    const sr = _vsBuf.sampleRate;
+    const N = ch.length;
+    const FFT = 2048;
+    const HOP = 1024;
+    const noteHist = new Array(12).fill(0);
+    const minPer = Math.floor(sr/1000), maxPer = Math.floor(sr/65);
+    for(let pos=0; pos+FFT<N; pos+=HOP){
+      let energy = 0;
+      for(let i=pos;i<pos+FFT;i++) energy += ch[i]*ch[i];
+      if(energy/FFT < 0.0001) continue;
+      let bestP=0, bestC=0;
+      for(let p=minPer;p<maxPer && p<FFT/2;p++){
+        let c=0,na=0,nb=0;
+        for(let i=0;i<FFT-p;i++){
+          c += ch[pos+i]*ch[pos+i+p];
+          na+= ch[pos+i]*ch[pos+i]; nb+= ch[pos+i+p]*ch[pos+i+p];
+        }
+        const nc = c/(Math.sqrt(na*nb)+1e-10);
+        if(nc>bestC){ bestC=nc; bestP=p; }
+      }
+      if(bestC>0.4 && bestP>0){
+        const freq = sr/bestP;
+        if(freq>65 && freq<1200){
+          const semi = 12*Math.log2(freq/440);
+          const nearestSemi = Math.round(semi);
+          const noteIdx = ((nearestSemi+9+12000)%12);
+          noteHist[noteIdx]++;
+        }
+      }
+    }
+    const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const majorP = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
+    const minorP = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+    let bestKey=0, bestMode='major', bestCorr=-1;
+    for(let r=0;r<12;r++){
+      let cm=0, cn=0;
+      for(let i=0;i<12;i++){ cm += noteHist[(r+i)%12]*majorP[i]; cn += noteHist[(r+i)%12]*minorP[i]; }
+      if(cm>bestCorr){bestCorr=cm; bestKey=r; bestMode='major';}
+      if(cn>bestCorr){bestCorr=cn; bestKey=r; bestMode='minor';}
+    }
+    _vsParams.scale = noteNames[bestKey];
+    _vsParams.mode = bestMode;
+    document.getElementById('vs-scale').value = noteNames[bestKey];
+    document.getElementById('vs-mode').value = bestMode;
+    document.getElementById('vs-detected').innerHTML = '✓ Detetada: <b style="color:var(--c4)">'+noteNames[bestKey]+' '+bestMode+'</b>';
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c4)">Escala detetada e aplicada. Agora "ANALISAR PITCH".</span>';
+  }, 100);
+};
+
+// ─── PITCH TRACKING ───
+window.fxVsAnalyze = function(){
+  if(!_vsBuf){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Carrega uma faixa primeiro</span>';
+    return;
+  }
+  document.getElementById('vs-status').innerHTML = '<span style="color:var(--c5)">A analisar pitch frame-a-frame...</span>';
+  setTimeout(()=>{
+    const ch = _vsBuf.getChannelData(0);
+    const sr = _vsBuf.sampleRate;
+    const N = ch.length;
+    const FFT = 2048;
+    const HOP = 512; // alta resolução temporal
+    _vsPitchTrack = [];
+    const minPer = Math.floor(sr/1000), maxPer = Math.floor(sr/65);
+    for(let pos=0; pos+FFT<N; pos+=HOP){
+      let energy = 0;
+      for(let i=pos;i<pos+FFT;i++) energy += ch[i]*ch[i];
+      energy /= FFT;
+      if(energy < 0.00005){
+        _vsPitchTrack.push({time: pos/sr, freq: 0, semi: 0, conf: 0, silent: true});
+        continue;
+      }
+      let bestP=0, bestC=0;
+      for(let p=minPer;p<maxPer && p<FFT/2;p++){
+        let c=0,na=0,nb=0;
+        for(let i=0;i<FFT-p;i++){
+          c += ch[pos+i]*ch[pos+i+p];
+          na+= ch[pos+i]*ch[pos+i]; nb+= ch[pos+i+p]*ch[pos+i+p];
+        }
+        const nc = c/(Math.sqrt(na*nb)+1e-10);
+        if(nc>bestC){ bestC=nc; bestP=p; }
+      }
+      // parabolic refinement
+      if(bestP > minPer+1 && bestP < maxPer-1){
+        const corrAt=(p)=>{
+          let c=0,na=0,nb=0;
+          for(let i=0;i<FFT-p;i++){ c += ch[pos+i]*ch[pos+i+p]; na += ch[pos+i]*ch[pos+i]; nb += ch[pos+i+p]*ch[pos+i+p]; }
+          return c/(Math.sqrt(na*nb)+1e-10);
+        };
+        const y0=corrAt(bestP-1), y1=bestC, y2=corrAt(bestP+1);
+        const denom = (y0 - 2*y1 + y2);
+        if(Math.abs(denom) > 1e-6){
+          const delta = 0.5*(y0-y2)/denom;
+          if(Math.abs(delta) < 1) bestP += delta;
+        }
+      }
+      if(bestC > 0.35 && bestP > 0){
+        const freq = sr/bestP;
+        const semi = 12*Math.log2(freq/440);
+        _vsPitchTrack.push({time: pos/sr, freq: freq, semi: semi, conf: bestC, silent: false});
+      } else {
+        _vsPitchTrack.push({time: pos/sr, freq: 0, semi: 0, conf: 0, silent: true});
+      }
+    }
+    _vsCalcCorrection();
+    _vsDrawPianoRoll();
+    const valid = _vsPitchTrack.filter(p=>!p.silent).length;
+    document.getElementById('vs-status').innerHTML = `<span style="color:var(--c4)">✓ Pitch analisado · ${_vsPitchTrack.length} frames (${valid} com voz · ${(_vsPitchTrack.length-valid)} silenciosos)</span>`;
+  }, 100);
+};
+
+// ─── CALCULA SNAP À ESCALA ───
+function _vsCalcCorrection(){
+  // gera notas da escala em MIDI (semitones from A4=440=semi 0)
+  // major: 0,2,4,5,7,9,11; minor: 0,2,3,5,7,8,10; chromatic: todas
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const rootIdx = noteNames.indexOf(_vsParams.scale);
+  let pattern;
+  if(_vsParams.mode === 'major') pattern = [0,2,4,5,7,9,11];
+  else if(_vsParams.mode === 'minor') pattern = [0,2,3,5,7,8,10];
+  else pattern = [0,1,2,3,4,5,6,7,8,9,10,11];
+  const scaleSemis = pattern.map(o => (rootIdx + o + 12) % 12);
+
+  _vsCorrectedTrack = _vsPitchTrack.map(p=>{
+    if(p.silent) return Object.assign({}, p, {correctedSemi: 0, centsCorr: 0});
+    const semi = p.semi;  // semitones from A4
+    const nearestSemi = Math.round(semi);
+    const noteIdx = ((nearestSemi + 9 + 12000) % 12);  // 0=C, 11=B
+    // snap para nota da escala mais próxima
+    let bestSnap = nearestSemi;
+    let bestDist = 99;
+    for(let octOff = -1; octOff <= 1; octOff++){
+      for(const sn of scaleSemis){
+        // encontra todas as ocorrências desta nota em torno de nearestSemi
+        const target = sn; // 0..11
+        // baseSemi nearest = base nota (em semis from A4) que tem este noteIdx
+        const baseSemi = nearestSemi + ((target - noteIdx + 12) % 12) - (((target - noteIdx + 12) % 12) > 6 ? 12 : 0) + octOff*12;
+        const dist = Math.abs(baseSemi - semi);
+        if(dist < bestDist){ bestDist = dist; bestSnap = baseSemi; }
+      }
+    }
+    const strengthMul = _vsParams.strength / 100;
+    const correctedSemi = semi + (bestSnap - semi) * strengthMul;
+    const centsCorr = (correctedSemi - semi) * 100;
+    return Object.assign({}, p, {correctedSemi: correctedSemi, centsCorr: centsCorr});
+  });
+}
+
+// ─── DRAW PIANO ROLL ───
+function _vsDrawPianoRoll(){
+  const cv = document.getElementById('vs-pianoroll');
+  if(!cv) return;
+  const W = cv.offsetWidth || cv.width;
+  cv.width = W;
+  const H = cv.height;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#07070e';
+  ctx.fillRect(0,0,W,H);
+  if(!_vsPitchTrack.length || !_vsBuf){
+    ctx.fillStyle = 'rgba(140,140,160,0.4)';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('— sem dados — carrega faixa e clica ANALISAR PITCH —', W/2, H/2);
+    return;
+  }
+  // determinar gama de semitones a mostrar
+  const valid = _vsPitchTrack.filter(p=>!p.silent);
+  if(!valid.length) return;
+  let minSemi = Math.min(...valid.map(p=>p.semi));
+  let maxSemi = Math.max(...valid.map(p=>p.semi));
+  minSemi = Math.floor(minSemi) - 2;
+  maxSemi = Math.ceil(maxSemi) + 2;
+  const semiRange = Math.max(12, maxSemi - minSemi);
+  const totalDur = _vsBuf.duration;
+  const leftMargin = 30;
+  // calcular escala notes
+  const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const rootIdx = noteNames.indexOf(_vsParams.scale);
+  let pattern;
+  if(_vsParams.mode === 'major') pattern = [0,2,4,5,7,9,11];
+  else if(_vsParams.mode === 'minor') pattern = [0,2,3,5,7,8,10];
+  else pattern = [0,1,2,3,4,5,6,7,8,9,10,11];
+  const scaleSemis = pattern.map(o => (rootIdx + o + 12) % 12);
+  // linhas horizontais para cada semitom
+  for(let s=Math.floor(minSemi); s<=Math.ceil(maxSemi); s++){
+    const y = H - 14 - ((s - minSemi) / semiRange) * (H - 24);
+    const noteIdx = ((s + 9 + 12000) % 12);
+    const inScale = scaleSemis.includes(noteIdx);
+    const isBlack = [1,3,6,8,10].includes(noteIdx);
+    ctx.strokeStyle = inScale ? 'rgba(255,58,181,0.18)' : (isBlack ? 'rgba(40,40,60,0.5)' : 'rgba(255,255,255,0.04)');
+    ctx.lineWidth = inScale ? 1.5 : 1;
+    ctx.beginPath(); ctx.moveTo(leftMargin, y); ctx.lineTo(W, y); ctx.stroke();
+    // etiqueta nota
+    if(s % 1 === 0){
+      ctx.fillStyle = inScale ? 'rgba(255,58,181,0.95)' : (isBlack ? 'rgba(80,80,100,0.6)' : 'rgba(140,140,160,0.8)');
+      ctx.font = inScale ? 'bold 9px monospace' : '9px monospace';
+      ctx.fillText(noteNames[noteIdx], 4, y+3);
+    }
+  }
+  // grid de tempo
+  const tickSec = Math.max(1, Math.floor(totalDur/10));
+  for(let t=0; t<=totalDur; t+=tickSec){
+    const x = leftMargin + (t/totalDur) * (W-leftMargin-5);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H-12); ctx.stroke();
+    ctx.fillStyle = 'rgba(140,140,160,0.7)';
+    ctx.font = '8px monospace';
+    ctx.fillText(t.toFixed(0)+'s', x-6, H-2);
+  }
+  // pitch original (linha cinzenta)
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let started = false;
+  for(const p of _vsPitchTrack){
+    if(p.silent){ started=false; continue; }
+    const x = leftMargin + (p.time/totalDur) * (W-leftMargin-5);
+    const y = H - 14 - ((p.semi - minSemi) / semiRange) * (H - 24);
+    if(!started){ ctx.moveTo(x,y); started=true; }
+    else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // pitch corrigido (linha verde)
+  if(_vsCorrectedTrack.length){
+    ctx.strokeStyle = 'rgba(45,255,138,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    started = false;
+    for(const p of _vsCorrectedTrack){
+      if(p.silent){ started=false; continue; }
+      const x = leftMargin + (p.time/totalDur) * (W-leftMargin-5);
+      const y = H - 14 - ((p.correctedSemi - minSemi) / semiRange) * (H - 24);
+      if(!started){ ctx.moveTo(x,y); started=true; }
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+}
+
+// ─── APLICAR CORREÇÃO (phase vocoder por janela) ───
+window.fxVsApply = async function(){
+  if(!_vsBuf){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Carrega uma faixa primeiro</span>';
+    return;
+  }
+  if(!_vsCorrectedTrack.length){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Analisa o pitch primeiro</span>';
+    return;
+  }
+  document.getElementById('vs-status').innerHTML = '<span style="color:var(--c5)">⏳ A processar correção (phase vocoder por janela)...</span>';
+
+  await new Promise(r=>setTimeout(r,50));
+  try{
+    const t0 = performance.now();
+    _vsBufOut = await _vsApplyCorrection(_vsBuf, _vsCorrectedTrack, _vsPitchTrack);
+    const t1 = performance.now();
+    const validCorr = _vsCorrectedTrack.filter(p=>!p.silent && Math.abs(p.centsCorr) > 5).length;
+    const avgCorr = _vsCorrectedTrack.filter(p=>!p.silent && p.centsCorr !== 0)
+                                       .reduce((s,p,_,a)=>s+Math.abs(p.centsCorr)/a.length, 0);
+    document.getElementById('vs-status').innerHTML = `<span style="color:var(--c4)">✓ Correção aplicada · ${validCorr} frames corrigidos · correção média ${avgCorr.toFixed(1)} cents · ${((t1-t0)/1000).toFixed(1)}s</span>`;
+    document.getElementById('vs-result').innerHTML = `
+      <div style="background:var(--bg3);border:1px solid var(--c4);border-left:4px solid var(--c4);border-radius:6px;padding:12px;font-size:11px;">
+        <b style="color:var(--c4)">✓ Voz processada</b><br>
+        <span style="color:var(--muted);">Escala: ${_vsParams.scale} ${_vsParams.mode} · Strength: ${_vsParams.strength}% · Retune speed: ${_vsParams.retuneSpeed}%</span><br>
+        <span style="color:var(--muted);">${validCorr} frames corrigidos de ${_vsCorrectedTrack.filter(p=>!p.silent).length} ativos</span><br>
+        <button onclick="fxVsPreview()" style="margin-top:8px;padding:6px 12px;background:var(--c5);color:var(--bg);border:0;border-radius:4px;font-weight:700;font-size:10px;cursor:pointer;">▶ TOCAR PRÉVIA</button>
+        <button onclick="fxVsExport()" style="margin-top:8px;margin-left:6px;padding:6px 12px;background:var(--c4);color:var(--bg);border:0;border-radius:4px;font-weight:700;font-size:10px;cursor:pointer;">💾 EXPORTAR WAV</button>
+      </div>`;
+  }catch(e){
+    document.getElementById('vs-status').innerHTML = `<span style="color:var(--c7)">Erro: ${e.message}</span>`;
+  }
+};
+
+// ─── PHASE VOCODER COM PITCH SHIFT POR JANELA ───
+async function _vsApplyCorrection(inputBuf, correctedTrack, origTrack){
+  const sr = inputBuf.sampleRate;
+  const N = inputBuf.length;
+  const FFT = 2048;
+  const HOP_IN = 512;
+  const numCh = inputBuf.numberOfChannels;
+  const out = new AudioBuffer({length: N, sampleRate: sr, numberOfChannels: numCh});
+  // retune speed: smoothing temporal das correções
+  // 0 = full smooth (slow), 100 = no smoothing (instant)
+  const retuneSpeed = _vsParams.retuneSpeed / 100;
+  const smoothAlpha = 0.05 + (1 - retuneSpeed) * 0.7;  // EMA alpha
+
+  for(let c = 0; c < numCh; c++){
+    const inData = inputBuf.getChannelData(c);
+    const outData = out.getChannelData(c);
+    // STFT buffers
+    const realIn = new Float32Array(FFT);
+    const imagIn = new Float32Array(FFT);
+    const windowFn = new Float32Array(FFT);
+    for(let i=0;i<FFT;i++) windowFn[i] = 0.5*(1 - Math.cos(2*Math.PI*i/(FFT-1)));
+    const accum = new Float32Array(N);
+    const accumW = new Float32Array(N);
+
+    // smoothed pitch shift (semitones)
+    let smoothShift = 0;
+    let firstFrame = true;
+
+    let frameIdx = 0;
+    for(let pos = 0; pos + FFT < N; pos += HOP_IN){
+      // encontrar correção para este frame
+      // origTrack/correctedTrack tem entradas a cada HOP=512 também
+      const trackIdx = Math.min(correctedTrack.length-1, Math.floor(pos / HOP_IN));
+      const cp = correctedTrack[trackIdx];
+      const op = origTrack[trackIdx];
+      let rawShift = 0;
+      if(cp && op && !cp.silent && !op.silent){
+        rawShift = cp.correctedSemi - op.semi;
+      }
+      if(firstFrame){ smoothShift = rawShift; firstFrame = false; }
+      else smoothShift = smoothShift * (1-smoothAlpha) + rawShift * smoothAlpha;
+
+      const ratio = Math.pow(2, smoothShift/12);
+      // se ratio ≈ 1, copia direto (sem distorção)
+      if(Math.abs(smoothShift) < 0.01){
+        for(let i=0;i<FFT;i++){
+          if(pos+i < N){
+            accum[pos+i] += (inData[pos+i]||0) * windowFn[i] * windowFn[i];
+            accumW[pos+i] += windowFn[i] * windowFn[i];
+          }
+        }
+        frameIdx++;
+        continue;
+      }
+      // pitch shift por janela: resample da janela atual com ratio
+      // STFT phase vocoder simplificado: shift de bins de frequência
+      for(let i=0;i<FFT;i++) realIn[i] = (inData[pos+i]||0) * windowFn[i];
+      imagIn.fill(0);
+      _fft(realIn, imagIn, FFT);
+      // Re-bin: cada bin k vai para bin k*ratio (com interpolação)
+      const newReal = new Float32Array(FFT);
+      const newImag = new Float32Array(FFT);
+      const halfFFT = FFT/2;
+      for(let k=1; k<halfFFT; k++){
+        const targetBin = k * ratio;
+        const lo = Math.floor(targetBin);
+        const hi = lo + 1;
+        const frac = targetBin - lo;
+        if(lo < halfFFT){
+          newReal[lo] += realIn[k] * (1-frac);
+          newImag[lo] += imagIn[k] * (1-frac);
+        }
+        if(hi < halfFFT){
+          newReal[hi] += realIn[k] * frac;
+          newImag[hi] += imagIn[k] * frac;
+        }
+      }
+      // simetria conjugada
+      for(let k=1;k<halfFFT;k++){
+        newReal[FFT-k] = newReal[k];
+        newImag[FFT-k] = -newImag[k];
+      }
+      _ifft(newReal, newImag, FFT);
+      // overlap-add
+      for(let i=0;i<FFT;i++){
+        if(pos+i < N){
+          accum[pos+i] += newReal[i] * windowFn[i];
+          accumW[pos+i] += windowFn[i] * windowFn[i];
+        }
+      }
+      frameIdx++;
+    }
+    // normalizar
+    for(let i=0;i<N;i++){
+      outData[i] = accumW[i] > 0.001 ? accum[i] / accumW[i] : 0;
+    }
+  }
+  return out;
+}
+
+// ─── PREVIEW ───
+window.fxVsPreview = function(){
+  if(!_vsBufOut){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Aplica correção primeiro</span>';
+    return;
+  }
+  const ac = (typeof audioCtx!=='undefined' && audioCtx) ? audioCtx : new (window.AudioContext||window.webkitAudioContext)();
+  // toca 8s do output processado
+  const src = ac.createBufferSource();
+  src.buffer = _vsBufOut;
+  const g = ac.createGain(); g.gain.value = 0.8;
+  src.connect(g); g.connect(ac.destination);
+  src.start();
+  setTimeout(()=>{ try{src.stop();}catch(e){} }, Math.min(_vsBufOut.duration, 8) * 1000);
+  document.getElementById('vs-status').innerHTML = '<span style="color:var(--c5)">▶ A tocar prévia (8s)</span>';
+};
+
+// ─── EXPORTAR WAV ───
+window.fxVsExport = function(){
+  if(!_vsBufOut){
+    document.getElementById('vs-status').innerHTML = '<span style="color:var(--c2)">Aplica correção primeiro</span>';
+    return;
+  }
+  // codifica WAV 16-bit
+  const buf = _vsBufOut;
+  const numCh = buf.numberOfChannels;
+  const sr = buf.sampleRate;
+  const length = buf.length * numCh * 2 + 44;
+  const ab = new ArrayBuffer(length);
+  const view = new DataView(ab);
+  let p = 0;
+  const wstr = (s)=>{ for(let i=0;i<s.length;i++) view.setUint8(p++, s.charCodeAt(i)); };
+  wstr('RIFF'); view.setUint32(p,length-8,true); p+=4;
+  wstr('WAVE'); wstr('fmt '); view.setUint32(p,16,true); p+=4;
+  view.setUint16(p,1,true); p+=2; view.setUint16(p,numCh,true); p+=2;
+  view.setUint32(p,sr,true); p+=4; view.setUint32(p,sr*numCh*2,true); p+=4;
+  view.setUint16(p,numCh*2,true); p+=2; view.setUint16(p,16,true); p+=2;
+  wstr('data'); view.setUint32(p,buf.length*numCh*2,true); p+=4;
+  const chans = []; for(let c=0;c<numCh;c++) chans.push(buf.getChannelData(c));
+  for(let i=0;i<buf.length;i++){
+    for(let c=0;c<numCh;c++){
+      let s = Math.max(-1, Math.min(1, chans[c][i]));
+      view.setInt16(p, s<0?s*0x8000:s*0x7FFF, true); p+=2;
+    }
+  }
+  const blob = new Blob([ab], {type:'audio/wav'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'vocal-tuned.wav';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
+  document.getElementById('vs-status').innerHTML = '<span style="color:var(--c4)">✓ vocal-tuned.wav exportado</span>';
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

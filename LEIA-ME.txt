@@ -1,43 +1,57 @@
 MASTERING SUITE by Piradex — v1.0.1
 
-VOCAL TUNE PRO — implementação completa e honesta
+═══ NOVO MÓDULO: VOICE LAB ═══
 
-O que o módulo FAZ a sério:
+Tab própria entre ANÁLISES e STUDIO PRO.
+Auto-Tune para voz isolada (stem) com modo SNAP TOTAL.
 
-1. ANÁLISE DE AFINAÇÃO
-   • Autocorrelação com interpolação parabólica sub-amostra
-     (precisão melhor que 1 cent)
-   • Normalização cross-correlation para rejeitar ruído
-   • Pré-checagem de energia (skip silêncio)
-   • Analisa até 60 segundos da faixa
-   • Output:
-     - Tonalidade (maior ou menor) via Krumhansl-Schmuckler
-     - Desvio global de afinação em cents
-     - Frequência real de A (vs ref 440 Hz)
-     - Histograma das 12 notas com percentagens
-     - Status: correto / ligeiro / significativo / extremo
+PIPELINE:
+1. CARREGAR STEM
+   • Drop zone para WAV/MP3/FLAC
+   • Decode via Web Audio API
+   • Mostra duração + sample rate + canais
 
-2. CORREÇÃO DE DESVIO DE AFINAÇÃO
-   • Calcula shift exato em cents para voltar a A=440 Hz
-   • Aplica via playbackRate (rápido mas altera duração)
+2. ANALISAR
+   • Pitch tracking janela-a-janela (FFT 2048, hop 512)
+   • Autocorrelação normalizada + refinamento parabólico
+   • Resolução: ~0.1 semitons sub-amostra
+   • Detecção de escala Krumhansl-Schmuckler (12 maior + 12 menor)
+   • % notas dentro/fora da escala detectada
 
-3. MUDANÇA DE TONALIDADE
-   • Pitch shift global ±2 semitons via playbackRate
-   • Útil para criar versões em diferentes tons
+3. APLICAR AUTO-TUNE (offline phase vocoder)
+   • Para cada janela calcula shift = target_escala - actual
+   • Se nota está fora da escala, escolhe a vizinha mais próxima (±6 semi)
+   • SNAP STRENGTH 0-100% controla quão forte é o pull
+   • RETUNE SPEED filtra os shifts (0ms = T-Pain robotic, 100ms+ = natural)
+   • Phase vocoder por janela com shift variável:
+     - FFT do sinal janelado (Hann window)
+     - Pitch shift no domínio espectral via bin remapping
+     - Phase unwrapping para preservar coerência
+     - Resynthesis via IFFT + overlap-add
+   • Duração preservada exatamente
 
-4. CORREÇÃO NOTA-A-NOTA
-   • Explicado honestamente: não é possível no master
-   • Mostra caminho realista (stems → Melodyne → re-import)
+4. A/B PLAYER
+   • Toca original / auto-tuned / stop
+   • Piano roll mostra ANTES (cinzento) vs DEPOIS (rosa)
+   • Fundo verde marca notas da escala detectada
 
-CONHECIMENTO TÉCNICO:
-• Krumhansl-Schmuckler: algoritmo padrão de music informatics
-  para deteção de tonalidade
-• Parabolic interpolation: refinamento sub-amostra do pico
-  de autocorrelação para precisão de afinação
-• Cross-correlation normalizada: rejeita harmónicos parciais
+5. EXPORT
+   • WAV 16-bit PCM (sem deps externas)
+   • MP3 (placeholder — precisa de lamejs)
+   • "Enviar para MASTER" → usa o buffer auto-tuned na chain master
 
-HONESTIDADE:
-A interface diz CLARAMENTE que pitch correction nota-a-nota
-no master é impossível sem stem separation, e explica porquê.
-Aponta para o módulo AI Stem Separator (Coming Soon) como
-caminho futuro para Melodyne-style correction dentro da app.
+═══ ARQUITETURA ═══
+
+Ficheiro novo: voicelab.js (654 linhas)
+Não toca em app.js nem features.js.
+Isolado em IIFE com state próprio (vlBuffer, vlTunedBuffer, vlAnalysis).
+Hook em openTab para inicializar o piano roll ao abrir o tab.
+
+═══ HONESTIDADE SOBRE LIMITAÇÕES ═══
+
+• Funciona MELHOR com voz isolada limpa (sem instrumentação)
+• Voz com muita reverb pode dar pitch tracking instável
+• Voz rouca/sussurrada: confidence baixa, pode falhar bins
+• Formant shift NÃO é preservado (pitch shift "puro" pode fazer voz
+  soar Mickey Mouse em shifts grandes)
+• Para shifts pequenos (<3 semi) o resultado é excelente

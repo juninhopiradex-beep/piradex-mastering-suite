@@ -142,6 +142,7 @@
     <div class="tab tab-primary active" onclick="openTab('master',this)">MASTER</div>
     <div class="tab tab-primary" onclick="openTab('ref',this)">REFERÊNCIA</div>
     <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
+    <div class="tab tab-primary" onclick="openTab('voicelab',this)" style="color:var(--c1);">VOICE LAB</div>
     <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
   </div>
   <div class="tabs tabs-effects">
@@ -747,6 +748,78 @@
       <!-- Veredito por mercado -->
       <div style="font-size:10px;color:var(--c4);font-weight:700;letter-spacing:1.5px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:4px;">VEREDITO — ALVOS POR PLATAFORMA</div>
       <div id="analysis-verdict" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+  </div>
+
+  <!-- VOICE LAB TAB -->
+  <div class="tab-panel" id="tab-voicelab">
+    <div class="module-panel" style="background:linear-gradient(180deg, rgba(255,58,181,0.04) 0%, var(--bg2) 80%);">
+      <div class="module-title-row">
+        <div class="module-title" style="color:var(--c1);">🎤 VOICE LAB — Auto-Tune para voz isolada</div>
+        <div style="font-size:10px;color:var(--c1);background:rgba(255,58,181,0.12);border:1px solid var(--c1);padding:3px 10px;border-radius:4px;letter-spacing:1px;">SNAP MODE</div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:8px 0 14px;line-height:1.6;">
+        Carrega um <b>stem de voz isolada</b> (sem instrumentação). O algoritmo detecta a escala,
+        identifica cada nota cantada, e <b>snap total</b> para a nota mais próxima da escala usando
+        phase vocoder offline. Resultado: Auto-Tune extremo estilo T-Pain / Cher.
+      </p>
+
+      <!-- Drop zone -->
+      <div id="vl-dropzone" style="border:2px dashed var(--c1);background:rgba(255,58,181,0.05);border-radius:12px;padding:30px;text-align:center;margin-bottom:14px;cursor:pointer;transition:all .15s;" onclick="document.getElementById('vl-file').click()">
+        <input type="file" id="vl-file" accept="audio/*" style="display:none;" onchange="vlLoadFile(this.files[0])">
+        <div style="font-size:36px;margin-bottom:8px;">🎤</div>
+        <div style="font-family:'Rajdhani',monospace;font-weight:700;font-size:14px;color:var(--c1);">CARREGAR STEM DE VOZ</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;">WAV / MP3 / FLAC · voz isolada sem instrumentos</div>
+      </div>
+
+      <div id="vl-info" style="display:none;background:var(--bg3);border-left:3px solid var(--c4);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-family:monospace;font-size:11px;"></div>
+
+      <!-- Controlos -->
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);">
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">ESCALA DETECTADA</div>
+          <div id="vl-key" style="font-family:'Orbitron',monospace;font-weight:900;font-size:26px;color:var(--c4);">—</div>
+          <div id="vl-key-info" style="font-size:10px;color:var(--muted);margin-top:4px;">aguarda análise</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);">
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">SNAP STRENGTH</div>
+          <div id="vl-strength-v" style="font-family:'Orbitron',monospace;font-weight:900;font-size:22px;color:var(--c1);">100%</div>
+          <input type="range" min="0" max="100" value="100" id="vl-strength" oninput="document.getElementById('vl-strength-v').textContent=this.value+'%'" style="width:100%;margin-top:6px;accent-color:var(--c1);">
+          <div style="font-size:9px;color:var(--muted2);">100% = Auto-Tune extremo · 50% = subtil</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);">
+          <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">RETUNE SPEED</div>
+          <div id="vl-speed-v" style="font-family:'Orbitron',monospace;font-weight:900;font-size:22px;color:var(--c2);">0 ms</div>
+          <input type="range" min="0" max="200" value="0" id="vl-speed" oninput="document.getElementById('vl-speed-v').textContent=this.value+' ms'" style="width:100%;margin-top:6px;accent-color:var(--c2);">
+          <div style="font-size:9px;color:var(--muted2);">0 ms = T-Pain snap · 100+ = natural</div>
+        </div>
+      </div>
+
+      <!-- Botões de ação -->
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <button onclick="vlAnalyze()" id="vl-btn-analyze" style="flex:1;padding:14px;background:rgba(45,212,255,0.15);border:1px solid var(--c5);color:var(--c5);border-radius:8px;font-family:'Rajdhani',monospace;font-weight:700;font-size:12px;letter-spacing:1.5px;cursor:pointer;" disabled>1. ANALISAR VOZ</button>
+        <button onclick="vlApply()" id="vl-btn-apply" style="flex:1;padding:14px;background:rgba(255,58,181,0.15);border:1px solid var(--c1);color:var(--c1);border-radius:8px;font-family:'Rajdhani',monospace;font-weight:700;font-size:12px;letter-spacing:1.5px;cursor:pointer;" disabled>2. APLICAR AUTO-TUNE</button>
+      </div>
+
+      <!-- Piano roll comparison -->
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">PIANO ROLL — antes (cinzento) vs depois (rosa)</div>
+      <canvas id="vl-pianoroll" width="900" height="240" style="width:100%;height:240px;background:#07070e;border-radius:6px;border:1px solid var(--border);"></canvas>
+
+      <!-- A/B player -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px;">
+        <button onclick="vlPlay('original')" id="vl-play-orig" style="padding:12px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;" disabled>▶ ORIGINAL</button>
+        <button onclick="vlPlay('tuned')" id="vl-play-tuned" style="padding:12px;background:var(--bg3);border:1px solid var(--c1);color:var(--c1);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;" disabled>▶ AUTO-TUNED</button>
+        <button onclick="vlStop()" style="padding:12px;background:var(--bg3);border:1px solid var(--muted);color:var(--muted);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;">⬛ STOP</button>
+      </div>
+
+      <!-- Export -->
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <button onclick="vlExport('wav')" id="vl-export-wav" style="flex:1;padding:12px;background:rgba(45,255,138,0.12);border:1px solid var(--c4);color:var(--c4);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;" disabled>⬇ EXPORT WAV</button>
+        <button onclick="vlExport('mp3')" id="vl-export-mp3" style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--border2);color:var(--muted);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;" disabled>⬇ EXPORT MP3</button>
+        <button onclick="vlSendToMaster()" id="vl-send-master" style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--c5);color:var(--c5);border-radius:6px;font-family:'Rajdhani',monospace;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;" disabled>→ ENVIAR PARA MASTER</button>
+      </div>
+
+      <div id="vl-status" style="margin-top:10px;font-size:10px;color:var(--muted);font-family:monospace;min-height:14px;"></div>
     </div>
   </div>
 
@@ -1574,5 +1647,6 @@
 </script>
 <script src="app.js"></script>
 <script src="features.js"></script>
+<script src="voicelab.js"></script>
 </body>
 </html>

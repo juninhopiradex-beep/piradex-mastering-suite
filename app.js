@@ -103,7 +103,7 @@ let loudTarget=-9;
 
 // ===== TABS =====
 function openTab(name, el) {
-  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis' && name!=='studiopro'){
+  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis' && name!=='studiopro' && name!=='voicelab'){
     setStatus('Muda para PROCESSADO para aceder aos efeitos');
     return;
   }
