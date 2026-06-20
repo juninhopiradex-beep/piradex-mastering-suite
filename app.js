@@ -103,13 +103,13 @@ let loudTarget=-9;
 
 // ===== TABS =====
 function openTab(name, el) {
-  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis' && name!=='studiopro' && name!=='voicelab'){
+  if(playMode==='before' && name!=='master' && name!=='ref' && name!=='analysis' && name!=='studiopro' && name!=='voicelab' && name!=='voicetune'){
     setStatus('Muda para PROCESSADO para aceder aos efeitos');
     return;
   }
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
+  if(el) el.classList.add('active');
   const panel=document.getElementById('tab-'+name);
   if(panel) panel.classList.add('active');
   // redraw canvases now that the panel is visible (offsetWidth is correct)
@@ -133,6 +133,7 @@ function openTab(name, el) {
     if(typeof fxRenderHub==='function') fxRenderHub();
   },60);
   if(name==='reference')setTimeout(()=>{_drawReferenceOverlay();},60);
+  if(name==='voicetune')setTimeout(()=>{ if(typeof vtInitDrop==='function'){vtInitDrop();} if(typeof _vtDrawAll==='function')_vtDrawAll(); },60);
   if(name==='reson')setTimeout(()=>{ if(typeof _ensureResonAnalyser==='function'){ _ensureResonAnalyser(); _startResonLoop(); } updateReson(); },60);
   if(name==='image')setTimeout(()=>{ if(typeof _ensureVectorscope==='function') _ensureVectorscope(); updateImager(); },60);
   if(name==='lowfocus')setTimeout(()=>{ if(typeof updateLowFocus==='function') updateLowFocus(); },60);

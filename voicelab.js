@@ -698,8 +698,22 @@
   window.vlSendToMaster = function () {
     var buf = vlProcessedBuffer || vlBuffer;
     if (!buf) { vlStatus('Processa primeiro','var(--c7)'); return; }
+    // Injecta no player da suite
     window.audioBuffer = buf;
-    vlStatus('✓ Enviado para MASTER — muda para o tab MASTER','var(--c5)');
+    // Inicializa audioCtx da suite se necessário
+    if (typeof initAudio === 'function') initAudio();
+    // Mostra waveform e esconde dropzone
+    var ww = document.getElementById('waveform-wrap');
+    var dz = document.getElementById('drop-zone');
+    if (ww) ww.style.display = 'flex';
+    if (dz) dz.style.display = 'none';
+    // Redesenha waveform e aplica DSP
+    if (typeof drawWaveform === 'function') drawWaveform();
+    if (typeof applyDSP === 'function') applyDSP();
+    // Muda para tab MASTER
+    var masterTab = document.querySelector('.tab-primary[onclick*="master"]');
+    if (typeof openTab === 'function') openTab('master', masterTab || document.querySelector('.tab-primary'));
+    vlStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
   function _bufToWav(buffer){
@@ -797,6 +811,25 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * INIT
    * ══════════════════════════════════════════════════════════════════════════ */
+  // Recebe buffer afinado do Voice Tune
+  window.vlReceiveTuned = function(buf) {
+    vlBuffer = buf;
+    vlProcessedBuffer = null;
+    var info = document.getElementById('vl-info');
+    if (info) {
+      info.style.display = 'block';
+      info.innerHTML = '<div style="color:var(--c6);font-weight:700;">↗ Recebido do Voice Tune</div>' +
+        '<div style="color:var(--muted);margin-top:3px;">' + buf.duration.toFixed(1) + 's · ' + buf.sampleRate + 'Hz</div>';
+    }
+    _setBtn('vl-play-orig', false);
+    _setBtn('vl-play-preview', false);
+    _setBtn('vl-play-result', true);
+    _setBtn('vl-export-wav', true);
+    _setBtn('vl-send-master', true);
+    _setBtn('vl-btn-process', false);
+    vlStatus('✓ Recebido do Voice Tune — pronto para processar', 'var(--c6)');
+  };
+
   var _origOpenTab=window.openTab;
   window.openTab=function(name,el){
     if(_origOpenTab)_origOpenTab(name,el);

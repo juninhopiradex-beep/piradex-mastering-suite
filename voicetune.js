@@ -359,9 +359,18 @@
 
   window.vtSendToMaster = function() {
     var buf = vtTunedBuffer || vtBuffer;
-    if(!buf){vtStatus('Aplica o Auto-Tune primeiro','var(--c7)');return;}
-    window.audioBuffer=buf;
-    vtStatus('✓ Enviado para MASTER','var(--c5)');
+    if(!buf){vtStatus('Carrega um ficheiro primeiro','var(--c7)');return;}
+    window.audioBuffer = buf;
+    if (typeof initAudio === 'function') initAudio();
+    var ww = document.getElementById('waveform-wrap');
+    var dz = document.getElementById('drop-zone');
+    if (ww) ww.style.display = 'flex';
+    if (dz) dz.style.display = 'none';
+    if (typeof drawWaveform === 'function') drawWaveform();
+    if (typeof applyDSP === 'function') applyDSP();
+    var masterTab = document.querySelector('.tab-primary[onclick*="'master'"]');
+    if (typeof openTab === 'function') openTab('master', masterTab || document.querySelector('.tab-primary'));
+    vtStatus('✓ Enviado para MASTER — a reproduzir','var(--c5)');
   };
 
   window.vtSendToVoiceLab = function() {
