@@ -148,8 +148,18 @@
     _startVtPreview();
     vtPreviewActive = true;
     var btn = document.getElementById('vt-play-preview');
-    if (btn) { btn.style.background = 'rgba(255,227,53,0.25)'; btn.style.borderColor = 'var(--c3)'; btn.textContent = '⬛ PARAR'; }
-    vtStatus('▶ PREVIEW em loop — move os sliders para ouvir o efeito · clica de novo para parar', 'var(--c3)');
+    if (btn) { btn.style.background='rgba(255,227,53,0.25)'; btn.style.borderColor='var(--c3)'; btn.textContent='⬛ PARAR'; }
+    window.AudioManager && window.AudioManager.play(
+      'vt-preview',
+      function(){ window.vtStop(); },
+      function(active){
+        var b=document.getElementById('vt-play-preview');
+        if(!b) return;
+        if(active){b.textContent='⬛ PARAR';b.style.background='rgba(255,227,53,0.25)';}
+        else{b.textContent='▶ PREVIEW';b.style.background='rgba(255,227,53,0.07)';}
+      }
+    );
+    vtStatus('▶ PREVIEW em loop — clica de novo para parar', 'var(--c3)');
   };
 
   window.vtUpdatePreview = function() {
@@ -323,7 +333,16 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * PLAYER
    * ══════════════════════════════════════════════════════════════════════════ */
+  function _vtVisual(id, active) {
+    var map = {'vt-orig':'vt-play-orig','vt-tuned':'vt-play-tuned'};
+    var btn = document.getElementById(map[id]||id);
+    if (!btn) return;
+    btn.style.boxShadow = active ? '0 0 8px rgba(184,85,247,0.5)' : '';
+    btn.style.opacity = active ? '1' : '';
+  }
+
   window.vtPlay = function(which) {
+    var playId = 'vt-' + (which === 'tuned' ? 'tuned' : 'orig');
     vtStop();
     var buf = which==='tuned' ? vtTunedBuffer : vtBuffer;
     if (!buf) { vtStatus('Buffer indisponível','var(--c7)'); return; }
@@ -333,7 +352,16 @@
     vtPlayingSource.connect(ctx.destination);
     vtPlayingSource.start();
     vtStatus('▶ A tocar — '+(which==='tuned'?'AFINADO':'ORIGINAL'), which==='tuned'?'var(--c4)':'var(--text)');
-    vtPlayingSource.onended = function(){ vtPlayingSource=null; vtStatus('■ Parado','var(--muted)'); };
+    window.AudioManager && window.AudioManager.play(
+      playId,
+      function(){ window.vtStop(); },
+      function(active){ _vtVisual(playId, active); }
+    );
+    vtPlayingSource.onended = function(){
+      vtPlayingSource=null;
+      window.AudioManager && window.AudioManager.ended(playId);
+      vtStatus('■ Parado','var(--muted)');
+    };
   };
 
   window.vtStop = function() {
@@ -342,6 +370,7 @@
     vtPreviewActive=false;
     var btn=document.getElementById('vt-play-preview');
     if(btn){btn.style.background='rgba(255,227,53,0.07)';btn.style.borderColor='var(--c3)';btn.textContent='▶ PREVIEW';}
+    _vtVisual('vt-orig',false); _vtVisual('vt-tuned',false);
   };
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -368,18 +397,26 @@
     var dz = document.getElementById('drop-zone');
     if (ww) ww.style.display = 'flex';
     if (dz) dz.style.display = 'none';
-    // Actualizar UI da suite
-    var trackName = document.getElementById('track-name');
-    if (trackName) trackName.textContent = 'Voice Tune';
+    // UI completo da suite
+    var tn = document.getElementById('track-name');
+    if (tn) tn.textContent = 'Voice Tune';
+    var dur = buf.duration;
+    var fmtT = function(s){ return Math.floor(s/60)+':'+(Math.floor(s%60)<10?'0':'')+Math.floor(s%60); };
+    var td = document.getElementById('track-dur'); if(td) td.textContent = fmtT(dur);
+    var tt = document.getElementById('time-total'); if(tt) tt.textContent = fmtT(dur);
+    var eb = document.getElementById('export-btn'); if(eb) eb.style.display='flex';
+    var eo = document.getElementById('export-opts'); if(eo) eo.style.display='flex';
+    var hb = document.getElementById('headroom-btn'); if(hb) hb.style.display='flex';
+    var nb = document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
     if (typeof drawWaveform === 'function') drawWaveform();
     if (typeof applyDSP === 'function') applyDSP();
-    // Navegar para MASTER usando openVoiceTune's sister function logic
     document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
     document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
     var masterTab = document.querySelector('.tab-primary');
     if (masterTab) masterTab.classList.add('active');
     var masterPanel = document.getElementById('tab-master');
     if (masterPanel) masterPanel.classList.add('active');
+    document.dispatchEvent(new CustomEvent('piradex:tab', {detail:'master'}));
     vtStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
@@ -517,7 +554,7 @@
     var cv=document.getElementById('vt-scale-keys'); if(!cv) return;
     var W=cv.offsetWidth||200; cv.width=W; var H=cv.height;
     var ctx=cv.getContext('2d');
-    ctx.fillStyle='var(--bg)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#07070e'; ctx.fillRect(0,0,W,H);
     var sc=getScale(); if(!sc) return;
     var noteW=W/12;
     var blackNotes=[1,3,6,8,10];
@@ -551,13 +588,24 @@
   /* Waveform */
   function _drawWaveform() {
     var cv=document.getElementById('vt-waveform'); if(!cv||!vtBuffer) return;
-    var W=cv.offsetWidth||400; cv.width=W; var H=cv.height;
-    var ctx=cv.getContext('2d'); ctx.clearRect(0,0,W,H);
-    var data=vtBuffer.getChannelData(0), step=Math.floor(data.length/W);
-    ctx.strokeStyle='var(--c6)'; ctx.lineWidth=1.5; ctx.beginPath();
-    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2-mx*(H/2)*0.88;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    var W=cv.offsetWidth||cv.parentElement.offsetWidth||400; cv.width=W; var H=cv.height;
+    var ctx=cv.getContext('2d');
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,0,W,H);
+    var data=vtBuffer.getChannelData(0), step=Math.max(1,Math.floor(data.length/W));
+    ctx.globalAlpha=0.15; ctx.fillStyle='#b855f7'; ctx.beginPath(); ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));ctx.lineTo(x,H/2-mx*(H/2-2));}
+    ctx.lineTo(W,H/2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));ctx.lineTo(x,H/2+mx*(H/2-2));}
+    ctx.lineTo(W,H/2); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='#b855f7'; ctx.lineWidth=1.5; ctx.shadowColor='#b855f7'; ctx.shadowBlur=5; ctx.beginPath();
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2-mx*(H/2-2);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
     ctx.stroke();
-    ctx.strokeStyle='rgba(184,85,247,0.15)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2+mx*(H/2-2);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke(); ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(184,85,247,0.2)'; ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
   }
 

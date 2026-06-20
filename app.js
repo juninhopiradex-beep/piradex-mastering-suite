@@ -62,6 +62,42 @@ let headroomApplied = false;
 
 // Audio nodes
 let audioCtx=null, audioBuffer=null, sourceNode=null;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * AUDIO MANAGER GLOBAL — garante que apenas 1 player toca de cada vez
+ * Todos os módulos (Master, VoiceLab, VoiceTune, Aligner) registam-se aqui
+ * ═══════════════════════════════════════════════════════════════════════ */
+window.AudioManager = (function() {
+  var _active = null; // { id, stop, setVisual }
+
+  function stopAll(exceptId) {
+    if (_active && _active.id !== exceptId) {
+      try { _active.stop(); } catch(e) {}
+      if (_active.setVisual) _active.setVisual(false);
+      _active = null;
+    }
+  }
+
+  return {
+    // Regista e inicia — para tudo o resto primeiro
+    play: function(id, stopFn, setVisualFn) {
+      stopAll(id);
+      _active = { id: id, stop: stopFn, setVisual: setVisualFn };
+      if (setVisualFn) setVisualFn(true);
+    },
+    // Notifica que o player parou por si (onended)
+    ended: function(id) {
+      if (_active && _active.id === id) {
+        if (_active.setVisual) _active.setVisual(false);
+        _active = null;
+      }
+    },
+    // Para tudo
+    stopAll: function() { stopAll(null); _active = null; },
+    activeId: function() { return _active ? _active.id : null; }
+  };
+})();
+
 let eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir;
 let compNode, limiterNode, masterGain, dryGain;
 let shapeWS=null, shapeDryGain=null, shapeWetGain=null;
@@ -2544,6 +2580,8 @@ function loadFile(file){
       const nb=document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
       drawWaveform(); applyDSP();
       setStatus('Pronto · BEFORE = original · AFTER = masterizado');
+      // Trigger Genre DNA
+      document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: audioBuffer }));
       if(refStats) analyseAndDisplayRef(refStats.name);
     }catch(err){setStatus('Erro: '+err.message);}
   };
@@ -2604,10 +2642,14 @@ function playAudio(){
   }
   // Both paths already connect to analyserNode via buildChain
 
-  sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}};
+  sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}window.AudioManager.ended('master');};
   const offset=Math.min(pauseOffset,audioBuffer.duration-0.01);
   sourceNode.start(0,offset);
   startTime=audioCtx.currentTime-offset;
+  window.AudioManager.play('master',
+    function(){ try{stopSource();}catch(e){} isPlaying=false; pauseOffset=0; updatePlayBtn(); stopProgress(); },
+    function(active){ /* visual já gerido por updatePlayBtn */ }
+  );
   isPlaying=true; updatePlayBtn(); startProgress();
 }
 

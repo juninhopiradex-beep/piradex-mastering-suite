@@ -68,6 +68,24 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * CARREGAR FICHEIRO
    * ══════════════════════════════════════════════════════════════════════════ */
+  /* ── BYPASS POR PASSO ─────────────────────────────────────────────────── */
+  var vlBypass = {1:false, 2:false, 3:false, 4:false, 5:false};
+
+  window.vlToggleBypass = function(step, btn) {
+    vlBypass[step] = !vlBypass[step];
+    if (btn) {
+      btn.classList.toggle('bypass-active', vlBypass[step]);
+      btn.textContent = vlBypass[step] ? 'BYPASS ON' : 'BYPASS';
+    }
+    // Bypass desactiva o step ON checkbox também
+    var cbk = document.getElementById('vl-step-on-' + step);
+    if (cbk) cbk.checked = !vlBypass[step];
+    // Actualiza preview se activo
+    if (vlPreviewActive && vlPreviewNodes) _applyPreviewParams(vlPreviewNodes);
+  };
+
+  function _stepBypassed(n) { return vlBypass[n] === true; }
+
   window.vlLoadFile = async function (file) {
     if (!file) return;
     vlStatus('A carregar ' + file.name + '...', 'var(--c5)');
@@ -96,6 +114,8 @@
 
       vlStatus('✓ Ficheiro carregado — ajusta os passos, usa PREVIEW para ouvir, depois PROCESSAR', 'var(--c4)');
       _drawDropWave();
+      // Trigger Genre DNA + Mastering Memory
+      document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: vlBuffer }));
     } catch (e) {
       vlStatus('Erro ao carregar: ' + e.message, 'var(--c7)');
       console.error('[VoiceLab]', e);
@@ -177,12 +197,10 @@
     nodes.delayNode.delayTime.value = 0;
     nodes.delayFb = ctx.createGain(); nodes.delayFb.gain.value = 0;
     nodes.delayWet = ctx.createGain(); nodes.delayWet.gain.value = 0;
-    nodes.delayDry = ctx.createGain(); nodes.delayDry.gain.value = 1;
 
     // Reverb (ConvolverNode com IR sintético)
     nodes.reverbConv = ctx.createConvolver();
     nodes.reverbWet = ctx.createGain(); nodes.reverbWet.gain.value = 0;
-    nodes.reverbDry = ctx.createGain(); nodes.reverbDry.gain.value = 1;
     _buildIR(ctx, nodes.reverbConv, 1.5);
 
     // Output
@@ -193,20 +211,17 @@
     var eqChain = [nodes.hpf, nodes.deess, nodes.eqSub, nodes.eqLowBody, nodes.eqLow, nodes.eqLowMid, nodes.eqMid, nodes.eqMidDetail, nodes.eqHighMid, nodes.eqHigh, nodes.eqHighDetail, nodes.eqAir, nodes.eqAirDetail, nodes.eqPresence, nodes.comp, nodes.makeupGain];
     for (var i = 0; i < eqChain.length - 1; i++) eqChain[i].connect(eqChain[i+1]);
 
-    // Dry path
-    nodes.makeupGain.connect(nodes.delayDry);
-    nodes.delayDry.connect(nodes.output);
+    // Dry path — UMA ÚNICA conexão dry ao output
+    nodes.makeupGain.connect(nodes.output);
 
-    // Delay path
+    // Delay path — apenas wet soma ao output
     nodes.makeupGain.connect(nodes.delayNode);
     nodes.delayNode.connect(nodes.delayFb);
     nodes.delayFb.connect(nodes.delayNode);
     nodes.delayNode.connect(nodes.delayWet);
     nodes.delayWet.connect(nodes.output);
 
-    // Reverb path
-    nodes.makeupGain.connect(nodes.reverbDry);
-    nodes.reverbDry.connect(nodes.output);
+    // Reverb path — apenas wet soma ao output
     nodes.makeupGain.connect(nodes.reverbConv);
     nodes.reverbConv.connect(nodes.reverbWet);
     nodes.reverbWet.connect(nodes.output);
@@ -232,10 +247,10 @@
   function _applyPreviewParams(nodes) {
     var g = function (id, def) { var el = document.getElementById(id); return el ? parseFloat(el.value) : def; };
     var gc = function (id) { var el = document.getElementById(id); return el ? el.checked : false; };
-    var s1 = document.getElementById('vl-step-on-1') ? document.getElementById('vl-step-on-1').checked : true;
-    var s2 = document.getElementById('vl-step-on-2') ? document.getElementById('vl-step-on-2').checked : true;
-    var s3 = document.getElementById('vl-step-on-3') ? document.getElementById('vl-step-on-3').checked : true;
-    var s5 = document.getElementById('vl-step-on-5') ? document.getElementById('vl-step-on-5').checked : false;
+    var s1 = !vlBypass[1] && (document.getElementById('vl-step-on-1') ? document.getElementById('vl-step-on-1').checked : true);
+    var s2 = !vlBypass[2] && (document.getElementById('vl-step-on-2') ? document.getElementById('vl-step-on-2').checked : true);
+    var s3 = !vlBypass[3] && (document.getElementById('vl-step-on-3') ? document.getElementById('vl-step-on-3').checked : true);
+    var s5 = !vlBypass[5] && (document.getElementById('vl-step-on-5') ? document.getElementById('vl-step-on-5').checked : false);
 
     // Step 1 — CLEAN
     nodes.hpf.frequency.value = s1 ? g('vl-hpf', 80) : 20;
@@ -266,30 +281,39 @@
       nodes.comp.knee.value = g('vl-comp-knee', 10);
       nodes.makeupGain.gain.value = Math.pow(10, g('vl-comp-makeup', 0) / 20);
     } else {
-      nodes.comp.threshold.value = 0; nodes.comp.ratio.value = 1;
+      // Bypass real: threshold no máximo, ratio 1:1, sem makeup
+      nodes.comp.threshold.value = 0;
+      nodes.comp.ratio.value = 1;
+      nodes.comp.knee.value = 0;
       nodes.makeupGain.gain.value = 1;
     }
 
-    // Step 5 — SPACE
-    var reverbMix = s5 ? g('vl-reverb-mix', 0) / 100 : 0;
-    var delayMix = s5 ? g('vl-delay-mix', 0) / 100 : 0;
-    nodes.reverbWet.gain.value = reverbMix;
-    nodes.reverbDry.gain.value = 1 - reverbMix * 0.5;
-    nodes.delayWet.gain.value = delayMix;
-    nodes.delayDry.gain.value = 1;
-    nodes.delayFb.gain.value = s5 ? g('vl-delay-fb', 40) / 100 : 0;
+    // Step 5 — SPACE (bypass total quando s5=false)
+    var reverbMix = s5 ? g('vl-reverb-mix-detail', g('vl-reverb-mix', 0)) / 100 : 0;
+    var delayMix  = s5 ? g('vl-delay-mix-detail',  g('vl-delay-mix',  0)) / 100 : 0;
+    var reverbBp  = s5 ? gc('vl-reverb-bypass') : true;
+    var delayBp   = s5 ? gc('vl-delay-bypass')  : true;
 
-    if (s5 && delayMix > 0) {
+    // Reverb: wet=0 quando bypass ou mix=0 (dry vai directo — não precisa de nó)
+    var rvMix = (reverbBp || reverbMix <= 0) ? 0 : reverbMix;
+    nodes.reverbWet.gain.value = rvMix;
+
+    // Delay: wet=0 e feedback=0 quando bypass
+    var dlMix = (delayBp || delayMix <= 0) ? 0 : delayMix;
+    nodes.delayWet.gain.value = dlMix;
+    nodes.delayFb.gain.value  = dlMix > 0 ? g('vl-delay-fb', 40) / 100 : 0;
+
+    if (dlMix > 0) {
       var bpm = g('vl-delay-bpm', 120);
       var div = g('vl-delay-div', 4);
-      var delaySec = (60 / bpm) * (4 / div);
-      nodes.delayNode.delayTime.value = Math.min(delaySec, 4.9);
+      nodes.delayNode.delayTime.value = Math.min((60/bpm)*(4/div), 4.9);
     } else {
       nodes.delayNode.delayTime.value = 0;
+      nodes.delayFb.gain.value = 0;
     }
 
-    // Rebuild IR se decay mudou
-    if (s5 && reverbMix > 0) {
+    // Rebuild IR só quando reverb activo e decay mudou
+    if (rvMix > 0) {
       var decay = g('vl-reverb-decay', 1.5);
       if (!nodes._lastDecay || Math.abs(nodes._lastDecay - decay) > 0.2) {
         nodes._lastDecay = decay;
@@ -301,25 +325,37 @@
   function _startVlPreview() {
     if (!vlBuffer) return;
     var ctx = getCtx();
+    // Para source anterior se existir
     if (vlPreviewSource) { try { vlPreviewSource.stop(); } catch(e){} vlPreviewSource = null; }
+    // Reconstrói chain de raiz para garantir estado limpo
     vlPreviewNodes = _buildPreviewChain();
     _applyPreviewParams(vlPreviewNodes);
     vlPreviewSource = ctx.createBufferSource();
     vlPreviewSource.buffer = vlBuffer;
-    vlPreviewSource.loop = true; // LOOP até parar
+    vlPreviewSource.loop = true;
     vlPreviewSource.connect(vlPreviewNodes._chain[0]);
     vlPreviewSource.start();
   }
 
   window.vlPlayPreview = function () {
     if (!vlBuffer) { vlStatus('Carrega um ficheiro primeiro', 'var(--c7)'); return; }
-    if (vlPreviewActive) { vlStop(); return; } // toggle — clica de novo para parar
+    if (vlPreviewActive) { vlStop(); return; } // toggle
     vlStop();
     _startVlPreview();
     vlPreviewActive = true;
     var prevBtn = document.getElementById('vl-play-preview');
-    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.25)'; prevBtn.textContent = '⬛ PARAR'; }
-    vlStatus('▶ PREVIEW em loop — ajusta os sliders e ouve o efeito · clica de novo para parar', 'var(--c3)');
+    if (prevBtn) { prevBtn.style.borderColor='var(--c3)'; prevBtn.style.background='rgba(255,227,53,0.25)'; prevBtn.textContent='⬛ PARAR'; }
+    window.AudioManager && window.AudioManager.play(
+      'vl-preview',
+      function() { window.vlStop(); },
+      function(active) {
+        var b = document.getElementById('vl-play-preview');
+        if (!b) return;
+        if (active) { b.textContent='⬛ PARAR'; b.style.background='rgba(255,227,53,0.25)'; }
+        else { b.textContent='▶ PREVIEW'; b.style.background='rgba(255,227,53,0.08)'; }
+      }
+    );
+    vlStatus('▶ PREVIEW em loop — clica de novo para parar', 'var(--c3)');
   };
 
   // Actualiza parâmetros dos nós durante preview em loop (sem reiniciar)
@@ -469,7 +505,7 @@
     };
   }
 
-  function _stepEnabled(n){var el=document.getElementById('vl-step-on-'+n);return el?el.checked:true;}
+  function _stepEnabled(n){if(vlBypass[n])return false;var el=document.getElementById('vl-step-on-'+n);return el?el.checked:true;}
 
   window.vlProcess = async function () {
     if (!vlBuffer) { vlStatus('Carrega um ficheiro primeiro','var(--c7)'); return; }
@@ -652,8 +688,24 @@
   /* ══════════════════════════════════════════════════════════════════════════
    * PLAYER
    * ══════════════════════════════════════════════════════════════════════════ */
+  function _vlVisual(id, active) {
+    var ids = {'vl-orig': 'vl-play-orig', 'vl-result': 'vl-play-result'};
+    var btnId = ids[id];
+    if (!btnId) return;
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (active) {
+      btn.style.boxShadow = id === 'vl-orig' ? '0 0 8px rgba(255,255,255,0.3)' : '0 0 8px rgba(45,255,138,0.5)';
+      btn.style.opacity = '1';
+    } else {
+      btn.style.boxShadow = '';
+      btn.style.opacity = '';
+    }
+  }
+
   window.vlPlay = function (which) {
-    vlStop();
+    var playId = 'vl-' + (which === 'result' ? 'result' : 'orig');
+    vlStop(); // para tudo local primeiro
     var buf = which === 'result' ? (vlProcessedBuffer || vlBuffer) : vlBuffer;
     if (!buf) { vlStatus('Buffer indisponível','var(--c7)'); return; }
     var ctx = getCtx();
@@ -662,8 +714,18 @@
     vlPlayingSource.connect(ctx.destination);
     vlPlayingSource.start();
     var isResult = which === 'result';
-    vlStatus('▶ A tocar — ' + (isResult ? 'RESULTADO PROCESSADO' : 'ORIGINAL'), isResult ? 'var(--c4)' : 'var(--text)');
-    vlPlayingSource.onended = function () { vlPlayingSource = null; vlStatus('■ Parado','var(--muted)'); };
+    vlStatus('▶ A tocar — ' + (isResult ? 'RESULTADO' : 'ORIGINAL'), isResult ? 'var(--c4)' : 'var(--text)');
+    // Registar no AudioManager global
+    window.AudioManager && window.AudioManager.play(
+      playId,
+      function() { window.vlStop(); },
+      function(active) { _vlVisual(playId, active); }
+    );
+    vlPlayingSource.onended = function () {
+      vlPlayingSource = null;
+      window.AudioManager && window.AudioManager.ended(playId);
+      vlStatus('■ Parado','var(--muted)');
+    };
   };
 
   window.vlStop = function () {
@@ -671,7 +733,8 @@
     if (vlPreviewSource) { try { vlPreviewSource.stop(); } catch (e) {} vlPreviewSource = null; }
     vlPreviewActive = false;
     var prevBtn = document.getElementById('vl-play-preview');
-    if (prevBtn) { prevBtn.style.borderColor = 'var(--c3)'; prevBtn.style.background = 'rgba(255,227,53,0.08)'; prevBtn.textContent = '▶ PREVIEW'; }
+    if (prevBtn) { prevBtn.style.borderColor='var(--c3)'; prevBtn.style.background='rgba(255,227,53,0.08)'; prevBtn.textContent='▶ PREVIEW'; }
+    _vlVisual('vl-orig', false); _vlVisual('vl-result', false);
   };
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -703,15 +766,25 @@
     // Redesenha waveform e aplica DSP
     if (typeof drawWaveform === 'function') drawWaveform();
     if (typeof applyDSP === 'function') applyDSP();
-    // Navegar para MASTER directamente (sem depender de openTab chain)
+    // Navegar para MASTER com UI completo
     var tn = document.getElementById('track-name');
     if (tn) tn.textContent = 'Voice Lab';
+    var dur = buf.duration;
+    var td = document.getElementById('track-dur');
+    if (td) td.textContent = Math.floor(dur/60)+':'+(Math.floor(dur%60)<10?'0':'')+Math.floor(dur%60);
+    var tt = document.getElementById('time-total');
+    if (tt) tt.textContent = Math.floor(dur/60)+':'+(Math.floor(dur%60)<10?'0':'')+Math.floor(dur%60);
+    var eb = document.getElementById('export-btn'); if(eb) eb.style.display='flex';
+    var eo = document.getElementById('export-opts'); if(eo) eo.style.display='flex';
+    var hb = document.getElementById('headroom-btn'); if(hb) hb.style.display='flex';
+    var nb = document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
     document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
     document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
     var masterTab = document.querySelector('.tab-primary');
     if (masterTab) masterTab.classList.add('active');
     var masterPanel = document.getElementById('tab-master');
     if (masterPanel) masterPanel.classList.add('active');
+    document.dispatchEvent(new CustomEvent('piradex:tab', {detail:'master'}));
     vlStatus('✓ Enviado para MASTER','var(--c5)');
   };
 
@@ -733,13 +806,28 @@
    * ══════════════════════════════════════════════════════════════════════════ */
   function _drawDropWave() {
     var cv=document.getElementById('vl-waveform');if(!cv||!vlBuffer)return;
-    var W=cv.offsetWidth||300;cv.width=W;var H=cv.height;
-    var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
-    var data=vlBuffer.getChannelData(0),step=Math.floor(data.length/W);
-    ctx.strokeStyle='var(--c1)';ctx.lineWidth=1.5;ctx.beginPath();
-    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2-mx*(H/2)*0.88;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    var W=cv.offsetWidth||cv.parentElement.offsetWidth||400;cv.width=W;var H=cv.height;
+    var ctx=cv.getContext('2d');
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(0,0,W,H);
+    var data=vlBuffer.getChannelData(0),step=Math.max(1,Math.floor(data.length/W));
+    // Fill espelhado
+    ctx.globalAlpha=0.15;ctx.fillStyle='#2ddcff';ctx.beginPath();ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));ctx.lineTo(x,H/2-mx*(H/2-2));}
+    ctx.lineTo(W,H/2);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(0,H/2);
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));ctx.lineTo(x,H/2+mx*(H/2-2));}
+    ctx.lineTo(W,H/2);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=1;
+    // Linha principal
+    ctx.strokeStyle='#2ddcff';ctx.lineWidth=1.5;ctx.shadowColor='#2ddcff';ctx.shadowBlur=4;ctx.beginPath();
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2-mx*(H/2-2);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();ctx.shadowBlur=0;
+    // Linha inferior espelhada
+    ctx.beginPath();
+    for(var x=0;x<W;x++){var mx=0;for(var i=0;i<step;i++)mx=Math.max(mx,Math.abs(data[x*step+i]||0));var y=H/2+mx*(H/2-2);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
     ctx.stroke();
-    ctx.strokeStyle='rgba(255,58,181,0.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+    // Linha centro
+    ctx.strokeStyle='rgba(45,220,255,0.15)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -855,23 +943,56 @@
     }, 30);
   };
 
-  // EXPORTAR TODAS as pistas com offsets aplicados
+  // EXPORTAR TODAS como ZIP (com JSZip) ou 1a1 como fallback
   window.vaExportAll = function() {
     if (!aligner.tracks.length) { vlStatus('Sem pistas para exportar','var(--c7)'); return; }
-    var delay = 0;
-    aligner.tracks.forEach(function(t, i){
-      setTimeout(function(){
-        var blob = _bufToWav(t.buffer);
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'aligned_' + (i+1) + '_' + t.name.replace(/\s/g,'_');
-        a.click();
-        setTimeout(function(){URL.revokeObjectURL(url);}, 1000);
-      }, delay);
-      delay += 400;
-    });
-    vlStatus('✓ A exportar ' + aligner.tracks.length + ' pistas...','var(--c4)');
+    vlStatus('⏳ A preparar ZIP...','var(--c5)');
+    setTimeout(function(){
+      // Tenta usar JSZip
+      if (typeof JSZip !== 'undefined') {
+        var zip = new JSZip();
+        var folder = zip.folder('aligned_tracks');
+        aligner.tracks.forEach(function(t, i){
+          var blob = _bufToWav(t.buffer);
+          var fname = (i+1) + '_' + t.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+          if (!fname.match(/\.wav$/i)) fname += '.wav';
+          folder.file(fname, blob);
+        });
+        // Também incluir a guia se existir
+        if (aligner.guide) {
+          var gb = _bufToWav(aligner.guide);
+          var gname = '0_GUIA_' + (document.getElementById('va-guide-name').textContent||'guia').replace(/[^a-zA-Z0-9._-]/g,'_');
+          if (!gname.match(/\.wav$/i)) gname += '.wav';
+          folder.file(gname, gb);
+        }
+        zip.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:1}})
+          .then(function(content){
+            var url = URL.createObjectURL(content);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'piradex_aligned_' + Date.now() + '.zip';
+            a.click();
+            setTimeout(function(){URL.revokeObjectURL(url);}, 2000);
+            vlStatus('✓ ZIP exportado com ' + aligner.tracks.length + ' pistas + guia','var(--c4)');
+          });
+      } else {
+        // Fallback: download 1 a 1 com delay
+        var delay = 0;
+        aligner.tracks.forEach(function(t, i){
+          setTimeout(function(){
+            var blob = _bufToWav(t.buffer);
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'aligned_' + (i+1) + '_' + t.name.replace(/[^a-zA-Z0-9._-]/g,'_') + '.wav';
+            a.click();
+            setTimeout(function(){URL.revokeObjectURL(url);}, 1000);
+          }, delay);
+          delay += 500;
+        });
+        vlStatus('✓ A exportar ' + aligner.tracks.length + ' ficheiros...','var(--c4)');
+      }
+    }, 30);
   };
 
   window.vaPlay=function(){
@@ -879,6 +1000,7 @@
     var ctx=getCtx(),gSrc=ctx.createBufferSource();gSrc.buffer=aligner.guide;gSrc.connect(ctx.destination);gSrc.start();
     aligner.playSource=[gSrc];
     aligner.tracks.forEach(function(t){var src=ctx.createBufferSource();src.buffer=t.buffer;src.connect(ctx.destination);if(t.offset>=0)src.start(ctx.currentTime+t.offset);else src.start(ctx.currentTime,-t.offset);aligner.playSource.push(src);});
+    window.AudioManager && window.AudioManager.play('va-mix', function(){ window.vaStop(); }, null);
     vlStatus('▶ A tocar alinhamento...','var(--c4)');
   };
   window.vaStop=function(){if(aligner.playSource){aligner.playSource.forEach(function(s){try{s.stop();}catch(e){}});aligner.playSource=null;}};
