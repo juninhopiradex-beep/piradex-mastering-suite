@@ -376,3 +376,12 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
   color: #ffe135 !important;
   transform: scale(1.08);
 }
+
+/* ── VOICE LAB v2 ─────────────────────────────────────────── */
+#tab-voicelab .vl-step-badge{transition:background .2s,color .2s,border-color .2s;}
+#tab-voicelab [id^="vl-step-"]{transition:border-color .25s;}
+#tab-voicelab [id^="vl-step-"][data-state="active"] .vl-step-badge{background:var(--c5);color:#000;border-color:var(--c5);}
+#tab-voicelab [id^="vl-step-"][data-state="done"] .vl-step-badge{background:var(--c4);color:#000;border-color:var(--c4);}
+/* VA track rows */
+.va-track-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.va-track-row canvas{flex:1;background:rgba(45,212,255,0.04);border:1px solid var(--border);border-radius:3px;cursor:ew-resize;}
