@@ -48,11 +48,11 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 .tab-panel.active{display:block;}
 
 /* MAIN GRID — fixed column widths so nothing reflows during playback */
-.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 120px 70px;grid-template-rows:minmax(190px,auto) minmax(150px,auto);gap:8px;padding:8px 12px;box-sizing:border-box;}
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden;min-height:0;contain:layout;}
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 120px 70px;gap:8px;padding:8px 12px;height:268px;box-sizing:border-box;}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden;min-height:0;contain:strict;}
 .panel-spectrum{padding:6px;contain:strict;}
 /* AI suggestions panel: allow internal scroll so the Balance section is never clipped */
-.panel-suggest{overflow:hidden;contain:layout;}
+.panel-suggest{overflow-y:auto;contain:layout;}
 .panel-suggest::-webkit-scrollbar{width:5px;}
 .panel-suggest::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 .plabel{font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}

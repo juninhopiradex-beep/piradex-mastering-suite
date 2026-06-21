@@ -1475,7 +1475,182 @@ function wireDrop(node, cb) {
   }
 }
 
-/* ════════════════════════════════ API PÚBLICA ════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════
+ * 11. PRO ANALYSIS — injecta 3 gráficos profissionais no painel ANÁLISE DA
+ *     FAIXA: Dynamic Range (DR/PSR), Correlómetro de fase, Tonal Balance vs
+ *     curva-alvo do género. Aditivo, lê window.audioBuffer / SPECTRAL_TARGETS.
+ * ════════════════════════════════════════════════════════════════════════ */
+function computeDR(buffer) {
+  // DR estilo TT-DR: usa apenas blocos com sinal (>-50dBFS), mede a diferença
+  // entre o pico e a média RMS dos 20% blocos mais altos (zona "loud").
+  const sr = buffer.sampleRate, blk = Math.round(0.3 * sr);
+  let peak = 0; const rmsBlocks = [];
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i += blk) {
+      let sq = 0, n = 0;
+      for (let j = i; j < Math.min(i + blk, d.length); j++) { const a = Math.abs(d[j]); if (a > peak) peak = a; sq += d[j] * d[j]; n++; }
+      if (n > 0) { const rms = Math.sqrt(sq / n); if (rms > 3.16e-3) rmsBlocks.push(rms); } // > -50 dBFS (ignora silêncio)
+    }
+  }
+  if (!rmsBlocks.length) return { dr: 0, psr: 0, crest: 0, peakDb: -70, rmsTopDb: -70 };
+  rmsBlocks.sort((a, b) => b - a);
+  // média dos 20% mais altos (zona loud) — TT-DR
+  const topCount = Math.max(1, Math.round(rmsBlocks.length * 0.2));
+  let sumTop = 0; for (let i = 0; i < topCount; i++) sumTop += rmsBlocks[i] * rmsBlocks[i];
+  const rmsTop = Math.sqrt(sumTop / topCount);
+  const peakDb = linToDb(peak), rmsTopDb = linToDb(rmsTop);
+  const dr = Math.max(0, Math.round(peakDb - rmsTopDb));
+  const psr = Math.max(0, peakDb - linToDb(rmsBlocks[0]));
+  // crest global (só blocos com sinal)
+  let sqAll = 0, nAll = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) { const d = buffer.getChannelData(c); for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > 1e-4) { sqAll += d[i] * d[i]; nAll++; } } }
+  const crest = nAll ? peakDb - linToDb(Math.sqrt(sqAll / nAll)) : 0;
+  return { dr, psr, crest, peakDb, rmsTopDb };
+}
+function computeCorrelation(buffer) {
+  if (buffer.numberOfChannels < 2) return 1;
+  const L = buffer.getChannelData(0), R = buffer.getChannelData(1);
+  let sum = 0, nL = 0, nR = 0;
+  const stride = Math.max(1, Math.floor(L.length / 200000));
+  for (let i = 0; i < L.length; i += stride) { sum += L[i] * R[i]; nL += L[i] * L[i]; nR += R[i] * R[i]; }
+  return clamp(sum / (Math.sqrt(nL * nR) + 1e-12), -1, 1);
+}
+function computeBandBalance(buffer) {
+  // energia em low(<250) / mid(250-4k) / high(>4k) via FFT
+  const sr = buffer.sampleRate, size = 4096, d = buffer.getChannelData(0);
+  const re = new Float32Array(size), im = new Float32Array(size);
+  let low = 0, mid = 0, high = 0, frames = 0;
+  for (let s = 0; s + size <= d.length; s += size * 2) {
+    for (let i = 0; i < size; i++) { const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / size); re[i] = d[s + i] * w; im[i] = 0; }
+    fft(re, im);
+    for (let k = 1; k < size / 2; k++) {
+      const f = k * sr / size, m = re[k] * re[k] + im[k] * im[k];
+      if (f < 250) low += m; else if (f < 4000) mid += m; else high += m;
+    }
+    frames++;
+  }
+  const tot = low + mid + high + 1e-12;
+  return { low: low / tot * 100, mid: mid / tot * 100, high: high / tot * 100 };
+}
+function injectProAnalysis() {
+  // injecta os 3 gráficos PRO dentro da aba ANÁLISES (tab-analysis), não no painel pequeno
+  const tab = document.getElementById('tab-analysis');
+  if (!tab || document.getElementById('prdx-pro-analysis')) return;
+  const modulePanel = tab.querySelector('.module-panel') || tab;
+  const box = el('div'); box.id = 'prdx-pro-analysis';
+  box.style.cssText = 'margin-top:18px;';
+  box.innerHTML = `
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+      MÉTRICAS PROFISSIONAIS <span style="font-size:8px;color:#2dff8a;border:1px solid #2dff8a;border-radius:3px;padding:1px 6px;letter-spacing:.5px;">PRO</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:12px;">DYNAMIC RANGE (DR / PSR)</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:30px;" id="prdx-dr">DR—</div>
+          <div style="flex:1;">
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div id="prdx-dr-bar" style="height:100%;width:0%;border-radius:4px;transition:all .3s;"></div></div>
+            <div style="font-size:10px;color:var(--muted);margin-top:6px;" id="prdx-dr-desc">aguarda áudio</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:10px;color:var(--muted2);">
+          <div>PSR <b id="prdx-psr" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div>
+          <div>CREST <b id="prdx-crest" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div>
+        </div>
+        <div style="margin-top:10px;font-size:8px;color:var(--muted);line-height:1.5;">
+          <span style="color:#2dff8a;">DR12+</span> audiófilo · <span style="color:#ffe135;">DR8-11</span> streaming · <span style="color:#ff3a3a;">DR&lt;7</span> esmagado
+        </div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:16px;">CORRELÓMETRO DE FASE</div>
+        <div style="text-align:center;margin-bottom:14px;">
+          <span id="prdx-corr-big" style="font-family:'Orbitron',monospace;font-weight:900;font-size:30px;color:#2dff8a;">+0.82</span>
+          <div id="prdx-corr-state" style="font-size:9px;color:var(--muted);margin-top:2px;">mono-compatível</div>
+        </div>
+        <div style="position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#ff3a3a,#ffe135 50%,#2dff8a);">
+          <div id="prdx-corr-ptr" style="position:absolute;top:-4px;left:90%;width:4px;height:18px;background:#fff;border-radius:2px;box-shadow:0 0 6px #000;transition:left .25s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:8px;color:var(--muted);">
+          <span>-1 anti-fase</span><span>0</span><span>+1 mono ✓</span>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;">TONAL BALANCE vs GÉNERO</span>
+          <span id="prdx-tonal-genre" style="font-size:9px;color:var(--c1);font-weight:700;">—</span>
+        </div>
+        <canvas id="prdx-tonal-cv" width="300" height="110" style="width:100%;height:100px;background:#07070e;border-radius:6px;display:block;"></canvas>
+        <div style="display:flex;gap:14px;margin-top:8px;font-size:8px;color:var(--muted);">
+          <span><span style="display:inline-block;width:8px;height:8px;background:var(--c1);border-radius:2px;margin-right:4px;"></span>a tua faixa</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border:1px dashed #2dff8a;border-radius:2px;margin-right:4px;"></span>alvo do género</span>
+        </div>
+      </div>
+    </div>`;
+  modulePanel.appendChild(box);
+}
+function updateProAnalysis() {
+  const buf = window.audioBuffer || (window._getAudioBuffer && window._getAudioBuffer());
+  if (!buf || !document.getElementById('prdx-pro-analysis')) return;
+  try {
+    // DR
+    const dr = computeDR(buf);
+    const drEl = $('#prdx-dr'), bar = $('#prdx-dr-bar'), desc = $('#prdx-dr-desc');
+    if (drEl) {
+      drEl.textContent = 'DR' + dr.dr;
+      const col = dr.dr >= 12 ? '#2dff8a' : dr.dr >= 8 ? '#ffe135' : '#ff3a3a';
+      drEl.style.color = col;
+      bar.style.width = clamp(dr.dr / 16 * 100, 5, 100) + '%'; bar.style.background = col;
+      desc.textContent = dr.dr >= 12 ? 'Dinâmica audiófila' : dr.dr >= 8 ? 'Loud com vida (streaming)' : 'Esmagado — abre a dinâmica';
+      $('#prdx-psr').textContent = dr.psr.toFixed(1);
+      $('#prdx-crest').textContent = dr.crest.toFixed(1);
+    }
+    // Correlação
+    const corr = computeCorrelation(buf);
+    const ptr = $('#prdx-corr-ptr'), big = $('#prdx-corr-big'), state = $('#prdx-corr-state');
+    if (ptr) {
+      ptr.style.left = ((corr + 1) / 2 * 100) + '%';
+      const col = corr > 0.3 ? '#2dff8a' : corr > -0.1 ? '#ffe135' : '#ff3a3a';
+      if (big) { big.textContent = (corr >= 0 ? '+' : '') + corr.toFixed(2); big.style.color = col; }
+      if (state) state.textContent = corr > 0.5 ? 'mono-compatível ✓' : corr > 0 ? 'estéreo amplo' : corr > -0.3 ? 'cuidado: fase larga' : '⚠ anti-fase — cancela em mono';
+    }
+    // Tonal balance
+    const bal = computeBandBalance(buf);
+    drawTonalBalance(bal);
+  } catch (e) { /* silencioso */ }
+}
+function drawTonalBalance(bal) {
+  const cv = $('#prdx-tonal-cv'); if (!cv) return;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  // género detectado (do GenreDNA se existir)
+  let genre = 'kizomba';
+  try { if (window.GenreDNA && window.GenreDNA.getLastResult) { const r = window.GenreDNA.getLastResult(); if (r && r.genre) genre = r.genre.toLowerCase().replace(/\s+/g, ''); } } catch (e) {}
+  const targets = window.SPECTRAL_TARGETS || {};
+  const tgt = targets[genre] || targets.kizomba || { low: 40, mid: 35, high: 25 };
+  $('#prdx-tonal-genre').textContent = genre.toUpperCase();
+  const bands = [['LOW', bal.low, tgt.low, '#b855f7'], ['MID', bal.mid, tgt.mid, '#2dd4ff'], ['HIGH', bal.high, tgt.high, '#2dff8a']];
+  const bw = W / 3, pad = 10;
+  bands.forEach((b, i) => {
+    const x = i * bw, cx = x + bw / 2;
+    const yMine = H - pad - (b[1] / 60 * (H - pad - 8));
+    const yTgt = H - pad - (b[2] / 60 * (H - pad - 8));
+    // zona alvo (banda)
+    g.fillStyle = 'rgba(45,255,138,.10)';
+    g.fillRect(x + 8, yTgt - 4, bw - 16, 8);
+    g.strokeStyle = 'rgba(45,255,138,.4)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x + 8, yTgt); g.lineTo(x + bw - 8, yTgt); g.stroke(); g.setLineDash([]);
+    // barra da tua faixa
+    g.fillStyle = b[3];
+    g.fillRect(cx - 10, yMine, 20, H - pad - yMine);
+    // label
+    g.fillStyle = '#888899'; g.font = '7px monospace'; g.textAlign = 'center';
+    g.fillText(b[0], cx, H - 2);
+    g.fillStyle = b[3]; g.font = 'bold 8px monospace';
+    g.fillText(Math.round(b[1]) + '%', cx, yMine - 3);
+  });
+}
+
+
 const _ev = {};
 function on(e, cb) { (_ev[e] = _ev[e] || []).push(cb); return () => off(e, cb); }
 function off(e, cb) { if (_ev[e]) _ev[e] = _ev[e].filter(f => f !== cb); }
@@ -1543,6 +1718,13 @@ function init() {
     if ($('#' + NS + '-overlay') && $('#' + NS + '-overlay').classList.contains(NS + '-open')) renderPage(currentPage);
   });
   window.PRDX3 = buildAPI();
+  // ── Pro Analysis: injecta DR/Correlómetro/Tonal Balance na ABA ANÁLISES ──
+  setTimeout(injectProAnalysis, 600);
+  document.addEventListener('piradex:tab', (e) => {
+    if (e.detail === 'analysis') { setTimeout(() => { injectProAnalysis(); updateProAnalysis(); }, 100); }
+  });
+  document.addEventListener('piradex:fileLoaded', () => { setTimeout(() => { injectProAnalysis(); updateProAnalysis(); }, 400); });
+  on('mastered', () => setTimeout(updateProAnalysis, 100));
   // ── Ponte postMessage: permite a um host/DAW-webview controlar a suite ──
   window.addEventListener('message', async (e) => {
     const m = e.data && e.data.prdx3; if (!m || !m.cmd) return;

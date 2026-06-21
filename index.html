@@ -2091,48 +2091,26 @@
 <script src="features2.js"></script>
 <script src="features3.js"></script>
 <script>
-/* Bootstrap do Stereo Vectorscope do painel principal — liga o canvas aos
-   analisadores L/R derivados do masterGain (tap passivo, não altera o som). */
+/* Liga o Stereo Vectorscope do painel principal (canvas vectorscope-cv) ao
+   módulo window.Vectorscope, alimentado por analisadores L/R do masterGain.
+   Só arranca quando há áudio real, e só uma vez (sem conflitos). */
 (function(){
-  var wired=false, raf=null;
-  function startVectorscope(){
+  var wired=false;
+  function start(){
     if(wired) return;
     var ac=window.audioCtx, src=window.masterGain, cv=document.getElementById('vectorscope-cv');
-    if(!ac||!src||!cv) return;
+    if(!ac||!src||!cv||!window.Vectorscope) return;
     try{
-      var splitter=ac.createChannelSplitter(2);
-      var aL=ac.createAnalyser(), aR=ac.createAnalyser();
+      var sp=ac.createChannelSplitter(2), aL=ac.createAnalyser(), aR=ac.createAnalyser();
       aL.fftSize=1024; aR.fftSize=1024;
-      src.connect(splitter); splitter.connect(aL,0); splitter.connect(aR,1);
+      src.connect(sp); sp.connect(aL,0); sp.connect(aR,1);
+      window.Vectorscope.init('vectorscope-cv', aL, aR);
+      window.Vectorscope.start();
       wired=true;
-      if(window.Vectorscope && window.Vectorscope.init){
-        window.Vectorscope.init('vectorscope-cv', aL, aR);
-        window.Vectorscope.start();
-      } else {
-        // fallback: desenho próprio se o módulo não existir
-        var ctx=cv.getContext('2d'), bufL=new Float32Array(aL.fftSize), bufR=new Float32Array(aR.fftSize);
-        (function draw(){
-          raf=requestAnimationFrame(draw);
-          var W=cv.width,H=cv.height;
-          ctx.fillStyle='rgba(7,7,14,.18)'; ctx.fillRect(0,0,W,H);
-          if(!aL.getFloatTimeDomainData) return;
-          aL.getFloatTimeDomainData(bufL); aR.getFloatTimeDomainData(bufR);
-          ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
-          for(var i=0;i<bufL.length;i+=2){
-            var l=bufL[i], r=bufR[i];
-            var x=W/2 + (l-r)*0.5*W*0.7;
-            var y=H/2 - (l+r)*0.5*H*0.7;
-            var hue=200+ (l+r)*80;
-            ctx.fillStyle='hsla('+hue+',90%,60%,.5)';
-            ctx.fillRect(x,y,1.6,1.6);
-          }
-        })();
-      }
-    }catch(e){ console.warn('vectorscope bootstrap', e); }
+    }catch(e){ console.warn('vectorscope wire', e); }
   }
-  // arranca quando o áudio começa a tocar
-  document.addEventListener('piradex:fileLoaded', function(){ setTimeout(startVectorscope, 300); });
-  ['click','play'].forEach(function(ev){ document.addEventListener(ev, function(){ setTimeout(startVectorscope, 100); }, {once:false}); });
+  document.addEventListener('piradex:fileLoaded', function(){ setTimeout(start, 400); });
+  document.addEventListener('click', function(){ if(window.audioBuffer) setTimeout(start, 150); });
 })();
 </script>
 </body>

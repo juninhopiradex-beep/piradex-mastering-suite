@@ -3090,6 +3090,7 @@ function _updateSugDataCards(){
     phaseEl.style.color=v>0.3?'#2dff8a':v>-0.1?'#ffe135':'#ff4500';
   }
 }
+window._updateSugDataCards = _updateSugDataCards;
 
 function updateSugs(sugs){
   sugs.forEach((s,i)=>{
@@ -3766,6 +3767,9 @@ const SPECTRAL_TARGETS={
   house:    {low:52,mid:28,high:20,desc:'Sub dominante + kick 4x4'},
   suno:     {low:30,mid:38,high:32,desc:'AI clean + ar e presenca'},
 };
+window.SPECTRAL_TARGETS = SPECTRAL_TARGETS;
+window._calcPLR = _calcPLR;
+window._getAudioBuffer = function(){ return typeof audioBuffer!=='undefined'?audioBuffer:null; };
 
 // Adaptive attack/release (Feat 8)
 function _applyAdaptiveComp(){
