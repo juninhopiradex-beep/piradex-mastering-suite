@@ -2580,6 +2580,8 @@ function loadFile(file){
       const nb=document.getElementById('new-track-btn'); if(nb) nb.style.display='block';
       drawWaveform(); applyDSP();
       setStatus('Pronto · BEFORE = original · AFTER = masterizado');
+      // Trigger Genre DNA
+      document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: audioBuffer }));
       if(refStats) analyseAndDisplayRef(refStats.name);
     }catch(err){setStatus('Erro: '+err.message);}
   };

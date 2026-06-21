@@ -114,6 +114,8 @@
 
       vlStatus('✓ Ficheiro carregado — ajusta os passos, usa PREVIEW para ouvir, depois PROCESSAR', 'var(--c4)');
       _drawDropWave();
+      // Trigger Genre DNA + Mastering Memory
+      document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: vlBuffer }));
     } catch (e) {
       vlStatus('Erro ao carregar: ' + e.message, 'var(--c7)');
       console.error('[VoiceLab]', e);
@@ -938,6 +940,49 @@
         _vaDrawTrack(i);
       });
       vlStatus('✓ Auto-align concluído — verifica e ajusta manualmente se necessário','var(--c4)');
+    }, 30);
+  };
+
+  // PHASE COHERENCE (AI) — alinhamento por ENVELOPE MATCHING.
+  // Em vez de correlacionar amostras cruas (sensível a fase/vibrato), correlaciona
+  // os envelopes de amplitude (forma das sílabas/transientes) → robusto a coros
+  // com vibrato, pitch diferente e timing humano.
+  window.vaPhaseAlign = function() {
+    if (!aligner.guide) { vlStatus('Carrega a guia primeiro','var(--c7)'); return; }
+    if (!aligner.tracks.length) { vlStatus('Adiciona pistas para alinhar','var(--c7)'); return; }
+    vlStatus('🧠 Phase Coherence — envelope matching...','var(--c6)');
+    setTimeout(function(){
+      var sr = aligner.guide.sampleRate;
+      var hop = Math.max(1, Math.floor(sr * 0.005)); // envelope a 5 ms
+      function envelope(buf){
+        var d = buf.getChannelData(0), n = Math.floor(d.length / hop), e = new Float32Array(n);
+        for (var i = 0; i < n; i++){ var s = 0; for (var k = 0; k < hop; k++){ var v = d[i*hop+k] || 0; s += v*v; } e[i] = Math.sqrt(s/hop); }
+        // suaviza (média móvel 3) e remove a média p/ correlação robusta
+        var sm = new Float32Array(n);
+        for (var j = 0; j < n; j++){ sm[j] = (e[Math.max(0,j-1)] + e[j] + e[Math.min(n-1,j+1)]) / 3; }
+        var mean = 0; for (var m = 0; m < n; m++) mean += sm[m]; mean /= (n || 1);
+        for (var p = 0; p < n; p++) sm[p] -= mean;
+        return sm;
+      }
+      var gEnv = envelope(aligner.guide);
+      var maxLagEnv = Math.floor((sr * 2.0) / hop); // ±2 s em amostras de envelope
+      aligner.tracks.forEach(function(t, i){
+        var tEnv = envelope(t.buffer);
+        var bestLag = 0, bestR = -Infinity;
+        var stride = (gEnv.length > 20000) ? 2 : 1; // acelera em ficheiros longos
+        for (var lag = -maxLagEnv; lag <= maxLagEnv; lag++){
+          var sum = 0, ng = 0, nt = 0;
+          var start = Math.max(0, -lag), end = Math.min(gEnv.length, tEnv.length - lag);
+          for (var k = start; k < end; k += stride){ var a = gEnv[k], b = tEnv[k+lag]; sum += a*b; ng += a*a; nt += b*b; }
+          var r = sum / (Math.sqrt(ng*nt) + 1e-9);
+          if (r > bestR){ bestR = r; bestLag = lag; }
+        }
+        t.offset = -(bestLag * hop) / sr;
+        var el = document.getElementById('va-offset-'+i);
+        if (el) el.textContent = Math.round(t.offset*1000);
+        _vaDrawTrack(i);
+      });
+      vlStatus('✓ Phase Coherence — alinhado por envelope (robusto a vibrato/timing humano)','var(--c4)');
     }, 30);
   };
 
