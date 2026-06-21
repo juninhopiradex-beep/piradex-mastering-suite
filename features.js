@@ -2432,36 +2432,72 @@ window.aiDeNoiseRun = function(type){
 // AI VOCAL TUNE PRO — Pitch detect (autocorrelação) + correção para escala
 // Versão funcional usando o pitch detector que já existe na app
 // ═══════════════════════════════════════════════════════════════════════════
-window.fxView_aiVocal = function(){
+window.fxView_aiVocal = function(b){
   const {hasAudio, status} = window.__fx;
-  if(!hasAudio()) return status('Carrega uma faixa primeiro');
-  return `
-    <div class="fx-card">
-      <div class="fx-title">🎤 Vocal Tune Pro — Análise de Afinação</div>
-      <p style="font-size:11px;color:var(--muted);line-height:1.55;">
-        Analisa a tonalidade da música, detecta desvios globais de afinação (A=440 Hz reference),
-        e aplica pitch shift global ao master. <b>Não é Auto-Tune nem Melodyne</b> — esses precisam de
-        stem isolado para funcionar bem.
-      </p>
-
-      <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:10px 12px;margin:14px 0;">
-        <div style="font-size:11px;color:var(--c3);font-weight:700;margin-bottom:4px;">⚠ Aviso técnico</div>
-        <div style="font-size:10px;color:var(--muted);line-height:1.5;">
-          Pitch correction nota-a-nota num master é impossível sem stem separation primeiro
-          (vocal isolado do resto). Quem te promete isso está a mentir. O que esta ferramenta
-          faz a sério: detecta tonalidade, mede desvio global, e permite afinar a faixa toda.
+  if(!hasAudio()){ b.innerHTML='<div style="color:var(--muted);padding:20px;text-align:center;">Carrega uma faixa no MASTER primeiro.</div>'; return; }
+  b.innerHTML=`
+    <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-bottom:12px;">
+      <b style="color:var(--c1)">Análise de afinação profissional.</b>
+      Detecta tonalidade (Krumhansl-Schmuckler), mede desvio em cents (A=440Hz) e aplica pitch shift global ao master.
+    </div>
+    <div style="background:var(--bg3);border-left:3px solid var(--c3);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:10px;color:var(--muted);line-height:1.5;">
+      <b style="color:var(--c3)">ℹ Nota técnica:</b> Correcção nota-a-nota num master completo exige stem isolado.
+      Para Auto-Tune vocal usa o <b style="color:var(--c1)">Vocal Tune Studio</b> com voz isolada.
+      Esta ferramenta faz análise de tonalidade + pitch shift global ao master inteiro.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <button id="aiv-btn-analyze" onclick="aiVocalAnalyze(this)"
+        style="padding:10px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,.1);
+        color:var(--c4);font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;
+        transition:all .2s;">🔍 1. ANALISAR AFINAÇÃO</button>
+      <button id="aiv-btn-apply" onclick="aiVocalShowApply(this)"
+        style="padding:10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);
+        color:var(--muted);font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;
+        transition:all .2s;" disabled>⚙ 2. AJUSTAR & PREVIEW</button>
+    </div>
+    <div id="vocal-result" style="font-size:11px;color:var(--muted);min-height:100px;padding:14px;
+      background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+      Clica <b style="color:var(--c4)">ANALISAR AFINAÇÃO</b> para começar.
+    </div>
+    <div id="aiv-preview-wrap" style="display:none;margin-top:14px;">
+      <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:8px;">PREVIEW — ORIGINAL vs CORRIGIDA</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;">
+          <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;margin-bottom:8px;">ORIGINAL</div>
+          <canvas id="aiv-wave-orig" height="48" style="width:100%;height:48px;border-radius:4px;background:#07070e;display:block;"></canvas>
+          <button id="aiv-play-orig" onclick="aiVocalPlayOrig(this)"
+            style="width:100%;margin-top:8px;padding:8px;border-radius:6px;border:1px solid var(--c5);
+            background:rgba(45,212,255,.1);color:var(--c5);font-family:'Rajdhani';font-weight:700;
+            font-size:10px;cursor:pointer;letter-spacing:1px;transition:all .2s;">▶ ORIGINAL</button>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;">
+          <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;margin-bottom:8px;">CORRIGIDA</div>
+          <canvas id="aiv-wave-corr" height="48" style="width:100%;height:48px;border-radius:4px;background:#07070e;display:block;"></canvas>
+          <button id="aiv-play-corr" onclick="aiVocalPlayCorr(this)"
+            style="width:100%;margin-top:8px;padding:8px;border-radius:6px;border:1px solid var(--c4);
+            background:rgba(45,255,138,.1);color:var(--c4);font-family:'Rajdhani';font-weight:700;
+            font-size:10px;cursor:pointer;letter-spacing:1px;transition:all .2s;">▶ CORRIGIDA</button>
         </div>
       </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;">
-        <button class="fx-btn" onclick="aiVocalAnalyze()" style="background:var(--bg3);border:1px solid var(--c4);color:var(--c4);">1. ANALISAR AFINAÇÃO</button>
-        <button class="fx-btn" onclick="aiVocalShowApply()" style="background:var(--bg3);border:1px solid var(--c5);color:var(--c5);">2. AJUSTAR (após análise)</button>
-      </div>
-
-      <div id="vocal-result" style="font-size:11px;color:var(--muted);min-height:120px;padding:14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
-        Aguarda análise — clica "1. ANALISAR AFINAÇÃO"
-      </div>
+      <button onclick="aiVocalExport(this)"
+        style="width:100%;margin-top:10px;padding:10px;border-radius:6px;border:1px solid var(--c1);
+        background:rgba(255,58,181,.12);color:var(--c1);font-family:'Rajdhani';font-weight:700;
+        font-size:11px;cursor:pointer;letter-spacing:1px;transition:all .2s;">⬇ EXPORTAR MASTER AFINADO (WAV 24-bit)</button>
     </div>`;
+
+  // override aiVocalAnalyze p/ activar o botão 2 e o preview quando termina
+  const _origAnalyze = window.aiVocalAnalyze;
+  window.aiVocalAnalyze = function(btn){
+    if(btn){ prdxBtnLoading(btn, '⏳ A ANALISAR…'); }
+    const _origResult_fn = function(){
+      const a = window._aiVocalAnalysis;
+      if(!a) return;
+      const applyBtn = document.getElementById('aiv-btn-apply');
+      if(applyBtn){ applyBtn.disabled=false; applyBtn.style.borderColor='var(--c5)'; applyBtn.style.color='var(--c5)'; applyBtn.style.background='rgba(184,85,247,.12)'; }
+      if(btn) prdxBtnDone(btn, '✓ ANÁLISE CONCLUÍDA', 'var(--c4)');
+    };
+    if(typeof _origAnalyze==='function'){ _origAnalyze(); setTimeout(_origResult_fn, 800); }
+  };
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2737,7 +2773,8 @@ function _drawVocalPianoRoll(track, scaleNotes, totalDur){
 // ═══════════════════════════════════════════════════════════════════════════
 // AJUSTAR: 3 opções reais que dá para fazer no master
 // ═══════════════════════════════════════════════════════════════════════════
-window.aiVocalShowApply = function(){
+window.aiVocalShowApply = function(btn){
+  if(btn) prdxBtnLoading(btn, '⏳ A PREPARAR…');
   const result = document.getElementById('vocal-result');
   const a = window._aiVocalAnalysis;
   if(!a){
@@ -3000,6 +3037,104 @@ window.aiVocalPitchShift = async function(semis){
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AI VOCAL — PREVIEW ORIGINAL vs CORRIGIDA + EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+window._aivOrigBuf = null; window._aivCorrBuf = null; window._aivPlaying = null;
+function _aivDrawWave(canvasId, buf, color) {
+  const cv = document.getElementById(canvasId); if (!cv || !buf) return;
+  const g = cv.getContext('2d'), W = cv.width || 300, H = cv.height || 48;
+  const d = buf.getChannelData(0), step = Math.max(1, Math.floor(d.length / W));
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = color; g.lineWidth = 1; g.beginPath();
+  for (let x = 0; x < W; x++) { let mx=0; for(let j=0;j<step;j++){const v=Math.abs(d[x*step+j]||0);if(v>mx)mx=v;} g.lineTo(x, H/2-mx*(H/2-2)); }
+  g.stroke(); g.beginPath();
+  for (let x = 0; x < W; x++) { let mx=0; for(let j=0;j<step;j++){const v=Math.abs(d[x*step+j]||0);if(v>mx)mx=v;} g.lineTo(x, H/2+mx*(H/2-2)); }
+  g.stroke();
+}
+function _aivCloneBuf(buf) {
+  try { const ac=typeof audioCtx!=='undefined'?audioCtx:new AudioContext(); const o=ac.createBuffer(buf.numberOfChannels,buf.length,buf.sampleRate); for(let c=0;c<buf.numberOfChannels;c++)o.getChannelData(c).set(buf.getChannelData(c)); return o; } catch(e){return null;}
+}
+function _aivShowPreview(corrBuf) {
+  window._aivCorrBuf = corrBuf;
+  const wrap = document.getElementById('aiv-preview-wrap'); if(wrap) wrap.style.display='block';
+  setTimeout(() => { _aivDrawWave('aiv-wave-orig',window._aivOrigBuf,'#2dd4ff'); _aivDrawWave('aiv-wave-corr',window._aivCorrBuf,'#2dff8a'); }, 60);
+}
+window.aiVocalPlayOrig = function(btn) {
+  if(!window._aivOrigBuf) return;
+  if(window._aivPlaying){try{window._aivPlaying.stop();}catch(e){}}
+  const ac=typeof audioCtx!=='undefined'?audioCtx:new AudioContext(), src=ac.createBufferSource();
+  src.buffer=window._aivOrigBuf; src.connect(ac.destination); src.start(); window._aivPlaying=src;
+  prdxBtnLoading(btn,'▶ A TOCAR…'); src.onended=()=>prdxBtnDone(btn,'▶ ORIGINAL','var(--c5)');
+};
+window.aiVocalPlayCorr = function(btn) {
+  if(!window._aivCorrBuf){prdxBtnDone(btn,'Aplica o ajuste primeiro','var(--c3)');return;}
+  if(window._aivPlaying){try{window._aivPlaying.stop();}catch(e){}}
+  const ac=typeof audioCtx!=='undefined'?audioCtx:new AudioContext(), src=ac.createBufferSource();
+  src.buffer=window._aivCorrBuf; src.connect(ac.destination); src.start(); window._aivPlaying=src;
+  prdxBtnLoading(btn,'▶ A TOCAR…'); src.onended=()=>prdxBtnDone(btn,'▶ CORRIGIDA','var(--c4)');
+};
+window.aiVocalExport = function(btn) {
+  const buf=window._aivCorrBuf||window.audioBuffer; if(!buf) return;
+  prdxBtnLoading(btn,'⏳ A CODIFICAR…');
+  try {
+    if(window.PRDX3&&window.PRDX3.encodeWAV){
+      const blob=window.PRDX3.encodeWAV(buf,24,{artist:'Piradex',title:'Master_Afinado',isrc:'',lufs:'—'});
+      const url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url; a.download='Piradex_Master_Afinado.wav'; document.body.appendChild(a); a.click();
+      setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
+      prdxBtnDone(btn,'✓ EXPORTADO','var(--c4)');
+    } else { prdxBtnDone(btn,'Usa Export no painel PRO','var(--c3)'); }
+  } catch(e){prdxBtnDone(btn,'✗ Erro','var(--c7)');}
+};
+// patch aiVocalCorrectTuning para activar preview
+(function(){
+  const _orig=window.aiVocalCorrectTuning;
+  window.aiVocalCorrectTuning=async function(){
+    if(window.audioBuffer) window._aivOrigBuf=_aivCloneBuf(window.audioBuffer);
+    await _orig.call(this);
+    if(window.audioBuffer) _aivShowPreview(window.audioBuffer);
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA GLOBAL DE ESTADOS DE BOTÕES — feedback visual imediato
+// ═══════════════════════════════════════════════════════════════════════════
+window.prdxBtnLoading = function(btn, label) {
+  if(!btn) return;
+  btn._prdxManaged=true; btn._origHTML=btn.innerHTML; btn._origStyle=btn.getAttribute('style')||'';
+  btn.innerHTML=label||'⏳ A processar…'; btn.disabled=true;
+  btn.style.opacity='0.7'; btn.style.cursor='wait'; btn.style.animation='prdx-pulse 1s infinite';
+};
+window.prdxBtnDone = function(btn, label, color) {
+  if(!btn) return;
+  btn.disabled=false; btn.style.opacity='1'; btn.style.cursor='pointer'; btn.style.animation='';
+  btn.innerHTML=label||(btn._origHTML||btn.innerHTML);
+  if(color){btn.style.borderColor=color; btn.style.color=color;}
+  const orig=btn._origHTML;
+  if(orig) setTimeout(()=>{try{btn.innerHTML=orig; if(btn._origStyle)btn.setAttribute('style',btn._origStyle); btn.disabled=false; btn._prdxManaged=false;}catch(e){}},2500);
+};
+(function(){
+  if(document.getElementById('prdx-btn-css'))return;
+  const s=document.createElement('style'); s.id='prdx-btn-css';
+  s.textContent='@keyframes prdx-pulse{0%,100%{opacity:.7}50%{opacity:1}}';
+  document.head.appendChild(s);
+})();
+// Auto-loading-state em cliques de botões com padrão async
+(function(){
+  const PAT=/analyz|apply|export|process|batch|align|render|generat|correct|shift|detect|run|separat|master|calc|encod|download|convert|auto/i;
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('button');
+    if(!btn||btn.disabled||btn._prdxManaged) return;
+    const oc=btn.getAttribute('onclick')||'';
+    if(!PAT.test(oc)) return;
+    const orig=btn.innerHTML;
+    btn.style.opacity='0.7'; btn.style.cursor='wait';
+    btn.innerHTML='⏳ '+btn.textContent.trim().slice(0,28);
+    btn.disabled=true;
+    setTimeout(()=>{if(btn.disabled){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';btn.innerHTML=orig;}},1800);
+  },true);
+})();
+
 // ★ VOCAL TUNE STUDIO — Auto-Tune profissional para VOZ ISOLADA
 // ═══════════════════════════════════════════════════════════════════════════
 // Diferença vs AI Vocal Tune Pro:
