@@ -4670,6 +4670,7 @@ const LICENSES = {
   'PRDX-MNTA-0003-0003': {tier:'advanced', mode:'monthly',  days:30},
 };
 let isFullVersion=false;   // true = qualquer licença válida (desbloqueia exportação)
+Object.defineProperty(window, 'isFullVersion', { get: () => isFullVersion });
 let hasStudioPro=false;    // true = nível 'advanced' (desbloqueia STUDIO PRO)
 let currentLicense=null;
 

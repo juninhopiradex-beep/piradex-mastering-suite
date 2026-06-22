@@ -42,6 +42,48 @@ function toast(msg, color) {
 /* Buffer activo: o master da suite, ou um ficheiro carregado localmente aqui. */
 let localBuffer = null;
 function activeBuffer() { return localBuffer || window.audioBuffer || null; }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * PLAYER INTERNO — toca o buffer (original) ou o master pós-efeito através de
+ * um nó tap, alimentando o vectorscope e os medidores. Resolve o "vector não
+ * funciona" (precisava de sinal a tocar) e dá o A/B no True Peak.
+ * ════════════════════════════════════════════════════════════════════════ */
+let _player = { src: null, tap: null, splitter: null, aL: null, aR: null, playing: false, which: null, onended: null };
+function playerTap() {
+  const ac = ctx();
+  if (!_player.tap) {
+    _player.tap = ac.createGain(); _player.tap.gain.value = 1;
+    _player.splitter = ac.createChannelSplitter(2);
+    _player.aL = ac.createAnalyser(); _player.aR = ac.createAnalyser();
+    _player.aL.fftSize = 2048; _player.aR.fftSize = 2048;
+    _player.tap.connect(_player.splitter);
+    _player.splitter.connect(_player.aL, 0); _player.splitter.connect(_player.aR, 1);
+    _player.tap.connect(ac.destination);
+  }
+  return _player.tap;
+}
+function prdx3Play(which, onstate) {
+  const ac = ctx();
+  if (ac.state === 'suspended') ac.resume();
+  prdx3Stop();
+  const buf = which === 'master' ? (window.__prdx3Master || activeBuffer()) : activeBuffer();
+  if (!buf) { if (onstate) onstate('nobuf'); return; }
+  const tap = playerTap();
+  const src = ac.createBufferSource(); src.buffer = buf; src.connect(tap);
+  src.onended = () => { _player.playing = false; if (_player.onended) _player.onended(); };
+  src.start(); _player.src = src; _player.playing = true; _player.which = which;
+  _player.onended = () => { if (onstate) onstate('stopped'); };
+  if (onstate) onstate('playing');
+  // arranca o vectorscope ligado ao tap, se a tab estiver aberta
+  if (window.Vectorscope && document.getElementById(NS + '-vscanvas')) {
+    try { window.Vectorscope.init(NS + '-vscanvas', _player.aL, _player.aR); window.Vectorscope.start(); } catch (e) {}
+  }
+  return _player;
+}
+function prdx3Stop() {
+  if (_player.src) { try { _player.src.onended = null; _player.src.stop(); } catch (e) {} _player.src = null; }
+  _player.playing = false;
+}
 function ctx() {
   if (window.audioCtx) return window.audioCtx;
   window.__prdx3Ctx = window.__prdx3Ctx || new (window.AudioContext || window.webkitAudioContext)();
@@ -564,7 +606,35 @@ function buildUI() {
   });
   renderPage('limiter');
 }
-function openModal() { $('#' + NS + '-overlay').classList.add(NS + '-open'); }
+function openModal() {
+  // PRO FINALIZER é exclusivo da versão FULL
+  if (!window.isFullVersion) { showProFinalLock(); return; }
+  $('#' + NS + '-overlay').classList.add(NS + '-open');
+}
+function showProFinalLock() {
+  let lock = document.getElementById(NS + '-lock');
+  if (!lock) {
+    lock = el('div'); lock.id = NS + '-lock';
+    lock.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(4,4,10,.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;';
+    lock.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--c6);border-radius:16px;padding:34px 30px;max-width:420px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.6);">
+      <div style="font-size:36px;margin-bottom:10px;">🔒</div>
+      <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:18px;background:linear-gradient(90deg,#b855f7,#ff3ab5);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:1px;margin-bottom:10px;">PRO FINALIZER</div>
+      <div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:18px;">Módulo exclusivo da <b style="color:var(--c4)">versão FULL</b>. Inclui True Peak Limiter, LUFS, 6 métricas de análise, separação de stems, export multi-formato, sessão ao vivo e mais.</div>
+      <button class="${NS}-btn ${NS}-go" id="${NS}-lockcta" style="width:100%;margin-bottom:8px;">DESBLOQUEAR VERSÃO FULL</button>
+      <button class="${NS}-btn" id="${NS}-lockclose" style="width:100%;border-color:var(--border2);color:var(--muted);">Fechar</button>
+    </div>`;
+    document.body.appendChild(lock);
+    lock.addEventListener('click', e => { if (e.target === lock) lock.style.display = 'none'; });
+    $('#' + NS + '-lockclose').onclick = () => lock.style.display = 'none';
+    $('#' + NS + '-lockcta').onclick = () => {
+      lock.style.display = 'none';
+      // abre o paywall existente da suite, se houver
+      const pw = document.getElementById('paywall-modal'); if (pw) { pw.style.display = 'flex'; return; }
+      if (typeof window.openPaywall === 'function') window.openPaywall();
+    };
+  }
+  lock.style.display = 'flex';
+}
 function closeModal() { $('#' + NS + '-overlay').classList.remove(NS + '-open'); stopMeter(); stopSpectrum(); stopVector(); }
 
 function needBuffer(body) {
@@ -629,7 +699,30 @@ function pageLimiter(body) {
         <button class="${NS}-btn ${NS}-go" id="${NS}-runlim">⚡ APLICAR LIMITER</button>
         <div class="${NS}-hint" id="${NS}-limstat">Processa offline e fica disponível em EXPORT.</div>
       </div>
+    </div>
+    <div class="${NS}-row">
+      <div class="${NS}-card" style="grid-column:1/-1;">
+        <div class="${NS}-lbl">🔊 A/B — ouve antes vs depois</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+          <button class="${NS}-btn" id="${NS}-playorig" style="border-color:var(--c5);color:var(--c5);background:rgba(45,212,255,.1);">▶ ORIGINAL (upload)</button>
+          <button class="${NS}-btn" id="${NS}-playmaster" style="border-color:var(--c4);color:var(--c4);background:rgba(45,255,138,.1);">▶ PÓS-EFEITO (limitado)</button>
+          <button class="${NS}-btn" id="${NS}-playstop" style="border-color:var(--border2);color:var(--muted);">■ PARAR</button>
+        </div>
+        <div class="${NS}-hint" id="${NS}-playhint" style="margin-top:8px;">Aplica o limiter primeiro para ouvires o "pós-efeito".</div>
+      </div>
     </div>`;
+  // ── player A/B ──
+  const pHint = () => $('#' + NS + '-playhint');
+  const resetPlayBtns = () => { const a = $('#' + NS + '-playorig'), b = $('#' + NS + '-playmaster'); if (a) { a.innerHTML = '▶ ORIGINAL (upload)'; a.style.opacity = '1'; } if (b) { b.innerHTML = '▶ PÓS-EFEITO (limitado)'; b.style.opacity = '1'; } };
+  $('#' + NS + '-playorig').onclick = () => {
+    if (!activeBuffer()) { toast('Carrega uma faixa primeiro', 'var(--c3)'); return; }
+    prdx3Play('original', s => { if (s === 'playing') { resetPlayBtns(); $('#' + NS + '-playorig').innerHTML = '♪ ORIGINAL…'; $('#' + NS + '-playorig').style.opacity = '.7'; if (pHint()) pHint().textContent = 'A tocar o ficheiro original (sem limiter).'; } if (s === 'stopped') resetPlayBtns(); });
+  };
+  $('#' + NS + '-playmaster').onclick = () => {
+    if (!window.__prdx3Master) { if (pHint()) { pHint().textContent = '⚠ Aplica o limiter primeiro (botão acima).'; pHint().style.color = 'var(--c3)'; } return; }
+    prdx3Play('master', s => { if (s === 'playing') { resetPlayBtns(); $('#' + NS + '-playmaster').innerHTML = '♪ PÓS-EFEITO…'; $('#' + NS + '-playmaster').style.opacity = '.7'; if (pHint()) { pHint().textContent = 'A tocar o master limitado.'; pHint().style.color = 'var(--c4)'; } } if (s === 'stopped') resetPlayBtns(); });
+  };
+  $('#' + NS + '-playstop').onclick = () => { prdx3Stop(); resetPlayBtns(); };
   const ceil = $('#' + NS + '-ceil'), ceilv = $('#' + NS + '-ceilv');
   ceil.oninput = () => ceilv.textContent = parseFloat(ceil.value).toFixed(1);
   // medições assíncronas
@@ -979,15 +1072,20 @@ function pageHarmonic(body) {
         const host = $('#' + NS + '-bands'); host.innerHTML = '';
         BANDS.forEach((band, i) => {
           const diff = nr[i] - nm[i]; // +ve => a referência tem mais => sobe esta banda
-          const dir = Math.abs(diff) < 1 ? '' : (diff > 0 ? '▲ +' : '▼ ');
-          const col = Math.abs(diff) < 1 ? 'var(--c4)' : (diff > 0 ? 'var(--c5)' : 'var(--c2)');
-          const w = clamp(Math.abs(diff) / 8 * 100, 4, 100);
+          const sig = Math.abs(diff) < 0.8;
+          const action = sig ? 'OK' : (diff > 0 ? 'SUBIR' : 'BAIXAR');
+          const col = sig ? 'var(--c4)' : (diff > 0 ? 'var(--c5)' : 'var(--c2)');
+          const w = clamp(Math.abs(diff) / 8 * 50, 2, 50); // metade da largura = desvio máx
+          // barra centrada: cresce para a direita se SUBIR, esquerda se BAIXAR
+          const barHtml = diff > 0
+            ? `<div style="position:absolute;left:50%;top:0;height:100%;width:${w}%;background:${col};border-radius:0 3px 3px 0;"></div>`
+            : `<div style="position:absolute;right:50%;top:0;height:100%;width:${w}%;background:${col};border-radius:3px 0 0 3px;"></div>`;
           host.appendChild(el('div', NS + '-bandrow', `
             <div class="${NS}-bandname">${band[0]}</div>
-            <div class="${NS}-bandbar"><div style="height:100%;width:${w}%;background:${col};${diff < 0 ? 'margin-left:auto;' : ''}"></div></div>
-            <div style="width:88px;text-align:right;font-size:10px;font-weight:700;color:${col};font-family:'Orbitron',monospace;">${dir}${Math.abs(diff).toFixed(1)} dB</div>`));
+            <div class="${NS}-bandbar" style="position:relative;"><div style="position:absolute;left:50%;top:-2px;width:1px;height:calc(100% + 4px);background:var(--border2);"></div>${barHtml}</div>
+            <div style="width:120px;text-align:right;font-size:10px;font-weight:700;color:${col};font-family:'Orbitron',monospace;">${action} ${sig ? '' : Math.abs(diff).toFixed(1) + 'dB'}</div>`));
         });
-        $('#' + NS + '-refstat').innerHTML = '<b style="color:var(--c4)">▲ azul</b> = a referência tem mais (considera subir) · <b style="color:var(--c2)">▼ laranja</b> = tens mais (considera baixar).';
+        $('#' + NS + '-refstat').innerHTML = 'Linha central = igual à referência. <b style="color:var(--c5)">SUBIR →</b> falta-te energia nesta banda · <b style="color:var(--c2)">← BAIXAR</b> tens a mais · <b style="color:var(--c4)">OK</b> = igual.';
         toast('✓ Assinatura harmónica comparada', 'var(--c4)');
       } catch (e) { $('#' + NS + '-refstat').textContent = 'Erro: ' + e.message; }
     }, 30);
@@ -1125,24 +1223,36 @@ function wireDropTo(node, cb) {
 let vectorWired = false, vAL = null, vAR = null;
 function stopVector() { try { if (window.Vectorscope) window.Vectorscope.stop(); } catch (e) {} }
 function pageVector(body) {
+  const buf = activeBuffer();
   body.innerHTML = `
-    <canvas class="${NS}-canvas" id="${NS}-vscanvas" width="360" height="360" style="height:340px;max-width:340px;margin:0 auto;"></canvas>
-    <div class="${NS}-hint" style="margin-top:8px;text-align:center;">Lissajous M/S (rotação 45°). Vertical = mono/centro · diagonal = estéreo amplo · horizontal = anti-fase. Liga o Play na suite.</div>`;
-  if (!window.Vectorscope) { $('#' + NS + '-vscanvas').getContext('2d').fillText && (function(){const g=$('#'+NS+'-vscanvas').getContext('2d');g.fillStyle='#888';g.font='12px monospace';g.fillText('Vectorscope (features2) não encontrado.',20,30);})(); return; }
+    <canvas class="${NS}-canvas" id="${NS}-vscanvas" width="360" height="360" style="height:320px;max-width:320px;margin:0 auto;display:block;"></canvas>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;">
+      <button class="${NS}-btn" id="${NS}-vplay" style="border-color:var(--c4);color:var(--c4);background:rgba(45,255,138,.1);">▶ TOCAR (ver o scope animar)</button>
+      <button class="${NS}-btn" id="${NS}-vstop" style="border-color:var(--border2);color:var(--muted);">■ PARAR</button>
+    </div>
+    <div class="${NS}-hint" style="margin-top:8px;text-align:center;">Lissajous M/S (rotação 45°). Vertical = mono/centro · diagonal = estéreo amplo · horizontal = anti-fase.<br>O scope só anima com áudio a tocar — usa o ▶ acima.</div>`;
+  if (!window.Vectorscope) { const g = $('#' + NS + '-vscanvas').getContext('2d'); g.fillStyle = '#888'; g.font = '12px monospace'; g.fillText('Vectorscope (features2) não encontrado.', 20, 30); return; }
+  if (!buf) { const g = $('#' + NS + '-vscanvas').getContext('2d'); g.fillStyle = '#888'; g.font = '12px monospace'; g.fillText('Carrega um master na suite primeiro.', 20, 30); }
+  const playBtn = $('#' + NS + '-vplay'), stopBtn = $('#' + NS + '-vstop');
+  playBtn.onclick = () => {
+    if (!activeBuffer()) { toast('Carrega uma faixa primeiro', 'var(--c3)'); return; }
+    prdx3Play(window.__prdx3Master ? 'master' : 'original', (s) => {
+      if (s === 'playing') { playBtn.innerHTML = '♪ A TOCAR…'; playBtn.style.opacity = '.7'; }
+      if (s === 'stopped') { playBtn.innerHTML = '▶ TOCAR (ver o scope animar)'; playBtn.style.opacity = '1'; }
+    });
+  };
+  stopBtn.onclick = () => { prdx3Stop(); playBtn.innerHTML = '▶ TOCAR (ver o scope animar)'; playBtn.style.opacity = '1'; };
+  // se já há masterGain a tocar na suite, também liga (fallback)
   const ac = window.audioCtx, src = window.masterGain;
-  if (!ac || !src) { const g = $('#' + NS + '-vscanvas').getContext('2d'); g.fillStyle = '#888'; g.font = '12px monospace'; g.fillText('masterGain indisponível — toca o master primeiro.', 20, 30); return; }
-  try {
-    if (!vectorWired) {
+  if (ac && src && !vectorWired) {
+    try {
       const splitter = ac.createChannelSplitter(2);
       vAL = ac.createAnalyser(); vAR = ac.createAnalyser();
       vAL.fftSize = 2048; vAR.fftSize = 2048;
-      src.connect(splitter);                 // tap passivo, não altera o output
-      splitter.connect(vAL, 0); splitter.connect(vAR, 1);
+      src.connect(splitter); splitter.connect(vAL, 0); splitter.connect(vAR, 1);
       vectorWired = true;
-    }
-    window.Vectorscope.init(NS + '-vscanvas', vAL, vAR);
-    window.Vectorscope.start();
-  } catch (e) { const g = $('#' + NS + '-vscanvas').getContext('2d'); g.fillStyle = '#f55'; g.font = '12px monospace'; g.fillText('Erro: ' + e.message, 20, 30); }
+    } catch (e) {}
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1290,6 +1400,7 @@ function pageStems(body) {
       try {
         const stems = _stemModel ? await _stemModel(buf) : await hpss4Stems(buf);
         Object.assign(results, stems);
+        window.__prdx3Stems = results; // disponível no EXPORT para download 1-a-1 ou todos
         // desenha mini-waveforms
         ['vocals','drums','bass','other'].forEach(k => {
           const cv = $('#' + NS + '-sw-' + k); if (!cv) return;
@@ -1553,11 +1664,62 @@ function pageExport(body) {
         <input class="${NS}-inp" id="${NS}-mIsrc" placeholder="ISRC (opcional)" style="flex:1">
       </div>
     </div>
+    <div id="${NS}-exstems"></div>
     <div class="${NS}-row" style="margin-top:14px;">
       <button class="${NS}-btn ${NS}-go" id="${NS}-dl">⬇ EXPORTAR</button>
       <button class="${NS}-btn" id="${NS}-receipt">🧾 MASTERING RECEIPT (PDF)</button>
       <div class="${NS}-hint" id="${NS}-dlstat"></div>
     </div>`;
+  // ── lista de stems (se já separados em STEMS) ──
+  (function renderExStems() {
+    const host = $('#' + NS + '-exstems'); if (!host) return;
+    const stems = window.__prdx3Stems;
+    if (!stems || !Object.keys(stems).length) {
+      host.innerHTML = `<div class="${NS}-hint" style="margin-top:6px;">💡 Separa a faixa em STEMS para aqui poderes exportar cada pista (1-a-1 ou todas).</div>`;
+      return;
+    }
+    const labels = { vocals: ['VOZ', '--c1'], drums: ['DRUMS', '--c7'], bass: ['BASS', '--c5'], other: ['OTHER', '--c4'] };
+    host.innerHTML = `<div class="${NS}-card" style="margin-top:12px;">
+      <div class="${NS}-lbl">Pistas separadas (stems)</div>
+      <div id="${NS}-exstemrows" style="margin-top:8px;"></div>
+      <button class="${NS}-btn ${NS}-go" id="${NS}-dlallstems" style="width:100%;margin-top:8px;">⬇ EXPORTAR TODAS AS STEMS (ZIP)</button>
+    </div>`;
+    const rows = $('#' + NS + '-exstemrows');
+    Object.keys(stems).forEach(k => {
+      const lab = labels[k] || [k.toUpperCase(), '--c4'];
+      const row = el('div'); row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);';
+      row.innerHTML = `<span style="font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:var(${lab[1]});">${lab[0]}</span>
+        <button class="${NS}-btn" data-exstem="${k}" style="padding:5px 12px;font-size:9px;">⬇ WAV 24</button>`;
+      rows.appendChild(row);
+    });
+    rows.querySelectorAll('[data-exstem]').forEach(b => {
+      b.onclick = () => {
+        const k = b.dataset.exstem;
+        try {
+          const blob = encodeWAV(stems[k], 24, { artist: $('#' + NS + '-mArt').value.trim() || 'Piradex', title: ($('#' + NS + '-mTit').value.trim() || 'master') + '_' + k });
+          download(blob, (($('#' + NS + '-mTit').value.trim() || 'master').replace(/[^\w\-]+/g, '_')) + '_' + k + '.wav');
+          toast('⬇ ' + k + '.wav', 'var(--c4)');
+        } catch (e) { toast('Erro: ' + e.message, 'var(--c7)'); }
+      };
+    });
+    $('#' + NS + '-dlallstems').onclick = async () => {
+      const btn = $('#' + NS + '-dlallstems'); btn.disabled = true; btn.innerHTML = '⏳ A criar ZIP…';
+      try {
+        const JSZ = window.JSZip || (window.PRDX3 && window.PRDX3._JSZip);
+        const base = ($('#' + NS + '-mTit').value.trim() || 'master').replace(/[^\w\-]+/g, '_');
+        if (!JSZ) { // fallback: descarrega uma a uma
+          Object.keys(stems).forEach((k, i) => setTimeout(() => { const blob = encodeWAV(stems[k], 24, { title: base + '_' + k }); download(blob, base + '_' + k + '.wav'); }, i * 400));
+          toast('A descarregar stems uma a uma…', 'var(--c5)'); btn.disabled = false; btn.innerHTML = '⬇ EXPORTAR TODAS AS STEMS (ZIP)'; return;
+        }
+        const zip = new JSZ();
+        Object.keys(stems).forEach(k => { const blob = encodeWAV(stems[k], 24, { title: base + '_' + k }); zip.file(base + '_' + k + '.wav', blob); });
+        const out = await zip.generateAsync({ type: 'blob' });
+        download(out, base + '_stems.zip');
+        toast('✓ ZIP com todas as stems', 'var(--c4)');
+      } catch (e) { toast('Erro ZIP: ' + e.message, 'var(--c7)'); }
+      btn.disabled = false; btn.innerHTML = '⬇ EXPORTAR TODAS AS STEMS (ZIP)';
+    };
+  })();
   const rb = $('#' + NS + '-receipt');
   if (window.MasteringReceipt) {
     rb.onclick = () => {
