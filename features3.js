@@ -522,11 +522,7 @@ function injectCSS() {
 /* ════════════════════════════════ BUILD UI ════════════════════════════════ */
 function buildUI() {
   injectCSS();
-  // FAB
-  const fab = el('button', NS + '-fab', 'PRO<br>FINAL');
-  fab.title = 'Pro Finalizer · True Peak · LUFS · Export';
-  fab.onclick = openModal;
-  document.body.appendChild(fab);
+  // (botão flutuante removido — agora abre pela aba PRO FINAL na barra principal)
 
   // Overlay + modal
   const ov = el('div', NS + '-overlay'); ov.id = NS + '-overlay';

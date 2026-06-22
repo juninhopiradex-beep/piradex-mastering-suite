@@ -144,6 +144,7 @@
     <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
     <div class="tab tab-primary" onclick="openTab('voicelab',this)" style="color:var(--c1);">VOICE LAB</div>
     <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
+    <div class="tab tab-primary" onclick="window.PRDX3&&window.PRDX3.open()" style="color:var(--c6);">PRO FINAL</div>
   </div>
   <div class="tabs tabs-effects">
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
@@ -222,34 +223,6 @@
         </div>
       </div>
 
-      <!-- LUFS TARGET SELECTOR -->
-      <div class="panel" id="panel-lufs-target" style="grid-column:span 2;">
-        <div class="plabel">LUFS TARGET — PLATAFORMA</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-          <div id="lufs-target-dot" style="width:10px;height:10px;border-radius:50%;background:#1db954;box-shadow:0 0 8px #1db954;flex-shrink:0;"></div>
-          <div id="lufs-target-name" style="font-family:'Orbitron',monospace;font-weight:700;font-size:12px;color:var(--text);">Spotify</div>
-          <div id="lufs-target-val" style="font-family:'Rajdhani',monospace;font-weight:700;font-size:12px;color:#1db954;">-14 LUFS</div>
-          <div id="lufs-target-tp" style="font-size:9px;color:var(--muted);margin-left:4px;">TP: -1.0 dBFS</div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
-          <button class="lufs-platform-btn" data-platform="spotify"   style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #1db954;color:#1db954;background:rgba(29,185,84,0.12);border-radius:3px;cursor:pointer;letter-spacing:1px;">SPOTIFY</button>
-          <button class="lufs-platform-btn" data-platform="apple"     style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #fc3c44;color:#fc3c44;background:rgba(252,60,68,0.12);border-radius:3px;cursor:pointer;letter-spacing:1px;">APPLE</button>
-          <button class="lufs-platform-btn" data-platform="youtube"   style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #ff0000;color:#ff0000;background:rgba(255,0,0,0.12);border-radius:3px;cursor:pointer;letter-spacing:1px;">YOUTUBE</button>
-          <button class="lufs-platform-btn" data-platform="tidal"     style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #00ffff;color:#00ffff;background:rgba(0,255,255,0.08);border-radius:3px;cursor:pointer;letter-spacing:1px;">TIDAL</button>
-          <button class="lufs-platform-btn" data-platform="deezer"    style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #ff6600;color:#ff6600;background:rgba(255,102,0,0.12);border-radius:3px;cursor:pointer;letter-spacing:1px;">DEEZER</button>
-          <button class="lufs-platform-btn" data-platform="club"      style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #b855f7;color:#b855f7;background:rgba(184,85,247,0.12);border-radius:3px;cursor:pointer;letter-spacing:1px;">CLUB/DJ</button>
-          <button class="lufs-platform-btn" data-platform="broadcast" style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #2ddcff;color:#2ddcff;background:rgba(45,220,255,0.08);border-radius:3px;cursor:pointer;letter-spacing:1px;">BROADCAST</button>
-          <button class="lufs-platform-btn" data-platform="cd"        style="padding:4px 8px;font-size:8px;font-family:'Rajdhani',monospace;font-weight:700;border:1px solid #ffe135;color:#ffe135;background:rgba(255,225,53,0.08);border-radius:3px;cursor:pointer;letter-spacing:1px;">CD</button>
-        </div>
-        <!-- Smart LUFS Coach -->
-        <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:8px 10px;">
-          <div style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:5px;">🎯 SMART LUFS COACH</div>
-          <div id="lufs-coach-msg" style="font-size:10px;color:#2dff8a;font-family:monospace;margin-bottom:5px;">A aguardar áudio...</div>
-          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
-            <div id="lufs-coach-bar" style="height:100%;width:0%;background:#2dff8a;border-radius:2px;transition:all .3s;"></div>
-          </div>
-        </div>
-      </div>
 
       <!-- GENRE DNA -->
       <div class="panel" id="panel-genre-dna">
