@@ -503,6 +503,8 @@ function injectCSS() {
   .${NS}-meter{height:14px;background:var(--bg);border-radius:7px;overflow:hidden;border:1px solid var(--border);position:relative;}
   .${NS}-fill{height:100%;width:0;transition:width .08s linear;}
   .${NS}-hint{font-size:11px;color:var(--muted);line-height:1.5;}
+  .${NS}-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;}
+  .${NS}-cardlbl{font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;}
   .${NS}-drop{border:1.5px dashed var(--border2);border-radius:10px;padding:22px;text-align:center;color:var(--muted2);
     font-size:12px;cursor:pointer;transition:border-color .15s,color .15s;}
   .${NS}-drop:hover,.${NS}-drop.${NS}-over{border-color:var(--c1);color:var(--c1);}
@@ -538,11 +540,13 @@ function buildUI() {
       <div class="${NS}-tab ${NS}-act" data-p="limiter">TRUE PEAK</div>
       <div class="${NS}-tab" data-p="meter">LUFS METER</div>
       <div class="${NS}-tab" data-p="spectrum">SPECTRUM</div>
+      <div class="${NS}-tab" data-p="analise">ANÁLISE</div>
       <div class="${NS}-tab" data-p="vector">VECTOR</div>
       <div class="${NS}-tab" data-p="harmonic">HARMONIC</div>
       <div class="${NS}-tab" data-p="phase">PHASE</div>
       <div class="${NS}-tab" data-p="stems">STEMS</div>
       <div class="${NS}-tab" data-p="presets">PRESETS</div>
+      <div class="${NS}-tab" data-p="tools">FERRAMENTAS</div>
       <div class="${NS}-tab" data-p="export">EXPORT</div>
       <div class="${NS}-tab" data-p="batch">BATCH</div>
       <div class="${NS}-tab" data-p="live">LIVE</div>
@@ -580,11 +584,13 @@ function renderPage(p) {
   if (p === 'limiter') return pageLimiter(body);
   if (p === 'meter') return pageMeter(body);
   if (p === 'spectrum') return pageSpectrum(body);
+  if (p === 'analise') return pageAnalise(body);
   if (p === 'vector') return pageVector(body);
   if (p === 'harmonic') return pageHarmonic(body);
   if (p === 'phase') return pagePhase(body);
   if (p === 'stems') return pageStems(body);
   if (p === 'presets') return pagePresets(body);
+  if (p === 'tools') return pageTools(body);
   if (p === 'export') return pageExport(body);
   if (p === 'batch') return pageBatch(body);
   if (p === 'live') return pageLive(body);
@@ -686,6 +692,223 @@ function pageMeter(body) {
     $('#' + NS + '-mbar').style.width = pct + '%';
   }
   loop();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * PÁGINA ANÁLISE — 6 MÉTRICAS PRO (consolidadas no PRO FINAL)
+ * ════════════════════════════════════════════════════════════════════════════ */
+function computeLoudnessHistory(buffer) {
+  const sr = buffer.sampleRate, nCh = buffer.numberOfChannels;
+  const filt = [];
+  for (let c = 0; c < nCh; c++) filt.push(kWeightFilter(buffer.getChannelData(c), sr));
+  const G = [1.0, 1.0, 1.0, 1.41, 1.41];
+  const win = Math.round(3 * sr), hop = Math.round(1 * sr);
+  const pts = [];
+  for (let start = 0; start + win <= filt[0].length; start += hop) {
+    let z = 0;
+    for (let c = 0; c < nCh; c++) {
+      let sum = 0; const d = filt[c];
+      for (let i = 0; i < win; i++) { const s = d[start + i]; sum += s * s; }
+      z += (G[c] || 1) * (sum / win);
+    }
+    pts.push(-0.691 + 10 * Math.log10(z + 1e-12));
+  }
+  return pts.length ? pts : [-23];
+}
+function computeWaterfall(buffer, frames) {
+  frames = frames || 6;
+  const d = buffer.getChannelData(0), size = 2048;
+  const seg = Math.floor(d.length / frames);
+  const out = [];
+  const re = new Float32Array(size), im = new Float32Array(size);
+  for (let f = 0; f < frames; f++) {
+    const base = f * seg;
+    const bands = new Float32Array(32);
+    let count = 0;
+    for (let s = base; s + size < base + seg && s + size < d.length; s += size * 2) {
+      for (let i = 0; i < size; i++) { const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / size); re[i] = d[s + i] * w; im[i] = 0; }
+      fft(re, im);
+      for (let b = 0; b < 32; b++) {
+        const k0 = Math.floor(Math.pow(size / 2, b / 32)), k1 = Math.max(k0 + 1, Math.floor(Math.pow(size / 2, (b + 1) / 32)));
+        let m = 0; for (let k = k0; k < k1 && k < size / 2; k++) m += Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+        bands[b] += m / Math.max(1, k1 - k0);
+      }
+      count++;
+    }
+    if (count) for (let b = 0; b < 32; b++) bands[b] /= count;
+    out.push(bands);
+  }
+  return out;
+}
+/* ════════════════════════════════════════════════════════════════════════════
+ * PÁGINA FERRAMENTAS — painéis movidos do ecrã principal (preservam ligação):
+ * Genre DNA · Sessão & Ferramentas · Ghost Reference · Blind A/B Test
+ * Os nós DOM são relocados (não recriados) → todos os listeners do app.js/
+ * features2.js continuam a funcionar porque estão presos aos próprios nós.
+ * ════════════════════════════════════════════════════════════════════════════ */
+let _toolsPanels = null;
+function grabToolPanels() {
+  if (_toolsPanels) return _toolsPanels;
+  const holder = document.getElementById('prdx-relocated-tools');
+  if (!holder) { _toolsPanels = []; return _toolsPanels; }
+  // guarda referências aos painéis directos do holder
+  _toolsPanels = Array.from(holder.children).filter(n => n.nodeType === 1 && n.tagName === 'DIV');
+  return _toolsPanels;
+}
+function pageTools(body) {
+  const panels = grabToolPanels();
+  if (!panels.length) {
+    body.innerHTML = `<div class="${NS}-hint" style="text-align:center;padding:30px;">Ferramentas indisponíveis.</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="${NS}-hint" style="margin-bottom:14px;">Genre DNA · Sessão · Ghost Reference · Blind A/B — movidos do ecrã principal.</div>
+    <div id="${NS}-tools-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;"></div>`;
+  const grid = $('#' + NS + '-tools-grid');
+  panels.forEach(p => {
+    // garante que o ab-panel (oculto) aparece aqui visível
+    if (p.id === 'ab-panel') p.style.display = '';
+    if (p.style) { p.style.gridColumn = ''; } // anula spans herdados do grid principal
+    grid.appendChild(p); // relocaliza preservando listeners
+  });
+}
+
+function pageAnalise(body) {
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="${NS}-card"><div class="${NS}-cardlbl">📐 CORRELÓMETRO DE FASE</div>
+        <div style="text-align:center;margin:10px 0;"><span id="${NS}-an-corr" style="font-family:'Orbitron',monospace;font-weight:900;font-size:28px;color:#2dff8a;">—</span>
+        <div id="${NS}-an-corr-state" style="font-size:9px;color:var(--muted);margin-top:2px;">aguarda áudio</div></div>
+        <div style="position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#ff3a3a,#ffe135 50%,#2dff8a);"><div id="${NS}-an-corr-ptr" style="position:absolute;top:-4px;left:50%;width:4px;height:18px;background:#fff;border-radius:2px;box-shadow:0 0 6px #000;transition:left .25s;"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:8px;color:var(--muted);"><span>-1</span><span>0</span><span>+1 mono ✓</span></div>
+      </div>
+      <div class="${NS}-card"><div class="${NS}-cardlbl">📊 DYNAMIC RANGE (DR / PSR)</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+          <div id="${NS}-an-dr" style="font-family:'Orbitron',monospace;font-weight:900;font-size:30px;color:#ffe135;">DR—</div>
+          <div style="flex:1;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div id="${NS}-an-dr-bar" style="height:100%;width:0%;border-radius:4px;transition:all .3s;"></div></div>
+          <div id="${NS}-an-dr-desc" style="font-size:10px;color:var(--muted);margin-top:6px;">—</div></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:10px;color:var(--muted2);"><div>PSR <b id="${NS}-an-psr" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div><div>PLR <b id="${NS}-an-plr" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div></div>
+        <div style="margin-top:8px;font-size:8px;color:var(--muted);"><span style="color:#2dff8a;">DR12+</span> audiófilo · <span style="color:#ffe135;">DR8-11</span> streaming · <span style="color:#ff3a3a;">DR&lt;7</span> esmagado</div>
+      </div>
+      <div class="${NS}-card"><div class="${NS}-cardlbl">📈 LOUDNESS HISTORY (LUFS-S)</div>
+        <canvas id="${NS}-an-lh" width="300" height="120" style="width:100%;height:108px;background:#07070e;border-radius:6px;display:block;margin-top:6px;"></canvas>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;"><span style="color:var(--muted);">INTEGRATED</span><span id="${NS}-an-int" style="font-family:'Orbitron',monospace;font-weight:900;color:#2dd4ff;">—</span></div>
+      </div>
+      <div class="${NS}-card"><div class="${NS}-cardlbl">🌊 SPECTRUM WATERFALL</div>
+        <canvas id="${NS}-an-wf" width="300" height="120" style="width:100%;height:108px;background:#07070e;border-radius:6px;display:block;margin-top:6px;"></canvas>
+        <div style="font-size:8px;color:var(--muted);margin-top:6px;">histórico temporal do espectro · vê o build-up de energia</div>
+      </div>
+      <div class="${NS}-card"><div class="${NS}-cardlbl">⚡ CREST FACTOR (TP vs RMS)</div>
+        <canvas id="${NS}-an-crest" width="300" height="120" style="width:100%;height:108px;background:#07070e;border-radius:6px;display:block;margin-top:6px;"></canvas>
+        <div style="font-size:8px;color:var(--muted);margin-top:6px;">distância pico↔RMS = quão "vivos" estão os transientes</div>
+      </div>
+      <div class="${NS}-card"><div class="${NS}-cardlbl" style="display:flex;justify-content:space-between;">TONAL BALANCE vs GÉNERO <span id="${NS}-an-genre" style="color:var(--c1);font-weight:700;">—</span></div>
+        <canvas id="${NS}-an-tonal" width="300" height="120" style="width:100%;height:108px;background:#07070e;border-radius:6px;display:block;margin-top:6px;"></canvas>
+        <div style="display:flex;gap:14px;margin-top:6px;font-size:8px;color:var(--muted);"><span><span style="display:inline-block;width:8px;height:8px;background:var(--c1);border-radius:2px;"></span> a tua faixa</span><span><span style="display:inline-block;width:8px;height:8px;border:1px dashed #2dff8a;border-radius:2px;"></span> alvo do género</span></div>
+      </div>
+    </div>
+    <div class="${NS}-hint" style="margin-top:10px;text-align:center;">6 métricas profissionais — actualizam quando carregas/masterizas uma faixa.</div>`;
+  setTimeout(updateAnalisePage, 80);
+}
+function updateAnalisePage() {
+  const buf = window.audioBuffer || (window._getAudioBuffer && window._getAudioBuffer());
+  if (!buf || !$('#' + NS + '-an-dr')) return;
+  try {
+    const corr = computeCorrelation(buf);
+    const ptr = $('#' + NS + '-an-corr-ptr'), big = $('#' + NS + '-an-corr'), st = $('#' + NS + '-an-corr-state');
+    if (big) {
+      const col = corr > 0.3 ? '#2dff8a' : corr > -0.1 ? '#ffe135' : '#ff3a3a';
+      big.textContent = (corr >= 0 ? '+' : '') + corr.toFixed(2); big.style.color = col;
+      if (ptr) ptr.style.left = ((corr + 1) / 2 * 100) + '%';
+      if (st) st.textContent = corr > 0.5 ? 'mono-compatível ✓' : corr > 0 ? 'estéreo amplo' : corr > -0.3 ? 'cuidado: fase larga' : '⚠ anti-fase';
+    }
+    const dr = computeDR(buf);
+    const drEl = $('#' + NS + '-an-dr');
+    if (drEl) {
+      const col = dr.dr >= 12 ? '#2dff8a' : dr.dr >= 8 ? '#ffe135' : '#ff3a3a';
+      drEl.textContent = 'DR' + dr.dr; drEl.style.color = col;
+      const bar = $('#' + NS + '-an-dr-bar'); if (bar) { bar.style.width = clamp(dr.dr / 16 * 100, 5, 100) + '%'; bar.style.background = col; }
+      const desc = $('#' + NS + '-an-dr-desc'); if (desc) desc.textContent = dr.dr >= 12 ? 'Dinâmica audiófila' : dr.dr >= 8 ? 'Loud com vida' : 'Esmagado';
+      const psr = $('#' + NS + '-an-psr'); if (psr) psr.textContent = dr.psr.toFixed(1) + ' dB';
+      const plr = $('#' + NS + '-an-plr'); if (plr) plr.textContent = dr.crest.toFixed(1) + ' dB';
+    }
+    drawLoudnessHistory(computeLoudnessHistory(buf));
+    const intEl = $('#' + NS + '-an-int'); if (intEl) intEl.textContent = measureLUFS(buf).toFixed(1) + ' LUFS';
+    drawWaterfall(computeWaterfall(buf, 6));
+    drawCrestFactor(dr);
+    drawAnaliseTonal(computeBandBalance(buf));
+  } catch (e) { /* silencioso */ }
+}
+function drawLoudnessHistory(pts) {
+  const cv = $('#' + NS + '-an-lh'); if (!cv) return;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  const min = -40, max = -6, yOf = v => H - ((clamp(v, min, max) - min) / (max - min)) * (H - 10) - 5;
+  g.strokeStyle = 'rgba(45,255,138,.4)'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(0, yOf(-14)); g.lineTo(W, yOf(-14)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#2dff8a'; g.font = '8px monospace'; g.fillText('-14 alvo', 4, yOf(-14) - 3);
+  g.beginPath(); g.moveTo(0, H);
+  pts.forEach((v, i) => { const x = i / Math.max(1, pts.length - 1) * W; g.lineTo(x, yOf(v)); });
+  g.lineTo(W, H); g.closePath();
+  const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, 'rgba(45,212,255,.3)'); grad.addColorStop(1, 'transparent');
+  g.fillStyle = grad; g.fill();
+  g.beginPath(); pts.forEach((v, i) => { const x = i / Math.max(1, pts.length - 1) * W, y = yOf(v); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.strokeStyle = '#2dd4ff'; g.lineWidth = 2; g.stroke();
+}
+function drawWaterfall(frames) {
+  const cv = $('#' + NS + '-an-wf'); if (!cv) return;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  const cols = ['#ff3ab5', '#b855f7', '#2dd4ff', '#2dff8a', '#ffe135', '#ff6b35'];
+  const yStep = 12;
+  frames.forEach((bands, fi) => {
+    const offY = fi * yStep, alpha = 1 - fi * 0.13;
+    let mx = 0; for (let b = 0; b < bands.length; b++) if (bands[b] > mx) mx = bands[b];
+    g.beginPath();
+    for (let b = 0; b < bands.length; b++) {
+      const x = b / (bands.length - 1) * W;
+      const mag = mx > 0 ? bands[b] / mx : 0;
+      const y = H - 20 - offY - mag * (H - 40);
+      b ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.strokeStyle = cols[fi % cols.length]; g.globalAlpha = Math.max(0.25, alpha); g.lineWidth = 1.5; g.stroke();
+  });
+  g.globalAlpha = 1;
+}
+function drawCrestFactor(dr) {
+  const cv = $('#' + NS + '-an-crest'); if (!cv) return;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  const min = -60, max = 0, xOf = v => 40 + ((clamp(v, min, max) - min) / (max - min)) * (W - 70);
+  g.fillStyle = '#888899'; g.font = '9px monospace'; g.fillText('TP', 8, 30);
+  g.fillStyle = '#16161e'; g.fillRect(40, 22, W - 70, 12); g.fillStyle = '#ff3a3a'; g.fillRect(40, 22, Math.max(0, xOf(dr.peakDb) - 40), 12);
+  g.fillStyle = '#ff3a3a'; g.fillText(dr.peakDb.toFixed(1), W - 26, 31);
+  g.fillStyle = '#888899'; g.fillText('RMS', 8, 58);
+  g.fillStyle = '#16161e'; g.fillRect(40, 50, W - 70, 12); g.fillStyle = '#ffe135'; g.fillRect(40, 50, Math.max(0, xOf(dr.rmsTopDb) - 40), 12);
+  g.fillStyle = '#ffe135'; g.fillText(dr.rmsTopDb.toFixed(1), W - 30, 59);
+  g.fillStyle = '#2dff8a'; g.font = 'bold 20px Orbitron, monospace'; g.textAlign = 'center';
+  g.fillText(dr.crest.toFixed(1) + ' dB', W / 2, H - 22);
+  g.font = '8px monospace'; g.fillStyle = '#888899'; g.fillText('crest · transientes', W / 2, H - 8); g.textAlign = 'left';
+}
+function drawAnaliseTonal(bal) {
+  const cv = $('#' + NS + '-an-tonal'); if (!cv) return;
+  let genre = 'kizomba';
+  try { if (window.GenreDNA && window.GenreDNA.getLastResult) { const r = window.GenreDNA.getLastResult(); if (r && r.genre) genre = r.genre.toLowerCase().replace(/\s+/g, ''); } } catch (e) {}
+  const targets = window.SPECTRAL_TARGETS || {}, tgt = targets[genre] || targets.kizomba || { low: 40, mid: 35, high: 25 };
+  const ge = $('#' + NS + '-an-genre'); if (ge) ge.textContent = genre.toUpperCase();
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, pad = 14;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
+  const bands = [['LOW', bal.low, tgt.low, '#b855f7'], ['MID', bal.mid, tgt.mid, '#2dd4ff'], ['HIGH', bal.high, tgt.high, '#2dff8a']];
+  const bw = W / 3;
+  bands.forEach((b, i) => {
+    const x = i * bw, cx = x + bw / 2;
+    const yMine = H - pad - (b[1] / 60 * (H - pad - 10)), yTgt = H - pad - (b[2] / 60 * (H - pad - 10));
+    g.fillStyle = 'rgba(45,255,138,.10)'; g.fillRect(x + 12, yTgt - 5, bw - 24, 10);
+    g.strokeStyle = 'rgba(45,255,138,.5)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x + 12, yTgt); g.lineTo(x + bw - 12, yTgt); g.stroke(); g.setLineDash([]);
+    g.fillStyle = b[3]; g.fillRect(cx - 14, yMine, 28, H - pad - yMine);
+    g.fillStyle = '#888899'; g.font = '8px monospace'; g.textAlign = 'center'; g.fillText(b[0], cx, H - 3);
+    g.fillStyle = b[3]; g.font = 'bold 9px monospace'; g.fillText(Math.round(b[1]) + '%', cx, yMine - 4);
+  });
+  g.textAlign = 'left';
 }
 
 /* ── SPECTRUM ANALYSER PRO ── */
@@ -1529,123 +1752,6 @@ function computeBandBalance(buffer) {
   const tot = low + mid + high + 1e-12;
   return { low: low / tot * 100, mid: mid / tot * 100, high: high / tot * 100 };
 }
-function injectProAnalysis() {
-  // injecta os 3 gráficos PRO dentro da aba ANÁLISES (tab-analysis), não no painel pequeno
-  const tab = document.getElementById('tab-analysis');
-  if (!tab || document.getElementById('prdx-pro-analysis')) return;
-  const modulePanel = tab.querySelector('.module-panel') || tab;
-  const box = el('div'); box.id = 'prdx-pro-analysis';
-  box.style.cssText = 'margin-top:18px;';
-  box.innerHTML = `
-    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-      MÉTRICAS PROFISSIONAIS <span style="font-size:8px;color:#2dff8a;border:1px solid #2dff8a;border-radius:3px;padding:1px 6px;letter-spacing:.5px;">PRO</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
-        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:12px;">DYNAMIC RANGE (DR / PSR)</div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:30px;" id="prdx-dr">DR—</div>
-          <div style="flex:1;">
-            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div id="prdx-dr-bar" style="height:100%;width:0%;border-radius:4px;transition:all .3s;"></div></div>
-            <div style="font-size:10px;color:var(--muted);margin-top:6px;" id="prdx-dr-desc">aguarda áudio</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:16px;margin-top:12px;font-size:10px;color:var(--muted2);">
-          <div>PSR <b id="prdx-psr" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div>
-          <div>CREST <b id="prdx-crest" style="color:var(--text);font-family:'Orbitron',monospace;">—</b></div>
-        </div>
-        <div style="margin-top:10px;font-size:8px;color:var(--muted);line-height:1.5;">
-          <span style="color:#2dff8a;">DR12+</span> audiófilo · <span style="color:#ffe135;">DR8-11</span> streaming · <span style="color:#ff3a3a;">DR&lt;7</span> esmagado
-        </div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
-        <div style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:16px;">CORRELÓMETRO DE FASE</div>
-        <div style="text-align:center;margin-bottom:14px;">
-          <span id="prdx-corr-big" style="font-family:'Orbitron',monospace;font-weight:900;font-size:30px;color:#2dff8a;">+0.82</span>
-          <div id="prdx-corr-state" style="font-size:9px;color:var(--muted);margin-top:2px;">mono-compatível</div>
-        </div>
-        <div style="position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#ff3a3a,#ffe135 50%,#2dff8a);">
-          <div id="prdx-corr-ptr" style="position:absolute;top:-4px;left:90%;width:4px;height:18px;background:#fff;border-radius:2px;box-shadow:0 0 6px #000;transition:left .25s;"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:8px;color:var(--muted);">
-          <span>-1 anti-fase</span><span>0</span><span>+1 mono ✓</span>
-        </div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="font-size:9px;color:var(--muted2);letter-spacing:1.5px;">TONAL BALANCE vs GÉNERO</span>
-          <span id="prdx-tonal-genre" style="font-size:9px;color:var(--c1);font-weight:700;">—</span>
-        </div>
-        <canvas id="prdx-tonal-cv" width="300" height="110" style="width:100%;height:100px;background:#07070e;border-radius:6px;display:block;"></canvas>
-        <div style="display:flex;gap:14px;margin-top:8px;font-size:8px;color:var(--muted);">
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--c1);border-radius:2px;margin-right:4px;"></span>a tua faixa</span>
-          <span><span style="display:inline-block;width:8px;height:8px;border:1px dashed #2dff8a;border-radius:2px;margin-right:4px;"></span>alvo do género</span>
-        </div>
-      </div>
-    </div>`;
-  modulePanel.appendChild(box);
-}
-function updateProAnalysis() {
-  const buf = window.audioBuffer || (window._getAudioBuffer && window._getAudioBuffer());
-  if (!buf || !document.getElementById('prdx-pro-analysis')) return;
-  try {
-    // DR
-    const dr = computeDR(buf);
-    const drEl = $('#prdx-dr'), bar = $('#prdx-dr-bar'), desc = $('#prdx-dr-desc');
-    if (drEl) {
-      drEl.textContent = 'DR' + dr.dr;
-      const col = dr.dr >= 12 ? '#2dff8a' : dr.dr >= 8 ? '#ffe135' : '#ff3a3a';
-      drEl.style.color = col;
-      bar.style.width = clamp(dr.dr / 16 * 100, 5, 100) + '%'; bar.style.background = col;
-      desc.textContent = dr.dr >= 12 ? 'Dinâmica audiófila' : dr.dr >= 8 ? 'Loud com vida (streaming)' : 'Esmagado — abre a dinâmica';
-      $('#prdx-psr').textContent = dr.psr.toFixed(1);
-      $('#prdx-crest').textContent = dr.crest.toFixed(1);
-    }
-    // Correlação
-    const corr = computeCorrelation(buf);
-    const ptr = $('#prdx-corr-ptr'), big = $('#prdx-corr-big'), state = $('#prdx-corr-state');
-    if (ptr) {
-      ptr.style.left = ((corr + 1) / 2 * 100) + '%';
-      const col = corr > 0.3 ? '#2dff8a' : corr > -0.1 ? '#ffe135' : '#ff3a3a';
-      if (big) { big.textContent = (corr >= 0 ? '+' : '') + corr.toFixed(2); big.style.color = col; }
-      if (state) state.textContent = corr > 0.5 ? 'mono-compatível ✓' : corr > 0 ? 'estéreo amplo' : corr > -0.3 ? 'cuidado: fase larga' : '⚠ anti-fase — cancela em mono';
-    }
-    // Tonal balance
-    const bal = computeBandBalance(buf);
-    drawTonalBalance(bal);
-  } catch (e) { /* silencioso */ }
-}
-function drawTonalBalance(bal) {
-  const cv = $('#prdx-tonal-cv'); if (!cv) return;
-  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
-  g.clearRect(0, 0, W, H); g.fillStyle = '#07070e'; g.fillRect(0, 0, W, H);
-  // género detectado (do GenreDNA se existir)
-  let genre = 'kizomba';
-  try { if (window.GenreDNA && window.GenreDNA.getLastResult) { const r = window.GenreDNA.getLastResult(); if (r && r.genre) genre = r.genre.toLowerCase().replace(/\s+/g, ''); } } catch (e) {}
-  const targets = window.SPECTRAL_TARGETS || {};
-  const tgt = targets[genre] || targets.kizomba || { low: 40, mid: 35, high: 25 };
-  $('#prdx-tonal-genre').textContent = genre.toUpperCase();
-  const bands = [['LOW', bal.low, tgt.low, '#b855f7'], ['MID', bal.mid, tgt.mid, '#2dd4ff'], ['HIGH', bal.high, tgt.high, '#2dff8a']];
-  const bw = W / 3, pad = 10;
-  bands.forEach((b, i) => {
-    const x = i * bw, cx = x + bw / 2;
-    const yMine = H - pad - (b[1] / 60 * (H - pad - 8));
-    const yTgt = H - pad - (b[2] / 60 * (H - pad - 8));
-    // zona alvo (banda)
-    g.fillStyle = 'rgba(45,255,138,.10)';
-    g.fillRect(x + 8, yTgt - 4, bw - 16, 8);
-    g.strokeStyle = 'rgba(45,255,138,.4)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x + 8, yTgt); g.lineTo(x + bw - 8, yTgt); g.stroke(); g.setLineDash([]);
-    // barra da tua faixa
-    g.fillStyle = b[3];
-    g.fillRect(cx - 10, yMine, 20, H - pad - yMine);
-    // label
-    g.fillStyle = '#888899'; g.font = '7px monospace'; g.textAlign = 'center';
-    g.fillText(b[0], cx, H - 2);
-    g.fillStyle = b[3]; g.font = 'bold 8px monospace';
-    g.fillText(Math.round(b[1]) + '%', cx, yMine - 3);
-  });
-}
-
 
 const _ev = {};
 function on(e, cb) { (_ev[e] = _ev[e] || []).push(cb); return () => off(e, cb); }
@@ -1714,13 +1820,9 @@ function init() {
     if ($('#' + NS + '-overlay') && $('#' + NS + '-overlay').classList.contains(NS + '-open')) renderPage(currentPage);
   });
   window.PRDX3 = buildAPI();
-  // ── Pro Analysis: injecta DR/Correlómetro/Tonal Balance na ABA ANÁLISES ──
-  setTimeout(injectProAnalysis, 600);
-  document.addEventListener('piradex:tab', (e) => {
-    if (e.detail === 'analysis') { setTimeout(() => { injectProAnalysis(); updateProAnalysis(); }, 100); }
-  });
-  document.addEventListener('piradex:fileLoaded', () => { setTimeout(() => { injectProAnalysis(); updateProAnalysis(); }, 400); });
-  on('mastered', () => setTimeout(updateProAnalysis, 100));
+  // ── As 6 métricas PRO vivem agora na tab ANÁLISE do PRO FINAL ──
+  document.addEventListener('piradex:fileLoaded', () => { setTimeout(updateAnalisePage, 400); });
+  on('mastered', () => setTimeout(updateAnalisePage, 100));
   // ── Ponte postMessage: permite a um host/DAW-webview controlar a suite ──
   window.addEventListener('message', async (e) => {
     const m = e.data && e.data.prdx3; if (!m || !m.cmd) return;
