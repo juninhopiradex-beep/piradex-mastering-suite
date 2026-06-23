@@ -388,12 +388,18 @@ function buildChain() {
   _spaceMixerEarly.connect(_spaceFb); _spaceFb.connect(_spaceDelay3);     // tail curta
 
   // ── TIGHT — compressor lento focado nos transientes (oposto do PUNCH) ───
+  const _tightIn  = audioCtx.createGain(); _tightIn.gain.value = 0;   // GATE: começa OFF
   const _tightComp = audioCtx.createDynamicsCompressor();
   _tightComp.threshold.value = 0; _tightComp.ratio.value = 1; _tightComp.knee.value = 12;
   _tightComp.attack.value = 0.020; _tightComp.release.value = 0.300;
+  const _tightOut = audioCtx.createGain(); _tightOut.gain.value = 0; // GATE: começa OFF
+  _tightIn.connect(_tightComp); _tightComp.connect(_tightOut);
 
   // ── PRESENCE — peaking estreito 2.5k (vocal/lead clarity) ───────────────
+  const _presIn   = audioCtx.createGain(); _presIn.gain.value = 0;    // GATE: começa OFF
   const _presPeak = audioCtx.createBiquadFilter(); _presPeak.type='peaking'; _presPeak.frequency.value=2700; _presPeak.Q.value=2.5; _presPeak.gain.value=0;
+  const _presOut  = audioCtx.createGain(); _presOut.gain.value = 0;   // GATE: começa OFF
+  _presIn.connect(_presPeak); _presPeak.connect(_presOut);
 
   // ── PHASE — low-end mono-isation: HP no side abaixo de 120Hz ────────────
   // o nó é controlado via _knobSideHP que actua no side path do M/S
@@ -403,8 +409,10 @@ function buildChain() {
   window.__knobNodes = {
     sub:{in:_subInGain, out:_subOut}, air:{in:_airInGain, shelf:_airShelf, out:_airOut},
     warmth:{in:_warmthInGain, out:_warmthOut}, drive:{in:_driveInGain, pre:_drivePreGain, out:_driveOut},
-    space:{in:_spaceInGain, out:_spaceOut, fb:_spaceFb}, tight:{node:_tightComp},
-    presence:{node:_presPeak}, sideHP:{node:null} // sideHP é wireado mais tarde
+    space:{in:_spaceInGain, out:_spaceOut, fb:_spaceFb},
+    tight:{in:_tightIn, node:_tightComp, out:_tightOut},
+    presence:{in:_presIn, node:_presPeak, out:_presOut},
+    sideHP:{node:null}
   };
 
   // ── handlers globais: cada knob recebe valor 0..1 e ajusta o seu DSP ────
@@ -436,7 +444,8 @@ function buildChain() {
     _spaceFb.gain.setTargetAtTime(0.1 + v * 0.2, _t(), 0.1);
   };
   window._knobTight = v => {
-    // tight comp: knob alto = comp mais activo nos transientes
+    _tightIn.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _tightOut.gain.setTargetAtTime(v * 0.5, _t(), 0.05); // mix paralelo
     if (v <= 0.05) { _tightComp.threshold.setTargetAtTime(0, _t(), 0.05); _tightComp.ratio.setTargetAtTime(1, _t(), 0.05); }
     else {
       _tightComp.threshold.setTargetAtTime(-15 - v * 15, _t(), 0.05);
@@ -446,6 +455,8 @@ function buildChain() {
     }
   };
   window._knobPresence = v => {
+    _presIn.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _presOut.gain.setTargetAtTime(v > 0 ? 0.5 : 0, _t(), 0.05); // mix paralelo
     _presPeak.gain.setTargetAtTime(v * 5, _t(), 0.05); // até +5 dB @ 2.7kHz Q=2.5
   };
   window._knobPhase = v => {
@@ -577,9 +588,9 @@ function buildChain() {
     limiterNode.connect(kn.drive.in); kn.drive.out.connect(masterGain);
     // SPACE: paralelo
     limiterNode.connect(kn.space.in); kn.space.out.connect(masterGain);
-    // PRESENCE e TIGHT: paralelo simples (não interferem com a chain principal)
-    limiterNode.connect(kn.presence.node); kn.presence.node.connect(masterGain);
-    limiterNode.connect(kn.tight.node); kn.tight.node.connect(masterGain);
+    // PRESENCE e TIGHT: agora com gate de input (não duplicam o sinal quando OFF)
+    limiterNode.connect(kn.presence.in); kn.presence.out.connect(masterGain);
+    limiterNode.connect(kn.tight.in); kn.tight.out.connect(masterGain);
   }
 
   masterGain.connect(analyserNode);
