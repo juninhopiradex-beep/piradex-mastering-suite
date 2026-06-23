@@ -1813,22 +1813,30 @@
         <button class="pm-close" onclick="skipPaywall()" style="background:rgba(0,0,0,0.2);border:none;color:#000;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;font-weight:700;flex-shrink:0;">✕</button>
       </div>
       <div class="paywall-body">
-        <div class="paywall-desc">As tuas <strong id="export-count-label">3 exportações gratuitas</strong> foram usadas!<br>Para continuar escolhe o teu plano.</div>
-        <div class="paywall-plans">
-          <div class="plan" id="plan-basic" onclick="selectPlan(this)">
-            <span class="plan-name">BASIC</span><span class="plan-price">€9</span><span class="plan-period">por mês</span>
-            <div class="plan-features">5 exportações/mês<br>Todos os presets<br>WAV 16-bit</div>
+        <div class="paywall-desc">As tuas <strong id="export-count-label">3 exportações gratuitas</strong> foram usadas!<br>Escolhe o teu plano para desbloquear a versão full.</div>
+        <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin:6px 0 8px;">VITALÍCIA — pagamento único</div>
+        <div class="paywall-plans" style="grid-template-columns:1fr 1fr;">
+          <div class="plan" data-pwplan="lifetime-basic" onclick="pwSelectPlan(this)">
+            <span class="plan-name">Vitalícia Básica</span><span class="plan-price">30 USD</span>
+            <div class="plan-features">Todos os módulos<br>sem STUDIO PRO · para sempre</div>
           </div>
-          <div class="plan popular selected" id="plan-pro" onclick="selectPlan(this)">
-            <span class="plan-badge">POPULAR</span><span class="plan-name">PRO</span><span class="plan-price">€19</span><span class="plan-period">por mês</span>
-            <div class="plan-features">Exportações ilimitadas<br>Todos os presets<br>WAV 24-bit + PIRADEX AI</div>
-          </div>
-          <div class="plan" id="plan-studio" onclick="selectPlan(this)">
-            <span class="plan-name">STUDIO</span><span class="plan-price">€49</span><span class="plan-period">por mês</span>
-            <div class="plan-features">Tudo do PRO<br>Licença comercial<br>Suporte prioritário</div>
+          <div class="plan selected" data-pwplan="lifetime-advanced" onclick="pwSelectPlan(this)">
+            <span class="plan-name" style="color:var(--c4)">Vitalícia Avançada</span><span class="plan-price" style="color:var(--c4)">50 USD</span>
+            <div class="plan-features">+ STUDIO PRO · + PRO FINAL<br>para sempre</div>
           </div>
         </div>
-        <button class="paywall-cta" onclick="goPay()">SUBSCREVER AGORA</button>
+        <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;margin:12px 0 8px;">ALUGUER — mensal (30 dias)</div>
+        <div class="paywall-plans" style="grid-template-columns:1fr 1fr;">
+          <div class="plan" data-pwplan="monthly-basic" onclick="pwSelectPlan(this)">
+            <span class="plan-name">Mensal Básica</span><span class="plan-price">15 USD<span style="font-size:12px;color:var(--muted)">/mês</span></span>
+            <div class="plan-features">Todos os módulos<br>sem STUDIO PRO · 30 dias</div>
+          </div>
+          <div class="plan" data-pwplan="monthly-advanced" onclick="pwSelectPlan(this)">
+            <span class="plan-name" style="color:var(--c4)">Mensal Avançada</span><span class="plan-price" style="color:var(--c4)">25 USD<span style="font-size:12px;color:var(--muted)">/mês</span></span>
+            <div class="plan-features">+ STUDIO PRO · + PRO FINAL<br>30 dias</div>
+          </div>
+        </div>
+        <button class="paywall-cta" onclick="goPay()">SEGUIR PARA PAGAMENTO →</button>
         <button onclick="openLicenseFromPaywall()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--c4);background:rgba(45,255,138,0.08);color:var(--c4);font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;margin-top:8px;">🔑 JÁ TENHO LICENÇA — INSERIR CÓDIGO</button>
         <div style="margin-top:12px;text-align:center;">
           <button onclick="continueAsDemo()" style="width:100%;padding:10px;border-radius:6px;border:1.5px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.05);color:var(--text);font-family:'Rajdhani';font-size:12px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.25)'">

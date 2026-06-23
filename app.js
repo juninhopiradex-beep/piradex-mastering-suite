@@ -5170,7 +5170,26 @@ function formatLicenseInput(el){
   if(v.length>19)v=v.slice(0,19);
   el.value=v;if(v.length===19)activateLicense();
 }
-function selectPlan(el){document.querySelectorAll('.plan').forEach(p=>p.classList.remove('selected'));el.classList.add('selected');}
+function pwSelectPlan(el){
+  document.querySelectorAll('#paywall-modal .plan').forEach(p=>p.classList.remove('selected'));
+  el.classList.add('selected');
+  // fixa o plano escolhido para o quadro de pagamento (resolve o "WhatsApp pede sempre plano")
+  _selectedPlan = el.getAttribute('data-pwplan');
+}
+function goPay(){
+  // garante que há um plano fixado (default: vitalícia avançada, o destacado)
+  const sel = document.querySelector('#paywall-modal .plan.selected');
+  _selectedPlan = (sel && sel.getAttribute('data-pwplan')) || _selectedPlan || 'lifetime-advanced';
+  // fecha o paywall e abre o quadro "desbloquear versão full" já com o plano escolhido
+  const pw = document.getElementById('paywall-modal'); if(pw) pw.style.display='none';
+  if(typeof openLicenseModal==='function'){
+    openLicenseModal();
+  } else {
+    const lm=document.getElementById('license-modal'); if(lm) lm.style.display='flex';
+  }
+  // reflecte a selecção no quadro de pagamento (destaca o plano e mostra o resumo)
+  if(typeof selectPlan==='function' && _selectedPlan) selectPlan(_selectedPlan);
+}
 function showPaywall(){
   const lbl=document.getElementById('export-count-label');
   if(lbl) lbl.textContent = FREE_EXPORTS+' exportações gratuitas';
@@ -5180,7 +5199,6 @@ function skipPaywall(){
   document.getElementById('paywall-modal').style.display='none';
   setStatus('MODO DEMO · '+exportCount+'/'+FREE_EXPORTS+' exportações usadas · subscreve para continuar');
 }
-function goPay(){const s=document.querySelector('.plan.selected .plan-name');window.open(PAY_URL+'?plan='+(s?s.textContent:'pro').toLowerCase(),'_blank');}
 
 async function exportMastered(){
   if(!isLoggedIn){document.getElementById('login-screen').style.display='flex';return;}
