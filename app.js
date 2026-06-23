@@ -3021,18 +3021,35 @@ function setMode(mode){
       hb.style.pointerEvents='none';hb.style.animation='none';
     }
   }
+  const modeChanged = (playMode !== mode);
   playMode=mode;
-  // ── Suave: alterna o DSP em tempo real sem parar a source ──
-  // (evita o "click"/travagem que vinha do stopSource() + playAudio() de novo)
   if(mode==='before'){
     resetAllDSP();
     resetModuleBypasses();
   } else {
     applyDSP();
   }
+  // ── CRÍTICO: se está a tocar, reconectar a source ao caminho certo ──
+  // ORIGINAL = source→dryGain (bypassa efeitos) · PROCESSADO = source→eqSub (chain completa)
+  // Sem isto, mudar de modo durante o playback não muda o caminho do áudio.
+  if(modeChanged && isPlaying && sourceNode && audioCtx){
+    try {
+      const pos = audioCtx.currentTime - startTime;       // posição actual
+      const off = Math.max(0, Math.min(pos, audioBuffer.duration - 0.01));
+      try { sourceNode.disconnect(); } catch(e){}
+      try { sourceNode.onended = null; sourceNode.stop(); } catch(e){}
+      // nova source no caminho correcto
+      sourceNode = audioCtx.createBufferSource();
+      sourceNode.buffer = audioBuffer;
+      if(mode==='after') sourceNode.connect(eqSub);
+      else sourceNode.connect(dryGain);
+      sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}window.AudioManager.ended('master');};
+      sourceNode.start(0, off);
+      startTime = audioCtx.currentTime - off;
+    } catch(e){ /* se falhar, mantém o que estava */ }
+  }
   updateModeUI(mode);
   updateLUFSDisplay();
-  // Se estava parado, garante que continua parado (não força play)
 }
 
 function resetAllDSP(){
