@@ -460,20 +460,23 @@ function buildChain() {
     _presPeak.gain.setTargetAtTime(v * 5, _t(), 0.05); // até +5 dB @ 2.7kHz Q=2.5
   };
   window._knobPhase = v => {
-    // mono-isa o side abaixo de 120Hz: aproveita msSideEqLow se existir
-    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
-      // baixa o ganho do side-low (efeito de mono-low)
-      msSideEqLow.gain.setTargetAtTime(-v * 18, _t(), 0.08); // até -18dB no side abaixo de 200Hz
-    }
+    // mono-isa o side abaixo de 250Hz. Combina com o side-HP do WIDE (não sobrepõe).
+    window.__phaseAmt = v;
+    _applySideLow();
   };
   // side HP do knob WIDE (já existente)
   window._knobSideHP = v => {
-    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
-      // quando wide é grande, corta o side-low para manter mono-compat
-      const reduceLow = -v * 9;
-      msSideEqLow.gain.setTargetAtTime(reduceLow, _t(), 0.08);
-    }
+    window.__wideHpAmt = v;
+    _applySideLow();
   };
+  // combina as duas contribuições (PHASE + WIDE) num só ajuste do side-low
+  function _applySideLow(){
+    if (typeof msSideEqLow === 'undefined' || !msSideEqLow) return;
+    const ph = window.__phaseAmt || 0;   // 0..1 → até -18 dB (mono-isação forte)
+    const wd = window.__wideHpAmt || 0;  // 0..1 → até -9 dB (mantém mono-compat)
+    const total = -(ph * 18) - (wd * 9); // soma os dois efeitos
+    msSideEqLow.gain.setTargetAtTime(Math.max(-24, total), _t(), 0.08);
+  }
 
   // RESON — 6 peaks dedicados
   _resonNodes = [];
@@ -3291,8 +3294,9 @@ function updateMeters(){
   for(let i=0;i<half;i++){sL+=td[i]*td[i];pkL=Math.max(pkL,Math.abs(td[i]));}
   for(let i=half;i<td.length;i++){sR+=td[i]*td[i];pkR=Math.max(pkR,Math.abs(td[i]));}
   const rmsL=Math.sqrt(sL/half),rmsR=Math.sqrt(sR/half);
-  vuL=rmsL*3>vuL?vuL*0.4+rmsL*3*0.6:vuL*0.88;
-  vuR=rmsR*3>vuR?vuR*0.4+rmsR*3*0.6:vuR*0.88;
+  // ballistics lentas (estilo VU pro): sobe moderado, desce devagar → movimento calmo
+  vuL=rmsL*3>vuL?vuL*0.6+rmsL*3*0.4:vuL*0.94;
+  vuR=rmsR*3>vuR?vuR*0.6+rmsR*3*0.4:vuR*0.94;
   if(piradexOn){vuL=Math.min(1,vuL*1.6);vuR=Math.min(1,vuR*1.6);}
   if(pkL>peakHoldL){peakHoldL=pkL;peakHoldTimerL=now;}
   if(pkR>peakHoldR){peakHoldR=pkR;peakHoldTimerR=now;}
@@ -3301,13 +3305,19 @@ function updateMeters(){
   setVU(Math.min(vuL,1),Math.min(vuR,1));
   const rms=(rmsL+rmsR)/2;
   const raw=rms>0?20*Math.log10(rms)-0.691:-70;
-  lufsSmooth=lufsSmooth*0.78+raw*0.22;
+  // integração lenta (estilo LUFS real): suavização forte → número calmo, não vibra
+  lufsSmooth=lufsSmooth*0.94+raw*0.06;
   const isHouse=curPreset==='house';
   const lo=isHouse?-11:-12,hi=isHouse?-6:-7;
   const display=playMode==='after'?Math.max(lo,Math.min(hi,lufsSmooth)).toFixed(1):lufsSmooth.toFixed(1);
   const lufsEl=document.getElementById('lufs-n'),slufEl=document.getElementById('slufs');
-  if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
-  const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
+  // só actualiza o texto ~3x por segundo (não a 60fps) → leitura estável
+  if(!window.__lufsLastUpd) window.__lufsLastUpd=0;
+  if(now-window.__lufsLastUpd>330){
+    window.__lufsLastUpd=now;
+    if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
+    const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
+  }
   const lfl=document.getElementById('lim-fill-l'),lfr=document.getElementById('lim-fill-r');
   if(lfl)lfl.style.width=Math.min(100,vuL*110)+'%';
   if(lfr)lfr.style.width=Math.min(100,vuR*110)+'%';
@@ -4185,26 +4195,20 @@ function applyHeadroom(){
 }
 
 function updateIODisplay(){
-  // Update IN arc and value
+  // INPUT fader (range -24..+12 dB → 0..100%)
   const inEl = document.getElementById('in-val');
-  const inArc= document.getElementById('in-arc');
   if(inEl) inEl.textContent = (inputGainDb>=0?'+':'')+inputGainDb.toFixed(1);
-  if(inArc){
-    const pct=Math.min(1,Math.max(0,(inputGainDb+24)/36));
-    const dash=pct*120;
-    inArc.setAttribute('stroke-dasharray', dash+' 120');
-    inArc.setAttribute('stroke', inputGainDb>0?'var(--c3)':inputGainDb<0?'var(--c7)':'var(--c6)');
-  }
-  // Update OUT arc and value
+  const inFill=document.getElementById('in-fill'), inCap=document.getElementById('in-cap');
+  const inPct=Math.min(100,Math.max(0,(inputGainDb+24)/36*100));
+  if(inFill){ inFill.style.height=inPct+'%'; inFill.style.background='linear-gradient(0deg,'+(inputGainDb>0?'var(--c3)':inputGainDb<0?'var(--c7)':'var(--c6)')+',transparent)'; }
+  if(inCap) inCap.style.bottom=inPct+'%';
+  // OUTPUT fader
   const outEl = document.getElementById('out-val');
-  const outArc= document.getElementById('out-arc');
   if(outEl) outEl.textContent = (outputGainDb>=0?'+':'')+outputGainDb.toFixed(1);
-  if(outArc){
-    const pct=Math.min(1,Math.max(0,(outputGainDb+24)/36));
-    const dash=pct*120;
-    outArc.setAttribute('stroke-dasharray', dash+' 120');
-    outArc.setAttribute('stroke', outputGainDb>0?'var(--c4)':outputGainDb<0?'var(--c7)':'var(--c1)');
-  }
+  const outFill=document.getElementById('out-fill'), outCap=document.getElementById('out-cap');
+  const outPct=Math.min(100,Math.max(0,(outputGainDb+24)/36*100));
+  if(outFill){ outFill.style.height=outPct+'%'; outFill.style.background='linear-gradient(0deg,'+(outputGainDb>0?'var(--c4)':outputGainDb<0?'var(--c7)':'var(--c1)')+',transparent)'; }
+  if(outCap) outCap.style.bottom=outPct+'%';
   setStatus('Input: '+(inputGainDb>=0?'+':'')+inputGainDb.toFixed(1)+'dB  ·  Output: '+(outputGainDb>=0?'+':'')+outputGainDb.toFixed(1)+'dB');
 }
 
