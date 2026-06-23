@@ -51,7 +51,12 @@ const PRESETS = {
 };
 
 const KNOBS_DEF   = ['CLEAN','BASS','LOUD','WIDE','PUNCH','FOCUS','SUB','AIR','WARMTH','DRIVE','SPACE','TIGHT','PRESENCE','PHASE'];
-const KNOB_COLORS = {CLEAN:'#2dd4ff',BASS:'#b855f7',LOUD:'#ff3ab5',WIDE:'#2dff8a',PUNCH:'#ff6b35',FOCUS:'#ffe135'};
+const KNOB_COLORS = {
+  CLEAN:'#2dd4ff', BASS:'#b855f7', LOUD:'#ff3ab5', WIDE:'#2dff8a', PUNCH:'#ff6b35', FOCUS:'#ffe135',
+  // novos
+  SUB:'#7c3aed', AIR:'#a5f3fc', WARMTH:'#fb923c', DRIVE:'#ef4444',
+  SPACE:'#06b6d4', TIGHT:'#84cc16', PRESENCE:'#ec4899', PHASE:'#94a3b8'
+};
 const SPEC_COLORS = ['#ff3ab5','#ff6b35','#ffe135','#2dff8a','#2dd4ff','#b855f7','#ff3ab5'];
 const FREQ_LABELS = [20,50,100,200,500,1000,2000,5000,10000,20000];
 const DB_LABELS   = [0,-12,-24,-48,-72,-90];
@@ -3040,6 +3045,10 @@ function resetAllDSP(){
   if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0, t, tc);
   // Reset width offsets
   widthAirOffset=0; widthHighOffset=0;
+  // Desligar os knobs novos (modo ORIGINAL = nada do novo activo)
+  ['_knobSub','_knobAir','_knobWarmth','_knobDrive','_knobSpace','_knobTight','_knobPresence','_knobPhase'].forEach(n => {
+    if(window[n]) try{ window[n](0); }catch(e){}
+  });
 }
 
 function updateModeUI(mode){
@@ -4609,7 +4618,12 @@ function onDrag(e){
   if(!dragName)return;
   kvals[dragName]=Math.max(0,Math.min(100,dragSV+(dragSY-(e.touches?e.touches[0].clientY:e.clientY))*0.9));
   drawKnob(KNOBS_DEF.indexOf(dragName),dragName);
-  if(playMode==='after'&&audioCtx)applyDSP();
+  // Auto-switch para PROCESSADO se o utilizador mexe num knob (queremos que ele ouça o efeito)
+  if(playMode!=='after' && audioCtx && audioBuffer){
+    if(typeof setMode==='function') setMode('after');
+    else playMode='after';
+  }
+  if(audioCtx) applyDSP();
 }
 function stopDrag(){dragName='';document.removeEventListener('mousemove',onDrag);document.removeEventListener('mouseup',stopDrag);}
 function toggleBypass(){
