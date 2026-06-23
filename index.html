@@ -144,7 +144,7 @@
     <div class="tab tab-primary" onclick="openTab('analysis',this)" style="color:var(--c4);">ANÁLISES</div>
     <div class="tab tab-primary" onclick="openTab('voicelab',this)" style="color:var(--c1);">VOICE LAB</div>
     <div class="tab tab-primary" onclick="openTab('studiopro',this)" style="color:var(--c3);">STUDIO PRO</div>
-    <div class="tab tab-primary" onclick="window.PRDX3&&window.PRDX3.open()" style="color:var(--c6);">PRO FINAL 🔒</div>
+    <div class="tab tab-primary" onclick="window.PRDX3&&window.PRDX3.open()" style="color:var(--c6);">PRO FINAL</div>
   </div>
   <div class="tabs tabs-effects">
     <div class="tab" onclick="openTab('eq',this)">EQ</div>
@@ -180,46 +180,12 @@
           <div class="sug"><div class="sdot" style="background:var(--c3)"></div><span id="s2t">Low-mid warmth</span><span class="sval c3" id="s2v">+0.8 dB</span></div>
           <div class="sug"><div class="sdot" style="background:var(--c5)"></div><span id="s3t">Stereo groove</span><span class="sval c5" id="s3v">+42%</span></div>
         </div>
-        <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;">
-          <div style="font-size:8px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:6px;">ANÁLISE DA FAIXA</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">LUFS</div>
-              <div style="font-size:13px;font-weight:700;color:var(--c1);font-family:'Rajdhani';" id="sug-lufs">-9.0</div>
-            </div>
-            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">PEAK</div>
-              <div style="font-size:13px;font-weight:700;color:var(--c4);font-family:'Rajdhani';" id="sug-peak">-2.0 dB</div>
-            </div>
-            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">PLR DIN.</div>
-              <div style="font-size:13px;font-weight:700;color:#ffe135;font-family:'Rajdhani';" id="sug-plr">13.1 dB</div>
-            </div>
-            <div style="background:var(--bg2);border-radius:4px;padding:5px 7px;border:1px solid var(--border);">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;">FASE</div>
-              <div style="font-size:13px;font-weight:700;color:#2dff8a;font-family:'Rajdhani';" id="sug-phase">+0.82</div>
-            </div>
-            <div style="background:var(--bg2);border-radius:4px;padding:7px 9px;border:1px solid var(--border);grid-column:span 2;">
-              <div style="font-size:8px;color:var(--muted2);letter-spacing:.5px;margin-bottom:6px;">BALANCE LOW / MID / HIGH</div>
-              <div style="display:flex;flex-direction:column;gap:5px;">
-                <div style="display:flex;gap:6px;align-items:center;">
-                  <span style="font-size:8px;color:#b855f7;min-width:30px;letter-spacing:.5px;">LOW</span>
-                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-low-bar" style="height:100%;width:52%;background:#b855f7;border-radius:3px;transition:width .2s;"></div></div>
-                  <span style="font-size:9px;font-weight:700;color:#b855f7;min-width:30px;text-align:right;" id="sug-low-pct">52%</span>
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;">
-                  <span style="font-size:8px;color:#2dd4ff;min-width:30px;letter-spacing:.5px;">MID</span>
-                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-mid-bar" style="height:100%;width:30%;background:#2dd4ff;border-radius:3px;transition:width .2s;"></div></div>
-                  <span style="font-size:9px;font-weight:700;color:#2dd4ff;min-width:30px;text-align:right;" id="sug-mid-pct">30%</span>
-                </div>
-                <div style="display:flex;gap:6px;align-items:center;">
-                  <span style="font-size:8px;color:#2dff8a;min-width:30px;letter-spacing:.5px;">HIGH</span>
-                  <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div id="sug-high-bar" style="height:100%;width:18%;background:#2dff8a;border-radius:3px;transition:width .2s;"></div></div>
-                  <span style="font-size:9px;font-weight:700;color:#2dff8a;min-width:30px;text-align:right;" id="sug-high-pct">18%</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- Análise da Faixa: visualmente removida do menu, IDs mantidos para o app.js continuar a actualizar -->
+        <div id="analise-faixa-inline" style="display:none;">
+          <span id="sug-lufs">-9.0</span><span id="sug-peak">-2.0 dB</span><span id="sug-plr">13.1 dB</span><span id="sug-phase">+0.82</span>
+          <span id="sug-low-bar"></span><span id="sug-low-pct">52%</span>
+          <span id="sug-mid-bar"></span><span id="sug-mid-pct">30%</span>
+          <span id="sug-high-bar"></span><span id="sug-high-pct">18%</span>
         </div>
       </div>
 

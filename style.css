@@ -443,3 +443,5 @@ html,body{background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--tex
 #memory-toast {
   box-shadow:0 4px 20px rgba(0,0,0,0.6);
 }
+/* PRO FINAL — esconde análise da faixa do panel principal (movida para o PRO FINAL) */
+#analise-faixa-inline{display:none!important;}

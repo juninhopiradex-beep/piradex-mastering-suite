@@ -20,7 +20,7 @@
 (function () {
 'use strict';
 
-const VERSION = '3.B';
+const VERSION = '1.0.1';
 const NS = 'prdx3';
 
 /* ════════════════════════════ HELPERS GERAIS ════════════════════════════ */
@@ -546,6 +546,8 @@ function injectCSS() {
   .${NS}-fill{height:100%;width:0;transition:width .08s linear;}
   .${NS}-hint{font-size:11px;color:var(--muted);line-height:1.5;}
   .${NS}-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;}
+  .${NS}-tools-grid .panel{contain:none!important;height:auto!important;min-height:120px!important;overflow:visible!important;display:block!important;}
+  .${NS}-tools-grid .panel .plabel{margin-bottom:10px;}
   .${NS}-cardlbl{font-size:9px;color:var(--muted2);letter-spacing:1.5px;margin-bottom:4px;}
   .${NS}-drop{border:1.5px dashed var(--border2);border-radius:10px;padding:22px;text-align:center;color:var(--muted2);
     font-size:12px;cursor:pointer;transition:border-color .15s,color .15s;}
@@ -607,8 +609,8 @@ function buildUI() {
   renderPage('limiter');
 }
 function openModal() {
-  // PRO FINALIZER é exclusivo da versão FULL
-  if (!window.isFullVersion) { showProFinalLock(); return; }
+  // PRO FINALIZER: aberto para contas master + tier advanced. Bloqueado para basic/demo.
+  if (!window.canProFinal) { showProFinalLock(); return; }
   $('#' + NS + '-overlay').classList.add(NS + '-open');
 }
 function showProFinalLock() {
@@ -619,7 +621,7 @@ function showProFinalLock() {
     lock.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--c6);border-radius:16px;padding:34px 30px;max-width:420px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.6);">
       <div style="font-size:36px;margin-bottom:10px;">🔒</div>
       <div style="font-family:'Orbitron',monospace;font-weight:900;font-size:18px;background:linear-gradient(90deg,#b855f7,#ff3ab5);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:1px;margin-bottom:10px;">PRO FINALIZER</div>
-      <div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:18px;">Módulo exclusivo da <b style="color:var(--c4)">versão FULL</b>. Inclui True Peak Limiter, LUFS, 6 métricas de análise, separação de stems, export multi-formato, sessão ao vivo e mais.</div>
+      <div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:18px;">Módulo exclusivo das contas <b style="color:var(--c4)">FULL Advanced</b> e <b style="color:var(--c4)">Master</b>. Indisponível em <b style="color:var(--c3)">Basic</b> e <b style="color:var(--c3)">Demo</b>.</div>
       <button class="${NS}-btn ${NS}-go" id="${NS}-lockcta" style="width:100%;margin-bottom:8px;">DESBLOQUEAR VERSÃO FULL</button>
       <button class="${NS}-btn" id="${NS}-lockclose" style="width:100%;border-color:var(--border2);color:var(--muted);">Fechar</button>
     </div>`;
@@ -855,12 +857,18 @@ function pageTools(body) {
     return;
   }
   body.innerHTML = `<div class="${NS}-hint" style="margin-bottom:14px;">Genre DNA · Sessão · Ghost Reference · Blind A/B — movidos do ecrã principal.</div>
-    <div id="${NS}-tools-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;"></div>`;
+    <div id="${NS}-tools-grid" class="${NS}-tools-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;"></div>`;
   const grid = $('#' + NS + '-tools-grid');
   panels.forEach(p => {
     // garante que o ab-panel (oculto) aparece aqui visível
     if (p.id === 'ab-panel') p.style.display = '';
-    if (p.style) { p.style.gridColumn = ''; } // anula spans herdados do grid principal
+    // neutraliza os estilos do grid principal que os faziam colapsar em barras finas
+    p.style.gridColumn = '';
+    p.style.contain = 'none';
+    p.style.height = 'auto';
+    p.style.minHeight = '120px';
+    p.style.overflow = 'visible';
+    p.style.background = 'var(--bg3)';
     grid.appendChild(p); // relocaliza preservando listeners
   });
 }
@@ -1977,7 +1985,8 @@ function init() {
   if (window.__prdx3Loaded) return; window.__prdx3Loaded = true;
   buildUI();
   document.addEventListener('piradex:fileLoaded', (e) => {
-    window.__prdx3Master = null; localBuffer = null;
+    window.__prdx3Master = null;
+    localBuffer = (e.detail && e.detail.numberOfChannels) ? e.detail : null; // captura o buffer carregado
     emit('fileLoaded', e.detail);
     if ($('#' + NS + '-overlay') && $('#' + NS + '-overlay').classList.contains(NS + '-open')) renderPage(currentPage);
   });

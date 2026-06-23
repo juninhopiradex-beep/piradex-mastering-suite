@@ -177,7 +177,7 @@ function openTab(name, el) {
   if(name==='image')setTimeout(()=>{ if(typeof _ensureVectorscope==='function') _ensureVectorscope(); updateImager(); },60);
   if(name==='lowfocus')setTimeout(()=>{ if(typeof updateLowFocus==='function') updateLowFocus(); },60);
   if(name==='highfocus')setTimeout(()=>{ if(typeof updateHighFocus==='function') updateHighFocus(); },60);
-  if(name==='dyneq')setTimeout(()=>{ if(typeof updateDynEQ==='function') updateDynEQ(); },60);
+  if(name==='dyneq')setTimeout(()=>{ if(typeof updateDynEQ==='function') updateDynEQ(); if(typeof _startDynEQAnim==='function') _startDynEQAnim(); },60);
   if(name==='mseq')setTimeout(()=>{ if(typeof updateMSEq==='function') updateMSEq(); },60);
   if(name==='warmth')setTimeout(()=>{ if(typeof updateWarmth==='function') updateWarmth(); },60);
   if(name==='spectral')setTimeout(()=>{ if(typeof updateSpectral==='function') updateSpectral(); },60);
@@ -1367,22 +1367,66 @@ function _drawDynEQ(){
   });
   ctx.strokeStyle='rgba(255,255,255,0.1)';
   ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
-  // 4 bandas
+  // 4 bandas — desenha curva de resposta + nível detectado em tempo real
   const colors=['rgba(45,212,255,1)','rgba(45,255,138,1)','rgba(255,225,53,1)','rgba(255,58,181,1)'];
   for(let i=0;i<4;i++){
     const idx=i+1;
     const f=parseInt(document.getElementById('deq'+idx+'-f')?.value||1000);
     const g=parseFloat(document.getElementById('deq'+idx+'-g')?.value||0);
+    const t=parseInt(document.getElementById('deq'+idx+'-t')?.value||-20);
     const x=Math.log10(f/20)/Math.log10(20000/20)*W;
+    // ── nível detectado em tempo real ──
+    let lvlDb=-70, active=false, appliedG=0;
+    try{
+      if(_dynEQNodes && _dynEQNodes.analysers && _dynEQNodes.analysers[i]){
+        const an=_dynEQNodes.analysers[i];
+        const buf=new Uint8Array(an.fftSize); an.getByteTimeDomainData(buf);
+        let sum=0; for(let k=0;k<buf.length;k++){const v=(buf[k]-128)/128; sum+=v*v;}
+        const rms=Math.sqrt(sum/buf.length);
+        lvlDb = rms>0 ? 20*Math.log10(rms) : -70;
+        active = lvlDb > t;
+        // gain efectivamente aplicado (interpolado pelo loop)
+        if(_deqNodes && _deqNodes[i]) appliedG = _deqNodes[i].gain.value;
+      }
+    }catch(e){}
+    // barra vertical de nível por banda
+    const lvlH = clamp((lvlDb+60)/60, 0, 1) * (H-30);
+    ctx.fillStyle = active ? colors[i] : colors[i].replace('1)','0.25)');
+    ctx.fillRect(x-2, H-14-lvlH, 4, lvlH);
+    // linha do threshold para esta banda
+    const thY = H/2 - t*1.5; // visual aprox
+    ctx.strokeStyle = colors[i].replace('1)','0.5)'); ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(x-30, thY); ctx.lineTo(x+30, thY); ctx.stroke(); ctx.setLineDash([]);
+    // ponto da banda — pisca quando está a comprimir
     const y=H/2 - g*8;
-    ctx.fillStyle=colors[i]; ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle=colors[i].replace('1)','0.3)'); ctx.lineWidth=1;
-    ctx.beginPath(); ctx.arc(x,y,18,0,Math.PI*2); ctx.stroke();
+    const pulse = active ? (1 + 0.3*Math.sin(Date.now()*0.012)) : 1;
+    ctx.fillStyle=colors[i]; ctx.beginPath(); ctx.arc(x,y,8*pulse,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=colors[i].replace('1)','0.4)'); ctx.lineWidth = active?2:1;
+    ctx.beginPath(); ctx.arc(x,y,18*pulse,0,Math.PI*2); ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.font='10px monospace'; ctx.textAlign='center';
     ctx.fillText(idx, x, y+3);
     ctx.fillStyle=colors[i]; ctx.font='9px monospace';
     ctx.fillText((g>=0?'+':'')+g.toFixed(1)+' dB', x, y-22);
+    // gain aplicado em vivo (quando diferente de g)
+    if(active && Math.abs(appliedG - g) > 0.1){
+      ctx.fillStyle = colors[i].replace('1)','0.7)'); ctx.font='8px monospace';
+      ctx.fillText('▼'+appliedG.toFixed(1), x, y+30);
+    }
+    // actualiza o "aplicado" no card respectivo
+    const apEl = document.getElementById('deq'+idx+'-applied');
+    if(apEl) apEl.textContent = 'aplicado: ' + appliedG.toFixed(1) + ' dB';
   }
+}
+// Anima o gráfico de forma contínua enquanto a aba estiver visível
+let _dynEQRAF = null;
+function _startDynEQAnim(){
+  if(_dynEQRAF) return;
+  function tick(){
+    const tab = document.getElementById('tab-dyneq');
+    if(tab && tab.classList.contains('active')){ _drawDynEQ(); }
+    _dynEQRAF = requestAnimationFrame(tick);
+  }
+  _dynEQRAF = requestAnimationFrame(tick);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2569,6 +2613,7 @@ function loadFile(file){
   reader.onload=async(e)=>{
     try{
       audioBuffer=await audioCtx.decodeAudioData(e.target.result.slice(0));
+      window.audioBuffer=audioBuffer;
       document.getElementById('track-name').textContent=file.name.replace(/\.[^.]+$/,'');
       document.getElementById('track-dur').textContent=fmtTime(audioBuffer.duration);
       document.getElementById('time-total').textContent=fmtTime(audioBuffer.duration);
@@ -2726,45 +2771,39 @@ function setMode(mode){
       hb.style.pointerEvents='none';hb.style.animation='none';
     }
   }
-  const was=isPlaying;
-  const pos=was?(audioCtx.currentTime-startTime):pauseOffset;
-  stopSource();
-  isPlaying=false;
-  pauseOffset=Math.max(0,Math.min(pos,audioBuffer.duration-0.01));
   playMode=mode;
-
+  // ── Suave: alterna o DSP em tempo real sem parar a source ──
+  // (evita o "click"/travagem que vinha do stopSource() + playAudio() de novo)
   if(mode==='before'){
-    // RESET ALL DSP to zero/bypass when going back to ORIGINAL
     resetAllDSP();
     resetModuleBypasses();
   } else {
-    // Entering PROCESSADO — apply current knob/preset settings to the chain once
     applyDSP();
   }
-
   updateModeUI(mode);
   updateLUFSDisplay();
-  if(was) setTimeout(()=>playAudio(),10);
+  // Se estava parado, garante que continua parado (não força play)
 }
 
 function resetAllDSP(){
   if(!audioCtx) return;
-  // Zero all EQ
-  [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>{ if(f) f.gain.value=0; });
-  // Bypass compressor
-  if(compNode){ compNode.threshold.value=0; compNode.ratio.value=1; }
+  const t = audioCtx.currentTime, tc = 0.05; // 50ms smoothing
+  // Zero all EQ — rampa suave (evita click)
+  [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>{ if(f) f.gain.setTargetAtTime(0, t, tc); });
+  // Bypass compressor — também com rampa
+  if(compNode){ compNode.threshold.setTargetAtTime(0, t, tc); compNode.ratio.setTargetAtTime(1, t, tc); }
   // Bypass limiter
-  if(limiterNode){ limiterNode.threshold.value=0; limiterNode.ratio.value=1; }
+  if(limiterNode){ limiterNode.threshold.setTargetAtTime(0, t, tc); limiterNode.ratio.setTargetAtTime(1, t, tc); }
   // Unity master gain
-  if(masterGain) masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  if(masterGain) masterGain.gain.setTargetAtTime(1.0, t, tc);
   // Unity dry gain
-  if(dryGain) dryGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  if(dryGain) dryGain.gain.setTargetAtTime(1.0, t, tc);
   // Unity side/mid
-  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
-  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,  audioCtx.currentTime, 0.05);
+  if(msSideGain) msSideGain.gain.setTargetAtTime(1.0, t, tc);
+  if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,  t, tc);
   // Zero shape
-  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
-  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  if(shapeDryGain) shapeDryGain.gain.setTargetAtTime(1.0, t, tc);
+  if(shapeWetGain) shapeWetGain.gain.setTargetAtTime(0.0, t, tc);
   // Reset width offsets
   widthAirOffset=0; widthHighOffset=0;
 }
@@ -4343,9 +4382,15 @@ function toggleBypass(){
   if(btn){
     btn.classList.toggle('on', bypassOn);
     btn.style.color = bypassOn ? '#ff3ab5' : '';
+    btn.textContent = bypassOn ? 'BYPASS ON' : 'BYPASS';
   }
   applyDSP();
-  setStatus(bypassOn ? '⚡ BYPASS ATIVO — sinal sem processamento' : 'Bypass desligado — processamento activo');
+  const playing = sourceNode && !sourceNode.ended;
+  if (bypassOn) {
+    setStatus(playing ? '⚡ BYPASS ATIVO — ouves o sinal cru' : '⚡ BYPASS ATIVO — toca a faixa para ouvir o sinal cru');
+  } else {
+    setStatus(playing ? 'Bypass OFF — processamento ativo' : 'Bypass OFF — processamento ativo (toca a faixa para ouvir)');
+  }
 }
 function setStatus(msg){document.getElementById('stxt').textContent=msg.toUpperCase();}
 
@@ -4671,6 +4716,17 @@ const LICENSES = {
 };
 let isFullVersion=false;   // true = qualquer licença válida (desbloqueia exportação)
 Object.defineProperty(window, 'isFullVersion', { get: () => isFullVersion });
+// PRO FINAL: aberto para contas master (admin/piradex) e para tier 'advanced'.
+// Bloqueado para tier 'basic' e demo.
+Object.defineProperty(window, 'canProFinal', {
+  get: () => {
+    const L = currentLicense;
+    if (!L) return false;
+    if (L.mode === 'master') return true;          // contas master sempre
+    if (L.mode === 'demo') return false;           // demo nunca
+    return L.tier === 'advanced';                  // basic = bloqueado, advanced = ok
+  }
+});
 let hasStudioPro=false;    // true = nível 'advanced' (desbloqueia STUDIO PRO)
 let currentLicense=null;
 
@@ -4738,6 +4794,13 @@ function updateLicenseBadge(){
   if(sp){
     sp.textContent = hasStudioPro ? 'STUDIO PRO' : 'STUDIO PRO 🔒';
     sp.style.opacity = hasStudioPro ? '1' : '0.6';
+  }
+  // PRO FINAL tab: locked apenas em basic/demo
+  const pf=document.querySelector('.tab[onclick*="PRDX3"]');
+  if(pf){
+    const ok = window.canProFinal;
+    pf.textContent = ok ? 'PRO FINAL' : 'PRO FINAL 🔒';
+    pf.style.opacity = ok ? '1' : '0.6';
   }
 }
 const PLANS={
