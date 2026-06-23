@@ -50,13 +50,17 @@ const PRESETS = {
     sugs:[['Low-mid nasal cut @ 500Hz','−2.5 dB','c2'],['Air & presence boost','+2.0 dB','c3'],['Stereo width AI clean','+58%','c5']]}
 };
 
-const KNOBS_DEF   = ['CLEAN','BASS','LOUD','WIDE','PUNCH','FOCUS'];
+const KNOBS_DEF   = ['CLEAN','BASS','LOUD','WIDE','PUNCH','FOCUS','SUB','AIR','WARMTH','DRIVE','SPACE','TIGHT','PRESENCE','PHASE'];
 const KNOB_COLORS = {CLEAN:'#2dd4ff',BASS:'#b855f7',LOUD:'#ff3ab5',WIDE:'#2dff8a',PUNCH:'#ff6b35',FOCUS:'#ffe135'};
 const SPEC_COLORS = ['#ff3ab5','#ff6b35','#ffe135','#2dff8a','#2dd4ff','#b855f7','#ff3ab5'];
 const FREQ_LABELS = [20,50,100,200,500,1000,2000,5000,10000,20000];
 const DB_LABELS   = [0,-12,-24,-48,-72,-90];
 
-let kvals     = {...PRESETS.kizomba.knobs};
+// Defaults: 6 originais do preset Kizomba + 8 novos a 0 (OFF até o utilizador subir)
+let kvals     = Object.assign(
+  {SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0},
+  PRESETS.kizomba.knobs
+);
 let piradexOn = false, bypassOn = false, curPreset = 'kizomba', playMode = 'before';
 let headroomApplied = false;
 
@@ -317,6 +321,144 @@ function buildChain() {
     n.frequency.value=[150,800,3000,10000][i];
     _spNodes.push(n);
   }
+  // ════════════════════════════════════════════════════════════════════════
+  // KNOBS NOVOS — processadores DSP dedicados (nós paralelos ao chain)
+  // Todos arrancam OFF (gain 0); são activados pelos handlers window._knobXxx
+  // que applyDSP() chama com o valor 0..1 do knob respectivo.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // ── SUB — Sub-harmonic synthesis (full-wave rectify + low-pass) ─────────
+  // Gera 1ª/2ª harmónicas a partir dos graves para "fake sub" em telemóveis
+  const _subInGain = audioCtx.createGain(); _subInGain.gain.value = 0;
+  const _subLP = audioCtx.createBiquadFilter(); _subLP.type='lowpass'; _subLP.frequency.value=120; _subLP.Q.value=0.7;
+  const _subRect = audioCtx.createWaveShaper();
+  { // curva de rectificação (full-wave abs) + ligeiro soft-clip para gerar harmónicos pares
+    const n = 4096, c = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.abs(x) * 0.95 - 0.475; }
+    _subRect.curve = c; _subRect.oversample = '2x';
+  }
+  const _subTone = audioCtx.createBiquadFilter(); _subTone.type='lowpass'; _subTone.frequency.value=200; _subTone.Q.value=0.7;
+  const _subOut = audioCtx.createGain(); _subOut.gain.value = 0; // mix paralelo
+  _subInGain.connect(_subLP); _subLP.connect(_subRect); _subRect.connect(_subTone); _subTone.connect(_subOut);
+
+  // ── AIR — Maag-style: shelf alto 12k + tape exciter ─────────────────────
+  const _airInGain = audioCtx.createGain(); _airInGain.gain.value = 0;
+  const _airHPF = audioCtx.createBiquadFilter(); _airHPF.type='highpass'; _airHPF.frequency.value=4000; _airHPF.Q.value=0.5;
+  const _airShelf = audioCtx.createBiquadFilter(); _airShelf.type='highshelf'; _airShelf.frequency.value=14000; _airShelf.gain.value=0;
+  const _airSat = audioCtx.createWaveShaper();
+  { const n = 4096, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 1.5) * 0.85; } _airSat.curve = c; _airSat.oversample = '2x'; }
+  const _airOut = audioCtx.createGain(); _airOut.gain.value = 0;
+  _airInGain.connect(_airHPF); _airHPF.connect(_airShelf); _airShelf.connect(_airSat); _airSat.connect(_airOut);
+
+  // ── WARMTH — saturação de 2ª harmónica (assimétrica = pares dominantes) + LP suave ─
+  const _warmthInGain = audioCtx.createGain(); _warmthInGain.gain.value = 0;
+  const _warmthSat = audioCtx.createWaveShaper();
+  { const n = 4096, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; // assimétrica para 2ª harmónica dominante (tape-style)
+      c[i] = x >= 0 ? Math.tanh(x * 1.8) * 0.9 : Math.tanh(x * 1.3) * 0.9; }
+    _warmthSat.curve = c; _warmthSat.oversample = '4x'; }
+  const _warmthLP = audioCtx.createBiquadFilter(); _warmthLP.type='lowpass'; _warmthLP.frequency.value=18000; _warmthLP.Q.value=0.7;
+  const _warmthOut = audioCtx.createGain(); _warmthOut.gain.value = 0;
+  _warmthInGain.connect(_warmthSat); _warmthSat.connect(_warmthLP); _warmthLP.connect(_warmthOut);
+
+  // ── DRIVE — parallel saturation (NY-style) ──────────────────────────────
+  const _driveInGain = audioCtx.createGain(); _driveInGain.gain.value = 0;
+  const _drivePreGain = audioCtx.createGain(); _drivePreGain.gain.value = 1.0; // boost antes do shaper
+  const _driveSat = audioCtx.createWaveShaper();
+  { const n = 4096, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 3.0) / Math.tanh(3.0); } _driveSat.curve = c; _driveSat.oversample = '4x'; }
+  const _driveOut = audioCtx.createGain(); _driveOut.gain.value = 0;
+  _driveInGain.connect(_drivePreGain); _drivePreGain.connect(_driveSat); _driveSat.connect(_driveOut);
+
+  // ── SPACE — pre-delay + early reflections (3 taps + feedback baixo) ─────
+  const _spaceInGain = audioCtx.createGain(); _spaceInGain.gain.value = 0;
+  const _spaceDelay1 = audioCtx.createDelay(0.2); _spaceDelay1.delayTime.value = 0.013;
+  const _spaceDelay2 = audioCtx.createDelay(0.2); _spaceDelay2.delayTime.value = 0.029;
+  const _spaceDelay3 = audioCtx.createDelay(0.2); _spaceDelay3.delayTime.value = 0.061;
+  const _spaceFb = audioCtx.createGain(); _spaceFb.gain.value = 0.18;       // baixo, não lava
+  const _spaceTone = audioCtx.createBiquadFilter(); _spaceTone.type='lowpass'; _spaceTone.frequency.value=6500; _spaceTone.Q.value=0.7;
+  const _spaceMixerEarly = audioCtx.createGain(); _spaceMixerEarly.gain.value = 0.4;
+  const _spaceOut = audioCtx.createGain(); _spaceOut.gain.value = 0;
+  _spaceInGain.connect(_spaceDelay1); _spaceInGain.connect(_spaceDelay2); _spaceInGain.connect(_spaceDelay3);
+  _spaceDelay1.connect(_spaceMixerEarly); _spaceDelay2.connect(_spaceMixerEarly); _spaceDelay3.connect(_spaceMixerEarly);
+  _spaceMixerEarly.connect(_spaceTone); _spaceTone.connect(_spaceOut);
+  _spaceMixerEarly.connect(_spaceFb); _spaceFb.connect(_spaceDelay3);     // tail curta
+
+  // ── TIGHT — compressor lento focado nos transientes (oposto do PUNCH) ───
+  const _tightComp = audioCtx.createDynamicsCompressor();
+  _tightComp.threshold.value = 0; _tightComp.ratio.value = 1; _tightComp.knee.value = 12;
+  _tightComp.attack.value = 0.020; _tightComp.release.value = 0.300;
+
+  // ── PRESENCE — peaking estreito 2.5k (vocal/lead clarity) ───────────────
+  const _presPeak = audioCtx.createBiquadFilter(); _presPeak.type='peaking'; _presPeak.frequency.value=2700; _presPeak.Q.value=2.5; _presPeak.gain.value=0;
+
+  // ── PHASE — low-end mono-isation: HP no side abaixo de 120Hz ────────────
+  // o nó é controlado via _knobSideHP que actua no side path do M/S
+  // (msSideEqLow já existe na suite — vamos reutilizá-lo)
+
+  // guardar refs em window para os handlers acederem
+  window.__knobNodes = {
+    sub:{in:_subInGain, out:_subOut}, air:{in:_airInGain, shelf:_airShelf, out:_airOut},
+    warmth:{in:_warmthInGain, out:_warmthOut}, drive:{in:_driveInGain, pre:_drivePreGain, out:_driveOut},
+    space:{in:_spaceInGain, out:_spaceOut, fb:_spaceFb}, tight:{node:_tightComp},
+    presence:{node:_presPeak}, sideHP:{node:null} // sideHP é wireado mais tarde
+  };
+
+  // ── handlers globais: cada knob recebe valor 0..1 e ajusta o seu DSP ────
+  const _t = () => audioCtx.currentTime;
+  window._knobSub = v => { // 0..1: mix do sub-harmonic synth
+    _subInGain.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _subOut.gain.setTargetAtTime(v * 0.45, _t(), 0.05); // até 45% mix paralelo (mais é mud)
+  };
+  window._knobSubSat = v => {}; // já incluído via _knobSub
+  window._knobAir = v => {
+    _airInGain.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _airShelf.gain.setTargetAtTime(v * 6, _t(), 0.05);  // até +6 dB shelf
+    _airOut.gain.setTargetAtTime(v * 0.35, _t(), 0.05); // mix paralelo (saturação subtil)
+  };
+  window._knobWarmth = v => {
+    _warmthInGain.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _warmthOut.gain.setTargetAtTime(v * 0.4, _t(), 0.05); // mix paralelo
+    // top rolloff aumenta levemente com warmth (tape behaviour)
+    _warmthLP.frequency.setTargetAtTime(20000 - v * 4000, _t(), 0.05); // 20k→16k
+  };
+  window._knobDrive = v => {
+    _driveInGain.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _drivePreGain.gain.setTargetAtTime(1 + v * 4, _t(), 0.05);  // 1× → 5× pre-gain (mais saturação)
+    _driveOut.gain.setTargetAtTime(v * 0.5, _t(), 0.05);
+  };
+  window._knobSpace = v => {
+    _spaceInGain.gain.setTargetAtTime(v > 0 ? 1 : 0, _t(), 0.05);
+    _spaceOut.gain.setTargetAtTime(v * 0.3, _t(), 0.1); // até 30% mix
+    _spaceFb.gain.setTargetAtTime(0.1 + v * 0.2, _t(), 0.1);
+  };
+  window._knobTight = v => {
+    // tight comp: knob alto = comp mais activo nos transientes
+    if (v <= 0.05) { _tightComp.threshold.setTargetAtTime(0, _t(), 0.05); _tightComp.ratio.setTargetAtTime(1, _t(), 0.05); }
+    else {
+      _tightComp.threshold.setTargetAtTime(-15 - v * 15, _t(), 0.05);
+      _tightComp.ratio.setTargetAtTime(1 + v * 3, _t(), 0.05);
+      _tightComp.attack.setTargetAtTime(0.03 - v * 0.02, _t(), 0.05);
+      _tightComp.release.setTargetAtTime(0.25, _t(), 0.05);
+    }
+  };
+  window._knobPresence = v => {
+    _presPeak.gain.setTargetAtTime(v * 5, _t(), 0.05); // até +5 dB @ 2.7kHz Q=2.5
+  };
+  window._knobPhase = v => {
+    // mono-isa o side abaixo de 120Hz: aproveita msSideEqLow se existir
+    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
+      // baixa o ganho do side-low (efeito de mono-low)
+      msSideEqLow.gain.setTargetAtTime(-v * 18, _t(), 0.08); // até -18dB no side abaixo de 200Hz
+    }
+  };
+  // side HP do knob WIDE (já existente)
+  window._knobSideHP = v => {
+    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
+      // quando wide é grande, corta o side-low para manter mono-compat
+      const reduceLow = -v * 9;
+      msSideEqLow.gain.setTargetAtTime(reduceLow, _t(), 0.08);
+    }
+  };
+
   // RESON — 6 peaks dedicados
   _resonNodes = [];
   for(let i=0;i<6;i++){
@@ -414,6 +556,26 @@ function buildChain() {
   msMidGain.connect(msMerger, 0, 1);
   msSideGain.connect(msInvSide); msInvSide.connect(msMerger, 0, 1);
   msMerger.connect(msProcGain); msProcGain.connect(masterGain);
+
+  // ── KNOBS NOVOS: ligar tap do limiterNode aos processadores paralelos ──
+  // PRESENCE e TIGHT vão em série na chain (não paralelo), por isso ligados antes
+  // SUB, AIR, WARMTH, DRIVE, SPACE são paralelos (soma no masterGain)
+  if (window.__knobNodes) {
+    const kn = window.__knobNodes;
+    // SUB: tap do limiter → sub-synth → masterGain (paralelo)
+    limiterNode.connect(kn.sub.in); kn.sub.out.connect(masterGain);
+    // AIR: paralelo
+    limiterNode.connect(kn.air.in); kn.air.out.connect(masterGain);
+    // WARMTH: paralelo
+    limiterNode.connect(kn.warmth.in); kn.warmth.out.connect(masterGain);
+    // DRIVE: paralelo
+    limiterNode.connect(kn.drive.in); kn.drive.out.connect(masterGain);
+    // SPACE: paralelo
+    limiterNode.connect(kn.space.in); kn.space.out.connect(masterGain);
+    // PRESENCE e TIGHT: paralelo simples (não interferem com a chain principal)
+    limiterNode.connect(kn.presence.node); kn.presence.node.connect(masterGain);
+    limiterNode.connect(kn.tight.node); kn.tight.node.connect(masterGain);
+  }
 
   masterGain.connect(analyserNode);
 
@@ -804,53 +966,123 @@ function applyDSP() {
   if(!audioCtx) return;
   if(piradexOn){ applyPiradexDSP(); return; }
 
-  const {BASS:bass,CLEAN:clean,LOUD:loud,PUNCH:punch,FOCUS:focus,WIDE:wide}=kvals;
+  const k = kvals;
+  // valores normalizados -1..+1 (50=centro), ou 0..1 conforme natureza do knob
+  const norm = v => (v - 50) / 50;                     // bipolar -1..1
+  const lin  = v => v / 100;                           // 0..1
+  const t = audioCtx.currentTime, smooth = 0.05;
+  // helper para rampa suave em qualquer AudioParam
+  const ramp = (p, v) => p && p.setTargetAtTime(v, t, smooth);
 
-  // ── EQ: 50 = 0dB (no effect), each point = small dB change
-  eqSub.gain.value    = (bass  - 50) * 0.18;  // ±9dB range
-  eqBass.gain.value   = (bass  - 50) * 0.12;  // ±6dB
-  eqLowNode.gain.value= (bass  - 50) * 0.06;  // ±3dB
-  eqMid.gain.value    = (focus - 50) * 0.12;  // ±6dB
-  eqHigh.gain.value   = (clean - 50) * 0.08;  // ±4dB
-  eqAir.gain.value    = (clean - 50) * 0.08;  // ±4dB
+  // ════════════════════════════════════════════════════════════════════════
+  // CLEAN — refinado: tilt EQ + dynamic de-essing + air harmonic shelf
+  // ════════════════════════════════════════════════════════════════════════
+  const cleanN = norm(k.CLEAN);                        // -1..+1
+  // tilt EQ: highs sobem, lows ligeiramente baixam (pivot ~1kHz)
+  eqHigh.gain.value = cleanN * 5.0;                    // ±5 dB @ 3.2kHz
+  eqAir.gain.value  = cleanN * 6.0;                    // ±6 dB @ 12kHz (shelf)
+  // de-essing dinâmico: knob > 60 corta sibilantes a 7kHz, mais agressivo se >80
+  if (_hfDeess) {
+    const deess = k.CLEAN > 50 ? -(k.CLEAN - 50) * 0.12 : 0;
+    ramp(_hfDeess.gain, deess);                        // 0 → -6 dB notch
+  }
+  // micro-cut de mud abaixo do pivot para "clean" verdadeiro (não só agudos)
+  if (cleanN > 0 && _lfMud) ramp(_lfMud.gain, -cleanN * 1.5);
 
-  // ── Compressor: at PUNCH=50 → near-bypass (threshold very high, ratio 1:1)
-  // PUNCH 0  = no compression (bypass)
-  // PUNCH 50 = gentle glue (-20dB threshold, 2:1)
-  // PUNCH 100= heavy compression (-40dB, 8:1)
-  if(punch <= 10) {
-    // Effectively bypass comp
-    compNode.threshold.value = 0;
-    compNode.ratio.value     = 1;
-  } else {
-    compNode.threshold.value = -40 * (punch/100);  // 0 to -40dB
-    compNode.ratio.value     = 1 + (punch/100) * 7; // 1:1 to 8:1
-    compNode.attack.value    = Math.max(0.001, 0.05 - (punch*0.0004));
-    compNode.release.value   = Math.max(0.05,  0.4  - (punch*0.003));
-    compNode.knee.value      = 6;
+  // ════════════════════════════════════════════════════════════════════════
+  // BASS — refinado: 3 bandas + saturação harmónica para "peso" sem desperdiçar headroom
+  // ════════════════════════════════════════════════════════════════════════
+  const bassN = norm(k.BASS);
+  eqSub.gain.value    = bassN * 9.0;                   // ±9 dB @ 40Hz
+  eqBass.gain.value   = bassN * 5.0;                   // ±5 dB @ 100Hz
+  eqLowNode.gain.value= bassN * 2.5;                   // ±2.5 dB @ 250Hz
+  // saturação sub: gera harmónicas (em vez de só amplificar) — usa _knob_subSat se existir
+  if (window._knobSubSat && k.BASS > 55) {
+    const amt = (k.BASS - 55) / 45;                    // 0..1
+    window._knobSubSat(amt);
   }
 
-  // ── Limiter: only active when LOUD > 60
-  if(loud <= 50) {
-    limiterNode.threshold.value = 0;
-    limiterNode.ratio.value     = 1;
+  // ════════════════════════════════════════════════════════════════════════
+  // FOCUS — refinado: peak no mid com Q variável + tilt centrado
+  // ════════════════════════════════════════════════════════════════════════
+  const focusN = norm(k.FOCUS);
+  eqMid.gain.value = focusN * 5.0;                     // ±5 dB no mid principal
+  // Q varia: knob alto = Q estreito (cirúrgico), knob baixo = Q largo (body)
+  if (eqMid.Q) ramp(eqMid.Q, k.FOCUS > 50 ? 0.7 + (k.FOCUS - 50) * 0.04 : 0.7);
+  // tilt centrado: knob alto sobe presence (3kHz), baixa boomy (250Hz)
+  if (_hfPres && focusN !== 0) ramp(_hfPres.gain, focusN * 2.5);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PUNCH — refinado: compressor + envelope no transient shaper
+  // ════════════════════════════════════════════════════════════════════════
+  if (k.PUNCH <= 10) {
+    ramp(compNode.threshold, 0); ramp(compNode.ratio, 1);
   } else {
-    limiterNode.threshold.value = -1;
-    limiterNode.ratio.value     = 20;
+    ramp(compNode.threshold, -40 * (k.PUNCH / 100));
+    ramp(compNode.ratio, 1 + (k.PUNCH / 100) * 7);
+    ramp(compNode.attack, Math.max(0.0005, 0.05 - (k.PUNCH * 0.0005))); // faster attack
+    ramp(compNode.release, Math.max(0.04, 0.4 - (k.PUNCH * 0.003)));
+    compNode.knee.value = 6;
+  }
+  // engata transient shaper se >60 (mais "snap" nos transientes)
+  if (_transientNode && k.PUNCH > 60) {
+    const amt = (k.PUNCH - 60) / 40;
+    ramp(_transientNode.threshold, -20 - amt * 10);
+    ramp(_transientNode.ratio, 1 + amt * 3);
+    ramp(_transientNode.attack, 0.001);
+    ramp(_transientNode.release, 0.08);
+  } else if (_transientNode) {
+    ramp(_transientNode.threshold, 0); ramp(_transientNode.ratio, 1);
   }
 
-  // ── Master gain calibrated so LOUD=65 ≈ -9 LUFS output
+  // ════════════════════════════════════════════════════════════════════════
+  // LOUD — refinado: engate progressivo de comp glue → limiter → master gain
+  // 0-50%: master gain sobe (volume puro)
+  // 50-80%: cola compressor activa (lower threshold do compNode em paralelo)
+  // 80-100%: limiter brickwall a -1dBTP
+  // ════════════════════════════════════════════════════════════════════════
+  const loud = k.LOUD;
+  // master gain: curva mais agressiva no final
   const gainFactor = loud <= 50
-    ? 0.1 + (loud/50) * 0.9    // 0→50: 0.1→1.0
-    : 1.0 + ((loud-50)/50) * 1.5; // 50→100: 1.0→2.5
-  masterGain.gain.setTargetAtTime(gainFactor, audioCtx.currentTime, 0.08);
+    ? 0.1 + (loud / 50) * 0.9                          // 0→1.0
+    : 1.0 + ((loud - 50) / 50) * 1.8;                  // 1.0→2.8
+  ramp(masterGain.gain, gainFactor);
 
-  // ── Width via the WIDE knob → Side gain (real M/S, no EQ corruption)
-  if(msSideGain){
-    const sideG = Math.max(0, wide/50); // 50=unity(1.0), 0=mono, 100=2x
-    msSideGain.gain.setTargetAtTime(sideG, audioCtx.currentTime, 0.08);
-    if(typeof _msEngage==='function') _msEngage();
+  // limiter brickwall engata progressivamente a partir de 60
+  if (loud <= 60) {
+    ramp(limiterNode.threshold, 0); ramp(limiterNode.ratio, 1);
+  } else {
+    const t = -((loud - 60) / 40) * 6;                 // 60→-0, 100→-6 dBFS
+    ramp(limiterNode.threshold, t);
+    ramp(limiterNode.ratio, 8 + ((loud - 60) / 40) * 12); // 8:1 → 20:1
+    ramp(limiterNode.attack, 0.001);
+    ramp(limiterNode.release, 0.08);
+    limiterNode.knee.value = 2;
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // WIDE — refinado: M/S + side-EQ HP automático quando wide > 60 (mantém mono-compat)
+  // ════════════════════════════════════════════════════════════════════════
+  if (msSideGain) {
+    const sideG = Math.max(0, k.WIDE / 50);            // 0=mono, 1.0=neutral, 2.0=wide
+    ramp(msSideGain.gain, sideG);
+    if (typeof _msEngage === 'function') _msEngage();
+  }
+  // side HP a 200Hz se wide > 60 (mantém peso mono no club)
+  if (window._knobSideHP) window._knobSideHP(k.WIDE > 60 ? (k.WIDE - 60) / 40 : 0);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // NOVOS KNOBS (8) — só aplicam se o knob existir em kvals
+  // SUB, AIR, WARMTH, DRIVE, SPACE, TIGHT, PRESENCE, PHASE
+  // ════════════════════════════════════════════════════════════════════════
+  if (typeof k.SUB === 'number' && window._knobSub) window._knobSub(lin(k.SUB));
+  if (typeof k.AIR === 'number' && window._knobAir) window._knobAir(lin(k.AIR));
+  if (typeof k.WARMTH === 'number' && window._knobWarmth) window._knobWarmth(lin(k.WARMTH));
+  if (typeof k.DRIVE === 'number' && window._knobDrive) window._knobDrive(lin(k.DRIVE));
+  if (typeof k.SPACE === 'number' && window._knobSpace) window._knobSpace(lin(k.SPACE));
+  if (typeof k.TIGHT === 'number' && window._knobTight) window._knobTight(lin(k.TIGHT));
+  if (typeof k.PRESENCE === 'number' && window._knobPresence) window._knobPresence(lin(k.PRESENCE));
+  if (typeof k.PHASE === 'number' && window._knobPhase) window._knobPhase(lin(k.PHASE));
 
   if(bypassOn){
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
@@ -861,13 +1093,15 @@ function applyDSP() {
     if(msSideGain) msSideGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
     if(msMidGain)  msMidGain.gain.setTargetAtTime(1.0,audioCtx.currentTime,0.02);
     masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+    // bypass também desliga os knobs novos
+    ['_knobSub','_knobAir','_knobWarmth','_knobDrive','_knobSpace','_knobTight','_knobPresence','_knobPhase','_knobSubSat'].forEach(n => { if(window[n]) try{window[n](0);}catch(e){} });
+    if (window._knobSideHP) window._knobSideHP(0);
     syncEQSliders();
     updateLUFSDisplay();
-    return; // stop here — nothing should overwrite bypass
+    return;
   }
 
   // ── Re-enforce any active module bypasses ──────────────────────────────────
-  // applyDSP overwrites node values, so we re-apply bypass state at the end
   if(moduleBypassState.eq){
     [eqSub,eqBass,eqLowNode,eqMid,eqHigh,eqAir].forEach(f=>f.gain.value=0);
   }
@@ -3091,6 +3325,8 @@ function setPreset(key,el){
   el.classList.add('active');
   document.getElementById('pi-name').textContent=p.name;
   document.getElementById('pi-desc').textContent=p.refs+' — '+p.desc;
+  // novos knobs voltam a 0 antes de aplicar preset (preset pode sobrepor se quiser)
+  Object.assign(kvals, {SUB:0,AIR:0,WARMTH:0,DRIVE:0,SPACE:0,TIGHT:0,PRESENCE:0,PHASE:0});
   Object.assign(kvals,p.knobs);
   if(audioCtx){
     eqSub.gain.value=p.eq.sub; eqBass.gain.value=p.eq.bass; eqLowNode.gain.value=p.eq.low;
