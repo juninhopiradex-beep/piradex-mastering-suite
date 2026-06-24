@@ -210,19 +210,21 @@ function measureLUFS(buffer) {
 async function applyTruePeakLimiter(buffer, opts) {
   const ceilingDb = opts.ceiling != null ? opts.ceiling : -1.0;
   const targetLufs = opts.targetLufs; // se definido, normaliza antes de limitar
+  const inputGainDb = opts.inputGain != null ? opts.inputGain : 0; // ganho de entrada (empurra para o limiter)
+  const mode = opts.mode || 'transparent'; // 'transparent' (release lento) ou 'aggressive' (release rápido, mais loud)
   const sr = buffer.sampleRate, nCh = buffer.numberOfChannels, N = buffer.length;
   const ceiling = dbToLin(ceilingDb);
 
-  // ganho de normalização opcional para o LUFS alvo
-  let preGain = 1;
+  // ganho de normalização opcional para o LUFS alvo + ganho de entrada manual
+  let preGain = dbToLin(inputGainDb);
   if (targetLufs != null) {
     const cur = measureLUFS(buffer);
-    if (cur > -70) preGain = dbToLin(targetLufs - cur);
+    if (cur > -70) preGain *= dbToLin(targetLufs - cur);
   }
 
   const out = ctx().createBuffer(nCh, N, sr);
   const lookahead = Math.round(0.005 * sr);      // 5 ms
-  const release = Math.round(0.050 * sr);        // 50 ms
+  const release = Math.round((mode === 'aggressive' ? 0.020 : 0.080) * sr); // agressivo=20ms, transparente=80ms
   const relCoef = Math.exp(-1 / release);
 
   // envelope de pico (linkado entre canais) a partir do sinal já com preGain
@@ -669,7 +671,212 @@ function renderPage(p) {
 }
 
 /* ── TRUE PEAK LIMITER ── */
+// computa dados para o gráfico do limiter: envelope de pico + redução de ganho ao longo do tempo
+function computeLimiterGraph(buffer, ceilingDb, inputGainDb, cols) {
+  cols = cols || 220;
+  const N = buffer.length, nCh = buffer.numberOfChannels;
+  const ceiling = dbToLin(ceilingDb), pre = dbToLin(inputGainDb || 0);
+  const block = Math.max(1, Math.floor(N / cols));
+  const peaks = new Array(cols).fill(0);
+  const gr = new Array(cols).fill(0); // gain reduction em dB (negativo)
+  for (let c = 0; c < cols; c++) {
+    let pk = 0;
+    const start = c * block, end = Math.min(N, start + block);
+    for (let i = start; i < end; i++) {
+      for (let ch = 0; ch < nCh; ch++) {
+        const v = Math.abs(buffer.getChannelData(ch)[i] * pre);
+        if (v > pk) pk = v;
+      }
+    }
+    peaks[c] = pk;
+    // redução = quanto o limiter tem de baixar para não passar o tecto
+    if (pk > ceiling) gr[c] = 20 * Math.log10(ceiling / pk); // dB negativo
+  }
+  return { peaks, gr };
+}
+
 function pageLimiter(body) {
+  const buf = activeBuffer();
+  if (!buf) return needBuffer(body);
+  body.innerHTML = `
+    <div class="${NS}-card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="${NS}-lbl" style="margin:0;">TRUE PEAK LIMITER · GAIN REDUCTION</div>
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--muted2);">
+          <span>IN <b id="${NS}-mIn" style="color:var(--c5);font-family:Orbitron;">—</b></span>
+          <span>OUT <b id="${NS}-mOut" style="color:var(--c4);font-family:Orbitron;">—</b></span>
+          <span>GR <b id="${NS}-mGr" style="color:var(--c7);font-family:Orbitron;">—</b></span>
+          <span>LUFS <b id="${NS}-mLufs" style="color:var(--c3);font-family:Orbitron;">—</b></span>
+        </div>
+      </div>
+      <canvas id="${NS}-limgraph" style="width:100%;height:230px;background:#07070e;border-radius:8px;display:block;"></canvas>
+    </div>
+    <div class="${NS}-row">
+      <div class="${NS}-card">
+        <div class="${NS}-lbl">GANHO DE ENTRADA</div>
+        <input type="range" min="0" max="18" step="0.5" value="0" class="${NS}-slider" id="${NS}-ingain">
+        <div class="${NS}-hint"><b id="${NS}-ingainv" style="color:var(--c5)">+0.0</b> dB &nbsp;·&nbsp; empurra o sinal para o limiter (mais loud)</div>
+      </div>
+      <div class="${NS}-card">
+        <div class="${NS}-lbl">TECTO (CEILING)</div>
+        <input type="range" min="-3" max="0" step="0.1" value="-1" class="${NS}-slider" id="${NS}-ceil">
+        <div class="${NS}-hint"><b id="${NS}-ceilv" style="color:var(--c1)">-1.0</b> dBTP &nbsp;·&nbsp; recomendado -1.0 (streaming)</div>
+      </div>
+    </div>
+    <div class="${NS}-row">
+      <div class="${NS}-card">
+        <div class="${NS}-lbl">MODO</div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="${NS}-btn ${NS}-modebtn" id="${NS}-mode-t" data-mode="transparent" style="flex:1;border-color:var(--c4);color:var(--c4);background:rgba(45,255,138,.12);">TRANSPARENTE</button>
+          <button class="${NS}-btn ${NS}-modebtn" id="${NS}-mode-a" data-mode="aggressive" style="flex:1;border-color:var(--border2);color:var(--muted);">AGRESSIVO</button>
+        </div>
+        <div class="${NS}-hint" style="margin-top:8px;">Transparente = release lento (limpo). Agressivo = release rápido (mais alto/denso).</div>
+      </div>
+      <div class="${NS}-card">
+        <div class="${NS}-lbl">NORMALIZAR PARA LUFS ALVO (opcional)</div>
+        <select class="${NS}-sel" id="${NS}-tgt" style="width:100%">
+          <option value="">— não normalizar —</option>
+          <option value="-14">Spotify / YouTube / Tidal  (-14)</option>
+          <option value="-16">Apple Music  (-16)</option>
+          <option value="-15">Deezer  (-15)</option>
+          <option value="-9">Club / DJ  (-9)</option>
+          <option value="-23">Broadcast EBU R128  (-23)</option>
+        </select>
+      </div>
+    </div>
+    <div class="${NS}-row">
+      <div class="${NS}-card" style="grid-column:1/-1;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="${NS}-btn" id="${NS}-playorig" style="border-color:var(--c5);color:var(--c5);background:rgba(45,212,255,.1);">▶ ORIGINAL</button>
+          <button class="${NS}-btn" id="${NS}-playmaster" style="border-color:var(--c4);color:var(--c4);background:rgba(45,255,138,.1);">▶ PÓS-EFEITO</button>
+          <button class="${NS}-btn" id="${NS}-playstop" style="border-color:var(--border2);color:var(--muted);">■ PARAR</button>
+          <span style="flex:1;"></span>
+          <button class="${NS}-btn ${NS}-go" id="${NS}-runlim">⚡ APLICAR + EXPORTAR</button>
+        </div>
+        <div class="${NS}-hint" id="${NS}-limstat" style="margin-top:8px;">Ajusta o gráfico e aplica — fica disponível em EXPORT.</div>
+      </div>
+    </div>`;
+
+  let curMode = 'transparent';
+  const ceil = $('#' + NS + '-ceil'), ceilv = $('#' + NS + '-ceilv');
+  const ingain = $('#' + NS + '-ingain'), ingainv = $('#' + NS + '-ingainv');
+  const cv = $('#' + NS + '-limgraph');
+
+  // ── desenha o gráfico do limiter ──
+  function drawGraph() {
+    if (!cv) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || 800, h = 230;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const g = cv.getContext('2d'); g.scale(dpr, dpr);
+    g.clearRect(0, 0, w, h);
+    const ceilDb = parseFloat(ceil.value), inDb = parseFloat(ingain.value);
+    // grid
+    g.strokeStyle = 'rgba(255,255,255,0.05)'; g.lineWidth = 1;
+    for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(0, h / 5 * i); g.lineTo(w, h / 5 * i); g.stroke(); }
+    // linha do tecto (mapeia 0 dBFS = topo, -24 = base; ceiling perto do topo)
+    const dbToY = db => { const t = Math.max(-24, Math.min(0, db)); return 8 + (-t / 24) * (h - 16); };
+    const ceilY = dbToY(ceilDb);
+    g.strokeStyle = '#ff3ab5'; g.setLineDash([6, 4]); g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(0, ceilY); g.lineTo(w, ceilY); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#ff3ab5'; g.font = '9px monospace';
+    g.fillText('CEILING ' + ceilDb.toFixed(1) + ' dBTP', 6, ceilY - 5);
+    // dados
+    const cols = Math.min(300, Math.floor(w / 3));
+    const data = computeLimiterGraph(buf, ceilDb, inDb, cols);
+    const mid = h / 2;
+    // forma de onda (verde→azul)
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#2dff8a'); grad.addColorStop(1, '#2dd4ff');
+    g.strokeStyle = grad; g.lineWidth = 1.2; g.globalAlpha = 0.85;
+    g.beginPath();
+    for (let c = 0; c < cols; c++) {
+      const x = c / cols * w;
+      const amp = Math.min(1, data.peaks[c]) * (mid - 10);
+      if (c === 0) g.moveTo(x, mid - amp); else g.lineTo(x, mid - amp);
+    }
+    for (let c = cols - 1; c >= 0; c--) {
+      const x = c / cols * w;
+      const amp = Math.min(1, data.peaks[c]) * (mid - 10);
+      g.lineTo(x, mid + amp);
+    }
+    g.stroke(); g.globalAlpha = 1;
+    // gain reduction (área vermelha no topo onde limita)
+    g.fillStyle = 'rgba(255,58,58,0.45)';
+    let maxGr = 0;
+    for (let c = 0; c < cols; c++) {
+      if (data.gr[c] < 0) {
+        const x = c / cols * w, bw = w / cols + 1;
+        const depth = Math.min(1, -data.gr[c] / 12) * 40;
+        g.fillRect(x, ceilY, bw, depth);
+        if (-data.gr[c] > maxGr) maxGr = -data.gr[c];
+      }
+    }
+    // medidores
+    const inPk = 20 * Math.log10(Math.max(1e-6, Math.max(...data.peaks)));
+    const mIn = $('#' + NS + '-mIn'), mGr = $('#' + NS + '-mGr');
+    if (mIn) mIn.textContent = (inPk + inDb).toFixed(1);
+    if (mGr) mGr.textContent = '-' + maxGr.toFixed(1);
+    const mOut = $('#' + NS + '-mOut'); if (mOut) mOut.textContent = ceilDb.toFixed(1);
+  }
+
+  ceil.oninput = () => { ceilv.textContent = parseFloat(ceil.value).toFixed(1); drawGraph(); };
+  ingain.oninput = () => { ingainv.textContent = (parseFloat(ingain.value) >= 0 ? '+' : '') + parseFloat(ingain.value).toFixed(1); drawGraph(); };
+
+  // modo
+  const setMode = m => {
+    curMode = m;
+    const t = $('#' + NS + '-mode-t'), a = $('#' + NS + '-mode-a');
+    if (t) { const on = m === 'transparent'; t.style.borderColor = on ? 'var(--c4)' : 'var(--border2)'; t.style.color = on ? 'var(--c4)' : 'var(--muted)'; t.style.background = on ? 'rgba(45,255,138,.12)' : 'transparent'; }
+    if (a) { const on = m === 'aggressive'; a.style.borderColor = on ? 'var(--c3)' : 'var(--border2)'; a.style.color = on ? 'var(--c3)' : 'var(--muted)'; a.style.background = on ? 'rgba(255,225,53,.12)' : 'transparent'; }
+  };
+  $('#' + NS + '-mode-t').onclick = () => setMode('transparent');
+  $('#' + NS + '-mode-a').onclick = () => setMode('aggressive');
+
+  // player A/B (reusa prdx3Play)
+  const pHint = () => $('#' + NS + '-limstat');
+  const resetPlayBtns = () => { const a = $('#' + NS + '-playorig'), b = $('#' + NS + '-playmaster'); if (a) { a.innerHTML = '▶ ORIGINAL'; a.style.opacity = '1'; } if (b) { b.innerHTML = '▶ PÓS-EFEITO'; b.style.opacity = '1'; } };
+  $('#' + NS + '-playorig').onclick = () => {
+    if (!activeBuffer()) { toast('Carrega uma faixa primeiro', 'var(--c3)'); return; }
+    prdx3Play('original', s => { if (s === 'playing') { resetPlayBtns(); $('#' + NS + '-playorig').innerHTML = '♪ ORIGINAL…'; $('#' + NS + '-playorig').style.opacity = '.7'; } if (s === 'stopped') resetPlayBtns(); });
+  };
+  $('#' + NS + '-playmaster').onclick = () => {
+    if (!window.__prdx3Master) { if (pHint()) { pHint().textContent = '⚠ Aplica o limiter primeiro.'; pHint().style.color = 'var(--c3)'; } return; }
+    prdx3Play('master', s => { if (s === 'playing') { resetPlayBtns(); $('#' + NS + '-playmaster').innerHTML = '♪ PÓS-EFEITO…'; $('#' + NS + '-playmaster').style.opacity = '.7'; } if (s === 'stopped') resetPlayBtns(); });
+  };
+  $('#' + NS + '-playstop').onclick = () => { prdx3Stop(); resetPlayBtns(); };
+
+  // medições iniciais
+  setTimeout(() => {
+    const luEl = $('#' + NS + '-mLufs');
+    try { if (luEl) luEl.textContent = measureLUFS(buf).toFixed(1); } catch (e) {}
+    drawGraph();
+  }, 40);
+
+  // aplicar
+  $('#' + NS + '-runlim').onclick = async () => {
+    const stat = $('#' + NS + '-limstat');
+    stat.textContent = 'A processar…'; stat.style.color = 'var(--c3)';
+    try {
+      const tgt = $('#' + NS + '-tgt').value;
+      const res = await applyTruePeakLimiter(buf, {
+        ceiling: parseFloat(ceil.value),
+        inputGain: parseFloat(ingain.value),
+        mode: curMode,
+        targetLufs: tgt ? parseFloat(tgt) : null
+      });
+      window.__prdx3Master = res; emit('mastered', { buffer: res });
+      const tp = measureTruePeakDb(res).toFixed(2), lu = measureLUFS(res).toFixed(1);
+      const mOut = $('#' + NS + '-mOut'), mLufs = $('#' + NS + '-mLufs');
+      if (mOut) mOut.textContent = tp; if (mLufs) mLufs.textContent = lu;
+      stat.innerHTML = `✓ Pronto — TP ${tp} dBTP · ${lu} LUFS. Vai a <b style="color:var(--c4)">EXPORT</b>.`;
+      stat.style.color = 'var(--c4)';
+      toast('✓ Master: ' + tp + ' dBTP · ' + lu + ' LUFS', 'var(--c4)');
+    } catch (e) { stat.textContent = 'Erro: ' + e.message; stat.style.color = 'var(--c7)'; }
+  };
+}
+
+function _pageLimiter_OLD(body) {
   const buf = activeBuffer();
   if (!buf) return needBuffer(body);
   body.innerHTML = `

@@ -186,7 +186,7 @@
         <div class="plabel">SPECTRUM ANALYZER</div>
         <canvas id="spec"></canvas>
       </div>
-      <div class="panel">
+      <div class="panel io-panel" style="display:flex;flex-direction:column;">
         <div class="plabel">I / O</div>
         <div class="io-wrap io-faders">
           <div class="io-item io-draggable" title="Arrasta para ajustar input gain" onmousedown="startIODrag(event,'input')" ontouchstart="startIODrag(event,'input')">
@@ -483,6 +483,13 @@
         <button onclick="toggleResonMode('boost')" id="rs-mode-boost" class="rs-mode" style="padding:10px 22px;font-size:12px;letter-spacing:1px;">▲  REALÇAR RESSONÂNCIAS</button>
         <span style="flex:1;"></span>
         <span style="font-size:10px;color:var(--muted);align-self:center;font-family:monospace;">picos ativos: <span id="rs-peaks" style="color:var(--c2)">0</span></span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap;">
+        <button onclick="resonPreview()" id="rs-preview" class="rs-mode" style="padding:9px 18px;font-size:11px;border-color:var(--c5);color:var(--c5);">👂 OUVIR (preview)</button>
+        <button onclick="resonApply()" id="rs-apply" class="rs-mode" style="padding:9px 18px;font-size:11px;border-color:var(--c4);color:var(--c4);">✓ APLICAR</button>
+        <button onclick="resonReset()" id="rs-reset" class="rs-mode" style="padding:9px 14px;font-size:11px;border-color:var(--border2);color:var(--muted);">↺ LIMPAR</button>
+        <div class="mod-ctrl" style="flex:1;min-width:160px;"><label>MIX (dry/wet)</label><input type="range" min="0" max="100" value="100" step="1" id="rs-mix" oninput="updateResonMix()"><span id="rs-mix-v">100%</span></div>
+        <span id="rs-state" style="font-size:10px;color:var(--muted);font-family:monospace;">inactivo — só análise</span>
       </div>
       <div class="module-info">Deteta picos ressonantes ao longo do espectro em tempo real e aplica corte dinâmico apenas onde e quando precisa. Não toca em frequências limpas. <b>SOOTHE</b> = suaviza tudo. <b>RESO</b> = só atua nas piores zonas.</div>
     </div>

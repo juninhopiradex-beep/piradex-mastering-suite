@@ -2338,7 +2338,11 @@ function _startResonLoop(){
     const atk = parseFloat(document.getElementById('rs-atk')?.value||20)/1000;
     const qVal = parseFloat(document.getElementById('rs-q')?.value||60)/10;
     // Atribui picos aos 6 nós dedicados; nós sem pico → gain 0
-    if(resonBypassed){
+    // SÓ aplica ganho se o utilizador carregou OUVIR (preview) ou APLICAR.
+    // Caso contrário, apenas analisa e desenha (não toca no som).
+    const resonActive = (window._resonApplied || window._resonPreview) && !resonBypassed;
+    const mix = (parseFloat(document.getElementById('rs-mix')?.value || 100)) / 100;
+    if(!resonActive){
       _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
     } else {
       _resonNodes.forEach((n,idx)=>{
@@ -2348,7 +2352,7 @@ function _startResonLoop(){
           n.frequency.setTargetAtTime(p.f, audioCtx.currentTime, atk*0.5+0.01);
           n.Q.setTargetAtTime(qVal, audioCtx.currentTime, 0.02);
           const intensity = Math.min(1, p.excess/12);
-          n.gain.setTargetAtTime(sign * depth * intensity, audioCtx.currentTime, atk*0.5+0.01);
+          n.gain.setTargetAtTime(sign * depth * intensity * mix, audioCtx.currentTime, atk*0.5+0.01);
         } else {
           n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
         }
@@ -2356,6 +2360,35 @@ function _startResonLoop(){
     }
     _drawResonView(data, avg, top, binHz);
   }, 80);
+}
+// ── Controlo de aplicação do RESON (ouvir/aplicar/limpar/mix) ──
+function resonPreview(){
+  window._resonPreview = !window._resonPreview;
+  window._resonApplied = false;
+  const btn=document.getElementById('rs-preview');
+  if(btn){ btn.style.background = window._resonPreview?'rgba(45,212,255,.18)':''; btn.textContent = window._resonPreview?'👂 A OUVIR…':'👂 OUVIR (preview)'; }
+  const st=document.getElementById('rs-state'); if(st) st.textContent = window._resonPreview?'preview ligado — a ouvir':'inactivo — só análise';
+  document.getElementById('rs-apply')?.style && (document.getElementById('rs-apply').style.background='');
+  if(typeof setStatus==='function') setStatus(window._resonPreview?'RESON: preview — toca a faixa para ouvir':'RESON: preview desligado');
+}
+function resonApply(){
+  window._resonApplied = true; window._resonPreview = false;
+  const ap=document.getElementById('rs-apply'); if(ap) ap.style.background='rgba(45,255,138,.18)';
+  const pv=document.getElementById('rs-preview'); if(pv){ pv.style.background=''; pv.textContent='👂 OUVIR (preview)'; }
+  const st=document.getElementById('rs-state'); if(st){ st.textContent='✓ aplicado'; st.style.color='var(--c4)'; }
+  if(typeof setStatus==='function') setStatus('RESON aplicado ao master');
+}
+function resonReset(){
+  window._resonApplied = false; window._resonPreview = false;
+  if(_resonNodes) _resonNodes.forEach(n=>{ if(n&&audioCtx) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
+  ['rs-apply','rs-preview'].forEach(id=>{const b=document.getElementById(id); if(b) b.style.background='';});
+  const pv=document.getElementById('rs-preview'); if(pv) pv.textContent='👂 OUVIR (preview)';
+  const st=document.getElementById('rs-state'); if(st){ st.textContent='inactivo — só análise'; st.style.color='var(--muted)'; }
+  if(typeof setStatus==='function') setStatus('RESON limpo (bypass)');
+}
+function updateResonMix(){
+  const v=document.getElementById('rs-mix')?.value||100;
+  const el=document.getElementById('rs-mix-v'); if(el) el.textContent=v+'%';
 }
 function _drawResonView(data, avg, peaks, binHz){
   const cv=document.getElementById('reson-cv'); if(!cv) return;
@@ -2687,7 +2720,9 @@ async function _renderProcessedForAnalysis(){
   const drive=parseFloat(document.getElementById('shape-drive')?.value||0)/100;
   const mix=parseFloat(document.getElementById('shape-mix')?.value||0)/100;
   oShape.curve=makeShapeCurve(shapeMode,drive,mix);oShape.oversample='4x';
-  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value;
+  // ganho final = masterGain × factor do fader OUTPUT (igual ao caminho real)
+  const outFactor = (typeof outputGainDb!=='undefined' && outputGainDb>-60) ? Math.pow(10, outputGainDb/20) : 1;
+  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value * outFactor;
   oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
   oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(off.destination);
   const src=off.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
