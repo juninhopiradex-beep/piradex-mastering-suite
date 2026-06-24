@@ -62,11 +62,9 @@ const FREQ_LABELS = [20,50,100,200,500,1000,2000,5000,10000,20000];
 const DB_LABELS   = [0,-12,-24,-48,-72,-90];
 
 // Defaults: 6 originais do preset Kizomba + 8 novos a 0 (OFF até o utilizador subir)
-let kvals     = Object.assign(
-  {SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0},
-  PRESETS.kizomba.knobs
-);
-let piradexOn = false, bypassOn = false, curPreset = 'kizomba', playMode = 'before';
+// Ao abrir: todos os knobs a 0 (sem efeito) excepto LOUD a 50 (ganho neutro = volume original da música)
+let kvals     = {CLEAN:0, BASS:0, LOUD:50, WIDE:50, PUNCH:0, FOCUS:0, SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0};
+let piradexOn = false, bypassOn = false, curPreset = '', playMode = 'before';
 let headroomApplied = false;
 
 // Audio nodes
