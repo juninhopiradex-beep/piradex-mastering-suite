@@ -62,8 +62,8 @@ const FREQ_LABELS = [20,50,100,200,500,1000,2000,5000,10000,20000];
 const DB_LABELS   = [0,-12,-24,-48,-72,-90];
 
 // Defaults: 6 originais do preset Kizomba + 8 novos a 0 (OFF até o utilizador subir)
-// Ao abrir: todos os knobs a 0 (sem efeito) excepto LOUD a 50 (ganho neutro = volume original da música)
-let kvals     = {CLEAN:0, BASS:0, LOUD:50, WIDE:50, PUNCH:0, FOCUS:0, SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0};
+// Ao abrir: knobs a 0 (sem efeito) excepto LOUD a 75 (compensa o headroom -6dB → iguala o volume original) e WIDE a 50 (estéreo neutro)
+let kvals     = {CLEAN:0, BASS:0, LOUD:75, WIDE:50, PUNCH:0, FOCUS:0, SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0};
 let piradexOn = false, bypassOn = false, curPreset = '', playMode = 'before';
 let headroomApplied = false;
 
@@ -2722,7 +2722,25 @@ async function _renderProcessedForAnalysis(){
   const outFactor = (typeof outputGainDb!=='undefined' && outputGainDb>-60) ? Math.pow(10, outputGainDb/20) : 1;
   const oGain=off.createGain();oGain.gain.value=masterGain.gain.value * outFactor;
   oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
-  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(off.destination);
+  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);
+
+  // knobs paralelos que somam energia (SUB/DRIVE/WARMTH/AIR/SPACE/PRESENCE/TIGHT)
+  // replica o tap paralelo: oLim → saturação/ganho → oGain (aproxima o efeito no loudness)
+  const k=kvals;
+  const addParallel=(amtRaw, curveFn, outMix)=>{
+    const amt=(amtRaw||0)/100; if(amt<=0.001) return;
+    const g=off.createGain(); g.gain.value=1;
+    const ws=off.createWaveShaper(); ws.curve=curveFn(amt); ws.oversample='2x';
+    const o=off.createGain(); o.gain.value=amt*outMix;
+    oLim.connect(g); g.connect(ws); ws.connect(o); o.connect(oGain);
+  };
+  const satCurve=(amt)=>{const n=2048,c=new Float32Array(n);const k2=amt*4;for(let i=0;i<n;i++){const x=(i/(n-1))*2-1;c[i]=Math.tanh(x*(1+k2))/Math.tanh(1+k2);}return c;};
+  addParallel(k.DRIVE, satCurve, 0.5);
+  addParallel(k.WARMTH, satCurve, 0.4);
+  addParallel(k.SUB, satCurve, 0.45);
+  addParallel(k.AIR, satCurve, 0.35);
+
+  oGain.connect(off.destination);
   const src=off.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
   return await off.startRendering();
 }
@@ -3338,14 +3356,14 @@ function updateMeters(){
   setVU(Math.min(vuL,1),Math.min(vuR,1));
   const rms=(rmsL+rmsR)/2;
   const raw=rms>0?20*Math.log10(rms)-0.691:-70;
-  // integração lenta (estilo LUFS real): suavização forte → número calmo, não vibra
-  lufsSmooth=lufsSmooth*0.94+raw*0.06;
+  // integração: rápida o suficiente para reagir ao processamento, lenta o suficiente para ler estável
+  lufsSmooth=lufsSmooth*0.82+raw*0.18;
   // mostra SEMPRE o valor real medido (sem clamp), tanto em ORIGINAL como PROCESSADO
   const display=lufsSmooth.toFixed(1);
   const lufsEl=document.getElementById('lufs-n'),slufEl=document.getElementById('slufs');
-  // só actualiza o texto ~3x por segundo (não a 60fps) → leitura estável
+  // actualiza o texto ~5x por segundo (reage mas não vibra)
   if(!window.__lufsLastUpd) window.__lufsLastUpd=0;
-  if(now-window.__lufsLastUpd>330){
+  if(now-window.__lufsLastUpd>200){
     window.__lufsLastUpd=now;
     if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
     const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
