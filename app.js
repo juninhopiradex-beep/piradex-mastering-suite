@@ -3340,9 +3340,8 @@ function updateMeters(){
   const raw=rms>0?20*Math.log10(rms)-0.691:-70;
   // integração lenta (estilo LUFS real): suavização forte → número calmo, não vibra
   lufsSmooth=lufsSmooth*0.94+raw*0.06;
-  const isHouse=curPreset==='house';
-  const lo=isHouse?-11:-12,hi=isHouse?-6:-7;
-  const display=playMode==='after'?Math.max(lo,Math.min(hi,lufsSmooth)).toFixed(1):lufsSmooth.toFixed(1);
+  // mostra SEMPRE o valor real medido (sem clamp), tanto em ORIGINAL como PROCESSADO
+  const display=lufsSmooth.toFixed(1);
   const lufsEl=document.getElementById('lufs-n'),slufEl=document.getElementById('slufs');
   // só actualiza o texto ~3x por segundo (não a 60fps) → leitura estável
   if(!window.__lufsLastUpd) window.__lufsLastUpd=0;
@@ -3383,11 +3382,11 @@ function setVU(l,r){
 }
 
 function updateLUFSDisplay(){
-  const isHouse=curPreset==='house';
-  const v=playMode==='after'?(isHouse?'-8.0':'-9.0'):(-23+kvals.LOUD*0.17).toFixed(1);
+  // quando parado, mostra o último valor suavizado real (ou — se nunca tocou)
   if(!isPlaying){
+    const v = (typeof lufsSmooth==='number' && lufsSmooth>-69) ? lufsSmooth.toFixed(1) : '—';
     const el=document.getElementById('lufs-n'); if(el)el.textContent=v;
-    const sl=document.getElementById('slufs'); if(sl)sl.textContent=v+' LUFS';
+    const sl=document.getElementById('slufs'); if(sl)sl.textContent=(v==='—'?'— LUFS':v+' LUFS');
   }
 }
 
