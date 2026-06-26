@@ -2663,19 +2663,25 @@ function _measureBuffer(buf){
   let peak=0, sumSq=0, n=0;
   const chans=[]; for(let c=0;c<nCh;c++) chans.push(buf.getChannelData(c));
   const win=Math.floor(sr*0.4), hop=Math.floor(sr*0.1);
-  const stLoud=[];
+  const stLoud=[];   // loudness por bloco em LUFS (para LRA)
+  const stEnergy=[]; // energia média por bloco (para LUFS integrado correcto)
   for(let i=0;i+win<=len;i+=hop){
-    let s=0;
-    for(let c=0;c<nCh;c++){ const d=chans[c]; for(let j=0;j<win;j+=4){ s+=d[i+j]*d[i+j]; } }
-    const rms=Math.sqrt(s/((win/4)*nCh));
+    let s=0, cnt=0;
+    for(let c=0;c<nCh;c++){ const d=chans[c]; for(let j=0;j<win;j++){ s+=d[i+j]*d[i+j]; cnt++; } }
+    const meanSq=s/cnt;
+    const rms=Math.sqrt(meanSq);
     stLoud.push(rms>0?20*Math.log10(rms)-0.691:-70);
+    stEnergy.push(meanSq);
   }
   for(let c=0;c<nCh;c++){ const d=chans[c]; for(let i=0;i<len;i+=2){ const a=Math.abs(d[i]); if(a>peak)peak=a; sumSq+=d[i]*d[i]; n++; } }
   const rmsAll=Math.sqrt(sumSq/n);
   const rmsDb=rmsAll>0?20*Math.log10(rmsAll):-70;
   const peakDb=peak>0?20*Math.log10(peak):-70;
   const gated=stLoud.filter(v=>v>-50);
-  const lufsInt=gated.length?gated.reduce((a,b)=>a+b,0)/gated.length-0.691:-70;
+  // LUFS integrado: média de ENERGIA dos blocos com gate, convertida a dB (1 só offset -0.691)
+  const gatedE=[]; for(let i=0;i<stLoud.length;i++){ if(stLoud[i]>-50) gatedE.push(stEnergy[i]); }
+  const meanE = gatedE.length ? gatedE.reduce((a,b)=>a+b,0)/gatedE.length : 0;
+  const lufsInt = meanE>0 ? 20*Math.log10(Math.sqrt(meanE))-0.691 : -70;
   const sorted=[...gated].sort((a,b)=>a-b);
   const pct=p=>sorted.length?sorted[Math.floor(p*(sorted.length-1))]:-70;
   const lra=sorted.length?(pct(0.95)-pct(0.10)):0;
@@ -3358,6 +3364,12 @@ function updateMeters(){
   const raw=rms>0?20*Math.log10(rms)-0.691:-70;
   // integração: rápida o suficiente para reagir ao processamento, lenta o suficiente para ler estável
   lufsSmooth=lufsSmooth*0.82+raw*0.18;
+  // ── acumula blocos de loudness reais (mesmo sinal do OUT) p/ a análise bater certo ──
+  if(isPlaying && playMode==='after' && raw>-50){
+    if(!window.__intBlocks) window.__intBlocks=[];
+    window.__intBlocks.push(raw);
+    if(window.__intBlocks.length>20000) window.__intBlocks.shift();
+  }
   // mostra SEMPRE o valor real medido (sem clamp), tanto em ORIGINAL como PROCESSADO
   const display=lufsSmooth.toFixed(1);
   const lufsEl=document.getElementById('lufs-n'),slufEl=document.getElementById('slufs');
