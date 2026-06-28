@@ -62,9 +62,11 @@ const FREQ_LABELS = [20,50,100,200,500,1000,2000,5000,10000,20000];
 const DB_LABELS   = [0,-12,-24,-48,-72,-90];
 
 // Defaults: 6 originais do preset Kizomba + 8 novos a 0 (OFF até o utilizador subir)
-// Ao abrir: knobs a 0 (sem efeito) excepto LOUD a 75 (compensa o headroom -6dB → iguala o volume original) e WIDE a 50 (estéreo neutro)
-let kvals     = {CLEAN:0, BASS:0, LOUD:75, WIDE:50, PUNCH:0, FOCUS:0, SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0};
-let piradexOn = false, bypassOn = false, curPreset = '', playMode = 'before';
+let kvals     = Object.assign(
+  {SUB:0, AIR:0, WARMTH:0, DRIVE:0, SPACE:0, TIGHT:0, PRESENCE:0, PHASE:0},
+  PRESETS.kizomba.knobs
+);
+let piradexOn = false, bypassOn = false, curPreset = 'kizomba', playMode = 'before';
 let headroomApplied = false;
 
 // Audio nodes
@@ -458,23 +460,20 @@ function buildChain() {
     _presPeak.gain.setTargetAtTime(v * 5, _t(), 0.05); // até +5 dB @ 2.7kHz Q=2.5
   };
   window._knobPhase = v => {
-    // mono-isa o side abaixo de 250Hz. Combina com o side-HP do WIDE (não sobrepõe).
-    window.__phaseAmt = v;
-    _applySideLow();
+    // mono-isa o side abaixo de 120Hz: aproveita msSideEqLow se existir
+    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
+      // baixa o ganho do side-low (efeito de mono-low)
+      msSideEqLow.gain.setTargetAtTime(-v * 18, _t(), 0.08); // até -18dB no side abaixo de 200Hz
+    }
   };
   // side HP do knob WIDE (já existente)
   window._knobSideHP = v => {
-    window.__wideHpAmt = v;
-    _applySideLow();
+    if (typeof msSideEqLow !== 'undefined' && msSideEqLow) {
+      // quando wide é grande, corta o side-low para manter mono-compat
+      const reduceLow = -v * 9;
+      msSideEqLow.gain.setTargetAtTime(reduceLow, _t(), 0.08);
+    }
   };
-  // combina as duas contribuições (PHASE + WIDE) num só ajuste do side-low
-  function _applySideLow(){
-    if (typeof msSideEqLow === 'undefined' || !msSideEqLow) return;
-    const ph = window.__phaseAmt || 0;   // 0..1 → até -18 dB (mono-isação forte)
-    const wd = window.__wideHpAmt || 0;  // 0..1 → até -9 dB (mantém mono-compat)
-    const total = -(ph * 18) - (wd * 9); // soma os dois efeitos
-    msSideEqLow.gain.setTargetAtTime(Math.max(-24, total), _t(), 0.08);
-  }
 
   // RESON — 6 peaks dedicados
   _resonNodes = [];
@@ -2336,11 +2335,7 @@ function _startResonLoop(){
     const atk = parseFloat(document.getElementById('rs-atk')?.value||20)/1000;
     const qVal = parseFloat(document.getElementById('rs-q')?.value||60)/10;
     // Atribui picos aos 6 nós dedicados; nós sem pico → gain 0
-    // SÓ aplica ganho se o utilizador carregou OUVIR (preview) ou APLICAR.
-    // Caso contrário, apenas analisa e desenha (não toca no som).
-    const resonActive = (window._resonApplied || window._resonPreview) && !resonBypassed;
-    const mix = (parseFloat(document.getElementById('rs-mix')?.value || 100)) / 100;
-    if(!resonActive){
+    if(resonBypassed){
       _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
     } else {
       _resonNodes.forEach((n,idx)=>{
@@ -2350,7 +2345,7 @@ function _startResonLoop(){
           n.frequency.setTargetAtTime(p.f, audioCtx.currentTime, atk*0.5+0.01);
           n.Q.setTargetAtTime(qVal, audioCtx.currentTime, 0.02);
           const intensity = Math.min(1, p.excess/12);
-          n.gain.setTargetAtTime(sign * depth * intensity * mix, audioCtx.currentTime, atk*0.5+0.01);
+          n.gain.setTargetAtTime(sign * depth * intensity, audioCtx.currentTime, atk*0.5+0.01);
         } else {
           n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
         }
@@ -2358,35 +2353,6 @@ function _startResonLoop(){
     }
     _drawResonView(data, avg, top, binHz);
   }, 80);
-}
-// ── Controlo de aplicação do RESON (ouvir/aplicar/limpar/mix) ──
-function resonPreview(){
-  window._resonPreview = !window._resonPreview;
-  window._resonApplied = false;
-  const btn=document.getElementById('rs-preview');
-  if(btn){ btn.style.background = window._resonPreview?'rgba(45,212,255,.18)':''; btn.textContent = window._resonPreview?'👂 A OUVIR…':'👂 OUVIR (preview)'; }
-  const st=document.getElementById('rs-state'); if(st) st.textContent = window._resonPreview?'preview ligado — a ouvir':'inactivo — só análise';
-  document.getElementById('rs-apply')?.style && (document.getElementById('rs-apply').style.background='');
-  if(typeof setStatus==='function') setStatus(window._resonPreview?'RESON: preview — toca a faixa para ouvir':'RESON: preview desligado');
-}
-function resonApply(){
-  window._resonApplied = true; window._resonPreview = false;
-  const ap=document.getElementById('rs-apply'); if(ap) ap.style.background='rgba(45,255,138,.18)';
-  const pv=document.getElementById('rs-preview'); if(pv){ pv.style.background=''; pv.textContent='👂 OUVIR (preview)'; }
-  const st=document.getElementById('rs-state'); if(st){ st.textContent='✓ aplicado'; st.style.color='var(--c4)'; }
-  if(typeof setStatus==='function') setStatus('RESON aplicado ao master');
-}
-function resonReset(){
-  window._resonApplied = false; window._resonPreview = false;
-  if(_resonNodes) _resonNodes.forEach(n=>{ if(n&&audioCtx) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
-  ['rs-apply','rs-preview'].forEach(id=>{const b=document.getElementById(id); if(b) b.style.background='';});
-  const pv=document.getElementById('rs-preview'); if(pv) pv.textContent='👂 OUVIR (preview)';
-  const st=document.getElementById('rs-state'); if(st){ st.textContent='inactivo — só análise'; st.style.color='var(--muted)'; }
-  if(typeof setStatus==='function') setStatus('RESON limpo (bypass)');
-}
-function updateResonMix(){
-  const v=document.getElementById('rs-mix')?.value||100;
-  const el=document.getElementById('rs-mix-v'); if(el) el.textContent=v+'%';
 }
 function _drawResonView(data, avg, peaks, binHz){
   const cv=document.getElementById('reson-cv'); if(!cv) return;
@@ -2663,25 +2629,19 @@ function _measureBuffer(buf){
   let peak=0, sumSq=0, n=0;
   const chans=[]; for(let c=0;c<nCh;c++) chans.push(buf.getChannelData(c));
   const win=Math.floor(sr*0.4), hop=Math.floor(sr*0.1);
-  const stLoud=[];   // loudness por bloco em LUFS (para LRA)
-  const stEnergy=[]; // energia média por bloco (para LUFS integrado correcto)
+  const stLoud=[];
   for(let i=0;i+win<=len;i+=hop){
-    let s=0, cnt=0;
-    for(let c=0;c<nCh;c++){ const d=chans[c]; for(let j=0;j<win;j++){ s+=d[i+j]*d[i+j]; cnt++; } }
-    const meanSq=s/cnt;
-    const rms=Math.sqrt(meanSq);
+    let s=0;
+    for(let c=0;c<nCh;c++){ const d=chans[c]; for(let j=0;j<win;j+=4){ s+=d[i+j]*d[i+j]; } }
+    const rms=Math.sqrt(s/((win/4)*nCh));
     stLoud.push(rms>0?20*Math.log10(rms)-0.691:-70);
-    stEnergy.push(meanSq);
   }
   for(let c=0;c<nCh;c++){ const d=chans[c]; for(let i=0;i<len;i+=2){ const a=Math.abs(d[i]); if(a>peak)peak=a; sumSq+=d[i]*d[i]; n++; } }
   const rmsAll=Math.sqrt(sumSq/n);
   const rmsDb=rmsAll>0?20*Math.log10(rmsAll):-70;
   const peakDb=peak>0?20*Math.log10(peak):-70;
   const gated=stLoud.filter(v=>v>-50);
-  // LUFS integrado: média de ENERGIA dos blocos com gate, convertida a dB (1 só offset -0.691)
-  const gatedE=[]; for(let i=0;i<stLoud.length;i++){ if(stLoud[i]>-50) gatedE.push(stEnergy[i]); }
-  const meanE = gatedE.length ? gatedE.reduce((a,b)=>a+b,0)/gatedE.length : 0;
-  const lufsInt = meanE>0 ? 20*Math.log10(Math.sqrt(meanE))-0.691 : -70;
+  const lufsInt=gated.length?gated.reduce((a,b)=>a+b,0)/gated.length-0.691:-70;
   const sorted=[...gated].sort((a,b)=>a-b);
   const pct=p=>sorted.length?sorted[Math.floor(p*(sorted.length-1))]:-70;
   const lra=sorted.length?(pct(0.95)-pct(0.10)):0;
@@ -2724,29 +2684,9 @@ async function _renderProcessedForAnalysis(){
   const drive=parseFloat(document.getElementById('shape-drive')?.value||0)/100;
   const mix=parseFloat(document.getElementById('shape-mix')?.value||0)/100;
   oShape.curve=makeShapeCurve(shapeMode,drive,mix);oShape.oversample='4x';
-  // ganho final = masterGain × factor do fader OUTPUT (igual ao caminho real)
-  const outFactor = (typeof outputGainDb!=='undefined' && outputGainDb>-60) ? Math.pow(10, outputGainDb/20) : 1;
-  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value * outFactor;
+  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value;
   oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
-  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);
-
-  // knobs paralelos que somam energia (SUB/DRIVE/WARMTH/AIR/SPACE/PRESENCE/TIGHT)
-  // replica o tap paralelo: oLim → saturação/ganho → oGain (aproxima o efeito no loudness)
-  const k=kvals;
-  const addParallel=(amtRaw, curveFn, outMix)=>{
-    const amt=(amtRaw||0)/100; if(amt<=0.001) return;
-    const g=off.createGain(); g.gain.value=1;
-    const ws=off.createWaveShaper(); ws.curve=curveFn(amt); ws.oversample='2x';
-    const o=off.createGain(); o.gain.value=amt*outMix;
-    oLim.connect(g); g.connect(ws); ws.connect(o); o.connect(oGain);
-  };
-  const satCurve=(amt)=>{const n=2048,c=new Float32Array(n);const k2=amt*4;for(let i=0;i<n;i++){const x=(i/(n-1))*2-1;c[i]=Math.tanh(x*(1+k2))/Math.tanh(1+k2);}return c;};
-  addParallel(k.DRIVE, satCurve, 0.5);
-  addParallel(k.WARMTH, satCurve, 0.4);
-  addParallel(k.SUB, satCurve, 0.45);
-  addParallel(k.AIR, satCurve, 0.35);
-
-  oGain.connect(off.destination);
+  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(off.destination);
   const src=off.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
   return await off.startRendering();
 }
@@ -3081,35 +3021,18 @@ function setMode(mode){
       hb.style.pointerEvents='none';hb.style.animation='none';
     }
   }
-  const modeChanged = (playMode !== mode);
   playMode=mode;
+  // ── Suave: alterna o DSP em tempo real sem parar a source ──
+  // (evita o "click"/travagem que vinha do stopSource() + playAudio() de novo)
   if(mode==='before'){
     resetAllDSP();
     resetModuleBypasses();
   } else {
     applyDSP();
   }
-  // ── CRÍTICO: se está a tocar, reconectar a source ao caminho certo ──
-  // ORIGINAL = source→dryGain (bypassa efeitos) · PROCESSADO = source→eqSub (chain completa)
-  // Sem isto, mudar de modo durante o playback não muda o caminho do áudio.
-  if(modeChanged && isPlaying && sourceNode && audioCtx){
-    try {
-      const pos = audioCtx.currentTime - startTime;       // posição actual
-      const off = Math.max(0, Math.min(pos, audioBuffer.duration - 0.01));
-      try { sourceNode.disconnect(); } catch(e){}
-      try { sourceNode.onended = null; sourceNode.stop(); } catch(e){}
-      // nova source no caminho correcto
-      sourceNode = audioCtx.createBufferSource();
-      sourceNode.buffer = audioBuffer;
-      if(mode==='after') sourceNode.connect(eqSub);
-      else sourceNode.connect(dryGain);
-      sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}window.AudioManager.ended('master');};
-      sourceNode.start(0, off);
-      startTime = audioCtx.currentTime - off;
-    } catch(e){ /* se falhar, mantém o que estava */ }
-  }
   updateModeUI(mode);
   updateLUFSDisplay();
+  // Se estava parado, garante que continua parado (não força play)
 }
 
 function resetAllDSP(){
@@ -3351,9 +3274,8 @@ function updateMeters(){
   for(let i=0;i<half;i++){sL+=td[i]*td[i];pkL=Math.max(pkL,Math.abs(td[i]));}
   for(let i=half;i<td.length;i++){sR+=td[i]*td[i];pkR=Math.max(pkR,Math.abs(td[i]));}
   const rmsL=Math.sqrt(sL/half),rmsR=Math.sqrt(sR/half);
-  // ballistics lentas (estilo VU pro): sobe moderado, desce devagar → movimento calmo
-  vuL=rmsL*3>vuL?vuL*0.6+rmsL*3*0.4:vuL*0.94;
-  vuR=rmsR*3>vuR?vuR*0.6+rmsR*3*0.4:vuR*0.94;
+  vuL=rmsL*3>vuL?vuL*0.4+rmsL*3*0.6:vuL*0.88;
+  vuR=rmsR*3>vuR?vuR*0.4+rmsR*3*0.6:vuR*0.88;
   if(piradexOn){vuL=Math.min(1,vuL*1.6);vuR=Math.min(1,vuR*1.6);}
   if(pkL>peakHoldL){peakHoldL=pkL;peakHoldTimerL=now;}
   if(pkR>peakHoldR){peakHoldR=pkR;peakHoldTimerR=now;}
@@ -3362,24 +3284,13 @@ function updateMeters(){
   setVU(Math.min(vuL,1),Math.min(vuR,1));
   const rms=(rmsL+rmsR)/2;
   const raw=rms>0?20*Math.log10(rms)-0.691:-70;
-  // integração: rápida o suficiente para reagir ao processamento, lenta o suficiente para ler estável
-  lufsSmooth=lufsSmooth*0.82+raw*0.18;
-  // ── acumula blocos de loudness reais (mesmo sinal do OUT) p/ a análise bater certo ──
-  if(isPlaying && playMode==='after' && raw>-50){
-    if(!window.__intBlocks) window.__intBlocks=[];
-    window.__intBlocks.push(raw);
-    if(window.__intBlocks.length>20000) window.__intBlocks.shift();
-  }
-  // mostra SEMPRE o valor real medido (sem clamp), tanto em ORIGINAL como PROCESSADO
-  const display=lufsSmooth.toFixed(1);
+  lufsSmooth=lufsSmooth*0.78+raw*0.22;
+  const isHouse=curPreset==='house';
+  const lo=isHouse?-11:-12,hi=isHouse?-6:-7;
+  const display=playMode==='after'?Math.max(lo,Math.min(hi,lufsSmooth)).toFixed(1):lufsSmooth.toFixed(1);
   const lufsEl=document.getElementById('lufs-n'),slufEl=document.getElementById('slufs');
-  // actualiza o texto ~5x por segundo (reage mas não vibra)
-  if(!window.__lufsLastUpd) window.__lufsLastUpd=0;
-  if(now-window.__lufsLastUpd>200){
-    window.__lufsLastUpd=now;
-    if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
-    const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
-  }
+  if(lufsEl&&lufsEl.textContent!==display)lufsEl.textContent=display;
+  const st=display+' LUFS'; if(slufEl&&slufEl.textContent!==st)slufEl.textContent=st;
   const lfl=document.getElementById('lim-fill-l'),lfr=document.getElementById('lim-fill-r');
   if(lfl)lfl.style.width=Math.min(100,vuL*110)+'%';
   if(lfr)lfr.style.width=Math.min(100,vuR*110)+'%';
@@ -3412,11 +3323,11 @@ function setVU(l,r){
 }
 
 function updateLUFSDisplay(){
-  // quando parado, mostra o último valor suavizado real (ou — se nunca tocou)
+  const isHouse=curPreset==='house';
+  const v=playMode==='after'?(isHouse?'-8.0':'-9.0'):(-23+kvals.LOUD*0.17).toFixed(1);
   if(!isPlaying){
-    const v = (typeof lufsSmooth==='number' && lufsSmooth>-69) ? lufsSmooth.toFixed(1) : '—';
     const el=document.getElementById('lufs-n'); if(el)el.textContent=v;
-    const sl=document.getElementById('slufs'); if(sl)sl.textContent=(v==='—'?'— LUFS':v+' LUFS');
+    const sl=document.getElementById('slufs'); if(sl)sl.textContent=v+' LUFS';
   }
 }
 
@@ -4257,20 +4168,26 @@ function applyHeadroom(){
 }
 
 function updateIODisplay(){
-  // INPUT fader (range -24..+12 dB → 0..100%)
+  // Update IN arc and value
   const inEl = document.getElementById('in-val');
+  const inArc= document.getElementById('in-arc');
   if(inEl) inEl.textContent = (inputGainDb>=0?'+':'')+inputGainDb.toFixed(1);
-  const inFill=document.getElementById('in-fill'), inCap=document.getElementById('in-cap');
-  const inPct=Math.min(100,Math.max(0,(inputGainDb+24)/36*100));
-  if(inFill){ inFill.style.height=inPct+'%'; inFill.style.background='linear-gradient(0deg,'+(inputGainDb>0?'var(--c3)':inputGainDb<0?'var(--c7)':'var(--c6)')+',transparent)'; }
-  if(inCap) inCap.style.bottom=inPct+'%';
-  // OUTPUT fader
+  if(inArc){
+    const pct=Math.min(1,Math.max(0,(inputGainDb+24)/36));
+    const dash=pct*120;
+    inArc.setAttribute('stroke-dasharray', dash+' 120');
+    inArc.setAttribute('stroke', inputGainDb>0?'var(--c3)':inputGainDb<0?'var(--c7)':'var(--c6)');
+  }
+  // Update OUT arc and value
   const outEl = document.getElementById('out-val');
+  const outArc= document.getElementById('out-arc');
   if(outEl) outEl.textContent = (outputGainDb>=0?'+':'')+outputGainDb.toFixed(1);
-  const outFill=document.getElementById('out-fill'), outCap=document.getElementById('out-cap');
-  const outPct=Math.min(100,Math.max(0,(outputGainDb+24)/36*100));
-  if(outFill){ outFill.style.height=outPct+'%'; outFill.style.background='linear-gradient(0deg,'+(outputGainDb>0?'var(--c4)':outputGainDb<0?'var(--c7)':'var(--c1)')+',transparent)'; }
-  if(outCap) outCap.style.bottom=outPct+'%';
+  if(outArc){
+    const pct=Math.min(1,Math.max(0,(outputGainDb+24)/36));
+    const dash=pct*120;
+    outArc.setAttribute('stroke-dasharray', dash+' 120');
+    outArc.setAttribute('stroke', outputGainDb>0?'var(--c4)':outputGainDb<0?'var(--c7)':'var(--c1)');
+  }
   setStatus('Input: '+(inputGainDb>=0?'+':'')+inputGainDb.toFixed(1)+'dB  ·  Output: '+(outputGainDb>=0?'+':'')+outputGainDb.toFixed(1)+'dB');
 }
 
@@ -5236,26 +5153,7 @@ function formatLicenseInput(el){
   if(v.length>19)v=v.slice(0,19);
   el.value=v;if(v.length===19)activateLicense();
 }
-function pwSelectPlan(el){
-  document.querySelectorAll('#paywall-modal .plan').forEach(p=>p.classList.remove('selected'));
-  el.classList.add('selected');
-  // fixa o plano escolhido para o quadro de pagamento (resolve o "WhatsApp pede sempre plano")
-  _selectedPlan = el.getAttribute('data-pwplan');
-}
-function goPay(){
-  // garante que há um plano fixado (default: vitalícia avançada, o destacado)
-  const sel = document.querySelector('#paywall-modal .plan.selected');
-  _selectedPlan = (sel && sel.getAttribute('data-pwplan')) || _selectedPlan || 'lifetime-advanced';
-  // fecha o paywall e abre o quadro "desbloquear versão full" já com o plano escolhido
-  const pw = document.getElementById('paywall-modal'); if(pw) pw.style.display='none';
-  if(typeof openLicenseModal==='function'){
-    openLicenseModal();
-  } else {
-    const lm=document.getElementById('license-modal'); if(lm) lm.style.display='flex';
-  }
-  // reflecte a selecção no quadro de pagamento (destaca o plano e mostra o resumo)
-  if(typeof selectPlan==='function' && _selectedPlan) selectPlan(_selectedPlan);
-}
+function selectPlan(el){document.querySelectorAll('.plan').forEach(p=>p.classList.remove('selected'));el.classList.add('selected');}
 function showPaywall(){
   const lbl=document.getElementById('export-count-label');
   if(lbl) lbl.textContent = FREE_EXPORTS+' exportações gratuitas';
@@ -5265,6 +5163,7 @@ function skipPaywall(){
   document.getElementById('paywall-modal').style.display='none';
   setStatus('MODO DEMO · '+exportCount+'/'+FREE_EXPORTS+' exportações usadas · subscreve para continuar');
 }
+function goPay(){const s=document.querySelector('.plan.selected .plan-name');window.open(PAY_URL+'?plan='+(s?s.textContent:'pro').toLowerCase(),'_blank');}
 
 async function exportMastered(){
   if(!isLoggedIn){document.getElementById('login-screen').style.display='flex';return;}
