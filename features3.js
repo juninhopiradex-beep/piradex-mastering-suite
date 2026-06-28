@@ -910,6 +910,8 @@ function pageAnalise(body) {
     </div>
     <div class="${NS}-hint" style="margin-top:10px;text-align:center;">6 métricas profissionais — actualizam quando carregas/masterizas uma faixa.</div>`;
   setTimeout(updateAnalisePage, 80);
+  // ── medidor In/Out (radar BS.1770 + RTA) — add-on não-destrutivo ──
+  if (window.PiradexAnalisePro) setTimeout(function(){ try{ PiradexAnalisePro.show(body); }catch(e){} }, 60);
 }
 function updateAnalisePage() {
   const buf = window.audioBuffer || (window._getAudioBuffer && window._getAudioBuffer());

@@ -607,6 +607,9 @@ function buildChain() {
   window.eqSub=eqSub; window.eqBass=eqBass; window.eqLowNode=eqLowNode;
   window.eqMid=eqMid; window.eqHigh=eqHigh; window.eqAir=eqAir;
   window.kvals=kvals;
+  // ── Tap de entrada para o medidor Análise PRO (radar/RTA In/Out) ──
+  window.dryGain=dryGain;
+  if(!window.__papInputTap){ window.__papInputTap=audioCtx.createGain(); window.__papInputTap.gain.value=1.0; }
 }
 
 // ===== SHAPE DSP =====
@@ -2936,6 +2939,8 @@ function playAudio(){
     sourceNode.connect(dryGain);
   }
   // Both paths already connect to analyserNode via buildChain
+  // ── tap de entrada (pré-processamento) para o medidor Análise PRO ──
+  try{ if(window.__papInputTap) sourceNode.connect(window.__papInputTap); }catch(e){}
 
   sourceNode.onended=()=>{if(isPlaying){isPlaying=false;pauseOffset=0;updatePlayBtn();stopProgress();}window.AudioManager.ended('master');};
   const offset=Math.min(pauseOffset,audioBuffer.duration-0.01);

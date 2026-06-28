@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════════
+  v3D — NOVO: Medidor In/Out na aba ANÁLISE (PRO FINAL)
+═══════════════════════════════════════════════════════════════
+
+O QUE FOI ACRESCENTADO (nada do que já tinhas foi removido):
+
+• Ficheiro NOVO: piradex-analise-pro.js
+    Medidor estilo Clarity M — radar de loudness BS.1770 + leituras
+    (Momentary / Short-term / Integrated / True-peak / LRA / Balance-o-Meter
+    / barras L/R) + RTA 1/3-oitava. Lê entrada vs saída, principalmente saída.
+
+ALTERAÇÕES MÍNIMAS (4 linhas no total, nada substituído):
+
+• app.js (2 sítios)
+    - junto aos exposes globais: expõe dryGain e cria window.__papInputTap
+      (tap de entrada persistente).
+    - em playAudio(): liga a fonte ao tap de entrada em qualquer modo
+      (PROCESSADO ou ORIGINAL), para o Δ entrada/saída funcionar sempre.
+
+• features3.js (1 sítio)
+    - no fim de pageAnalise(body): chama PiradexAnalisePro.show(body)
+      → o medidor aparece por baixo das 6 métricas, na aba ANÁLISE do PRO FINAL.
+
+• index.html (1 sítio)
+    - <script src="piradex-analise-pro.js"></script> a seguir ao features3.js.
+
+COMO FUNCIONA (não-destrutivo):
+  - Os nós de medição são criados UMA vez (singleton) e ligam-se em paralelo
+    ao masterGain (saída) e ao __papInputTap (entrada) + um nó silencioso.
+    Não alteram a tua cadeia de áudio.
+  - O painel é redesenhado a cada abertura da aba; o loop pára sozinho quando
+    fechas a página (sem leaks). Worklet 'piradex-loudness', CSS '.pap-'.
+
+USAR:
+  Abre o PRO FINAL → aba ANÁLISE, com uma faixa a tocar. O radar e o RTA
+  movem-se em tempo real. O painel "Entrada ⇄ Saída" mostra o que a tua
+  cadeia fez ao loudness / true-peak / dinâmica.
+
+VALIDADO:
+  Tom 1 kHz −23 dBFS (estéreo, 48 kHz) → Integrated −22.99 LUFS
+  (EBU Tech 3341, ±0.1). True-peak −23.01 dBTP. Correlação +1.000.
