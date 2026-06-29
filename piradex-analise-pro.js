@@ -79,8 +79,9 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
   .pap-h{font-family:'Orbitron','DM Mono',monospace;font-weight:800;font-size:12px;letter-spacing:1.5px;color:#f4c430;margin:0 0 8px}
   .pap-top{display:flex;gap:12px;flex-wrap:wrap}
   .pap-card2{background:#0d1116;border:1px solid #1d2731;border-radius:10px;padding:10px}
-  .pap-radar{flex:0 0 246px}.pap-radar canvas{width:246px;height:246px;display:block}
-  .pap-read{flex:1;min-width:250px;display:flex;gap:10px}
+  .pap-radar{flex:1 1 460px;min-width:320px;display:flex;align-items:center;justify-content:center}
+  .pap-radar canvas{width:100%;max-width:540px;height:auto;aspect-ratio:1/1;display:block;margin:0 auto}
+  .pap-read{flex:1 1 340px;min-width:280px;display:flex;gap:10px}
   .pap-col{display:flex;flex-direction:column;gap:8px;flex:1}
   .pap-ro{background:#10161d;border:1px solid #1d2731;border-radius:8px;padding:7px 9px}
   .pap-k{font-size:9px;letter-spacing:1.3px;color:#6b7884;text-transform:uppercase}
@@ -103,7 +104,7 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
   const TEMPLATE = `
     <div class="pap-h">MEDIDOR IN ⇄ OUT · RADAR DE LOUDNESS (BS.1770) — TEMPO REAL</div>
     <div class="pap-top">
-      <div class="pap-card2 pap-radar"><canvas data-r="radar" width="492" height="492"></canvas></div>
+      <div class="pap-card2 pap-radar"><canvas data-r="radar" width="600" height="600"></canvas></div>
       <div class="pap-card2 pap-read">
         <div class="pap-col">
           <div class="pap-ro"><div class="pap-k">Momentary (saída)</div><div class="pap-v big" data-r="mo">−∞ <small>LUFS</small></div></div>
@@ -169,10 +170,10 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
     function zone(rel){if(rel<-9)return'#2f6fd6';if(rel<-4)return'#1fa98a';if(rel<-1)return'#36c46a';if(rel<1.5)return'#f4c430';if(rel<4)return'#f08a24';return'#e23b3b';}
     function rFor(lu,R){const i=0.16*R;lu=Math.max(luMin,Math.min(luMax,lu));return i+(lu-luMin)/(luMax-luMin)*(R-i);}
     function drawRadar(){const W=rcv.width,H=rcv.height,cx=W/2,cy=H/2,R=Math.min(W,H)/2-10;rx.clearRect(0,0,W,H);
-      rx.fillStyle='#06080b';rx.beginPath();rx.arc(cx,cy,R,0,7);rx.fill();rx.font='9px DM Mono,monospace';rx.textAlign='center';
+      rx.fillStyle='#06080b';rx.beginPath();rx.arc(cx,cy,R,0,7);rx.fill();rx.font='13px DM Mono,monospace';rx.textAlign='center';
       for(const lu of[-24,-18,-12,-6,0,6]){const r=rFor(lu,R);rx.beginPath();rx.arc(cx,cy,r,0,7);
         rx.strokeStyle=lu===0?'rgba(244,196,48,.55)':'rgba(40,60,75,.6)';rx.lineWidth=lu===0?1.5:1;rx.stroke();
-        rx.fillStyle=lu===0?'rgba(244,196,48,.85)':'rgba(120,140,155,.7)';rx.fillText((lu>0?'+':'')+lu,cx,cy-r+10);}
+        rx.fillStyle=lu===0?'rgba(244,196,48,.85)':'rgba(120,140,155,.7)';rx.fillText((lu>0?'+':'')+lu,cx,cy-r+15);}
       const now=performance.now(),w=2*Math.PI/300*0.95;
       for(const h of HIST){const age=(now-h.t)/PER;if(age>1)continue;const ang=h.ang-Math.PI/2,r=rFor(h.lu,R);
         rx.beginPath();rx.moveTo(cx,cy);rx.arc(cx,cy,r,ang-w/2,ang+w/2);rx.closePath();rx.fillStyle=zone(h.lu);rx.globalAlpha=Math.max(0.12,1-age*0.85);rx.fill();}
@@ -224,7 +225,7 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
   async function show(container, opts){
     opts=opts||{};
     const ctx = opts.audioContext || global.audioCtx;
-    const out = opts.outputNode   || global.masterGain;
+    const out = opts.outputNode   || global.__papOutputTap || global.masterGain;
     const inp = (opts.inputNode!==undefined ? opts.inputNode : global.__papInputTap) || null;
     if(opts.target!=null) TARGET=opts.target;
     if(!ctx || !out){ console.warn('[pap] sem audioCtx/masterGain ainda'); return null; }

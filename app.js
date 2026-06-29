@@ -599,6 +599,9 @@ function buildChain() {
   dryGain.connect(analyserNode);
 
   analyserNode.connect(audioCtx.destination);
+  // ── tap de saída persistente para o medidor ANALYTIC PRO (sobrevive a rebuilds) ──
+  if(!window.__papOutputTap){ window.__papOutputTap = audioCtx.createGain(); window.__papOutputTap.gain.value = 1.0; }
+  try{ analyserNode.connect(window.__papOutputTap); }catch(e){}
 
   applyShapeCurve();
 

@@ -1,0 +1,21 @@
+═══════════════════════════════════════════════════════════════
+  v3F — Correções ANALYTIC PRO: saída a marcar + radar grande
+═══════════════════════════════════════════════════════════════
+
+PROBLEMA (v3E): o radar não marcava e a saída lia ~−120 LUFS (silêncio),
+enquanto a entrada lia −9.8 LUFS. Causa: o buildChain recria o masterGain ao
+recarregar/processar, e o tap do medidor tinha ficado preso ao masterGain antigo.
+
+CORRIGIDO:
+• app.js — criado um TAP DE SAÍDA PERSISTENTE (window.__papOutputTap) alimentado
+  pelo nó final real (analyserNode → destination), religado a cada buildChain.
+  Assim o medidor de saída segue sempre o áudio atual, em PROCESSADO e ORIGINAL.
+• piradex-analise-pro.js — a saída passa a ler window.__papOutputTap.
+  → A saída volta a marcar (Momentary/Integrated/True-peak reais) e o radar
+    desenha os spokes outra vez.
+
+RADAR GRANDE:
+• Na aba ANALYTIC PRO o radar é agora o elemento central (até ~540 px, responsivo),
+  com legendas maiores. Deixou de ficar pequeno como na captura anterior.
+
+Nada mais foi tocado. Worklet 'piradex-loudness', CSS '.pap-', globais '__pap*'.
