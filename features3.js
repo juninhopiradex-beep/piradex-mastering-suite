@@ -585,6 +585,7 @@ function buildUI() {
       <div class="${NS}-tab" data-p="meter">LUFS METER</div>
       <div class="${NS}-tab" data-p="spectrum">SPECTRUM</div>
       <div class="${NS}-tab" data-p="analise">ANÁLISE</div>
+      <div class="${NS}-tab" data-p="analytic">ANALYTIC PRO</div>
       <div class="${NS}-tab" data-p="vector">VECTOR</div>
       <div class="${NS}-tab" data-p="harmonic">HARMONIC</div>
       <div class="${NS}-tab" data-p="phase">PHASE</div>
@@ -657,6 +658,7 @@ function renderPage(p) {
   if (p === 'meter') return pageMeter(body);
   if (p === 'spectrum') return pageSpectrum(body);
   if (p === 'analise') return pageAnalise(body);
+  if (p === 'analytic') return pageAnalytic(body);
   if (p === 'vector') return pageVector(body);
   if (p === 'harmonic') return pageHarmonic(body);
   if (p === 'phase') return pagePhase(body);
@@ -910,8 +912,25 @@ function pageAnalise(body) {
     </div>
     <div class="${NS}-hint" style="margin-top:10px;text-align:center;">6 métricas profissionais — actualizam quando carregas/masterizas uma faixa.</div>`;
   setTimeout(updateAnalisePage, 80);
-  // ── medidor In/Out (radar BS.1770 + RTA) — add-on não-destrutivo ──
-  if (window.PiradexAnalisePro) setTimeout(function(){ try{ PiradexAnalisePro.show(body); }catch(e){} }, 60);
+}
+
+/* ════════════════════════════════════════════════════════════
+ * PÁGINA ANALYTIC PRO — radar de loudness In/Out dedicado (BS.1770)
+ * Só o medidor (radar + leituras + RTA), sem partilhar espaço.
+ * ════════════════════════════════════════════════════════════ */
+function pageAnalytic(body) {
+  body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-family:'Orbitron',monospace;font-weight:800;font-size:13px;letter-spacing:1.5px;color:var(--c1,#f4c430);">ANALYTIC PRO · RADAR DE LOUDNESS IN ⇄ OUT</div>
+      <div style="font-family:monospace;font-size:10px;letter-spacing:1px;color:var(--muted,#6b7884);">ITU-R BS.1770-4 · EBU R128</div>
+    </div>
+    <div id="${NS}-analytic-mount"></div>
+    <div class="${NS}-hint" style="margin-top:8px;text-align:center;">Carrega/toca uma faixa — o radar, o true-peak e o RTA actualizam em tempo real (entrada vs saída).</div>`;
+  const mount = $('#' + NS + '-analytic-mount');
+  if (window.PiradexAnalisePro) {
+    setTimeout(function(){ try { PiradexAnalisePro.show(mount); } catch(e){ console.warn('[analytic]', e); } }, 30);
+  } else {
+    mount.innerHTML = '<div style="padding:24px;color:var(--muted);font-family:monospace;">Módulo de análise não carregado (piradex-analise-pro.js).</div>';
+  }
 }
 function updateAnalisePage() {
   const buf = window.audioBuffer || (window._getAudioBuffer && window._getAudioBuffer());

@@ -1,0 +1,24 @@
+═══════════════════════════════════════════════════════════════
+  v3E — Aba dedicada ANALYTIC PRO (PRO FINAL)
+═══════════════════════════════════════════════════════════════
+
+O radar de loudness In/Out + RTA passou a ter uma ABA PRÓPRIA no PRO FINAL,
+deixando de partilhar espaço com os outros analisadores.
+
+ALTERAÇÕES (só em features3.js, nada removido das tuas funções):
+
+• NAV: nova aba "ANALYTIC PRO" (data-p="analytic"), a seguir a "ANÁLISE".
+• ROUTER: renderPage() passa a tratar p === 'analytic' → pageAnalytic(body).
+• NOVA função pageAnalytic(body): mostra SÓ o medidor (radar + leituras +
+  Balance-o-Meter + barras L/R + RTA), em ecrã inteiro da aba.
+• pageAnalise(body): o radar foi REMOVIDO daqui — a página ANÁLISE volta a ter
+  apenas as tuas 6 métricas (Correlómetro, DR/PSR, etc.), sem dividir espaço.
+
+COMPORTAMENTO:
+  - Abre PRO FINAL → aba ANALYTIC PRO, com uma faixa a tocar.
+  - Os taps de medição são os mesmos (singleton, em paralelo ao masterGain);
+    ao sair da aba o desenho pára sozinho, ao voltar volta a desenhar.
+  - Se abrires a aba antes de carregar áudio, mostra uma dica; assim que houver
+    master, reabre a aba e o radar arranca.
+
+Nada mais foi tocado. Worklet 'piradex-loudness', CSS '.pap-', globais '__pap*'.
