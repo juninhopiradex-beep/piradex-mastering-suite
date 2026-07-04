@@ -593,7 +593,10 @@ function buildChain() {
     limiterNode.connect(kn.tight.in); kn.tight.out.connect(masterGain);
   }
 
-  masterGain.connect(analyserNode);
+  // ── PONTOS DE INSERÇÃO do TP Limiter (worklet liga-se aqui async) ──
+  if(!window.__tpLimIn){ window.__tpLimIn=audioCtx.createGain(); window.__tpLimOut=audioCtx.createGain(); window.__tpLimIn.connect(window.__tpLimOut); }
+  masterGain.connect(window.__tpLimIn);
+  window.__tpLimOut.connect(analyserNode);
 
   // DRY CHAIN (ORIGINAL): source → dryGain → analyser → out
   dryGain.connect(analyserNode);
@@ -613,6 +616,9 @@ function buildChain() {
   // ── Tap de entrada para o medidor Análise PRO (radar/RTA In/Out) ──
   window.dryGain=dryGain;
   if(!window.__papInputTap){ window.__papInputTap=audioCtx.createGain(); window.__papInputTap.gain.value=1.0; }
+  // ── Event-bus mínimo (auditoria E4): módulos subscrevem reconstruções da cadeia ──
+  if(!window.PRDX){ window.PRDX={_e:{},on(n,f){(this._e[n]=this._e[n]||[]).push(f);},emit(n,d){(this._e[n]||[]).forEach(f=>{try{f(d);}catch(e){}});}}; }
+  PRDX.emit('chain:rebuilt',{ctx:audioCtx});
 }
 
 // ===== SHAPE DSP =====
@@ -2884,7 +2890,16 @@ function loadFile(file){
       // Trigger Genre DNA
       document.dispatchEvent(new CustomEvent('piradex:fileLoaded', { detail: audioBuffer }));
       if(refStats) analyseAndDisplayRef(refStats.name);
-    }catch(err){setStatus('Erro: '+err.message);}
+    }catch(err){
+      const ext=(file.name.split('.').pop()||'').toLowerCase();
+      let msg='Não consegui ler este ficheiro de áudio.';
+      if(['alac','m4a','aac'].includes(ext)) msg+=' Ficheiros '+ext.toUpperCase()+' nem sempre são suportados pelo browser — converte para WAV ou MP3.';
+      else if(['flac','ogg','opus'].includes(ext)) msg+=' O suporte a '+ext.toUpperCase()+' varia por browser — se falhar, converte para WAV.';
+      else if(['wav','mp3','aiff','aif'].includes(ext)) msg+=' O ficheiro pode estar corrompido ou usar um codec incomum dentro do contentor '+ext.toUpperCase()+'.';
+      else msg+=' Formato .'+ext+' não reconhecido — usa WAV, MP3, FLAC ou OGG.';
+      setStatus('❌ '+msg);
+      console.warn('[loadFile]',err);
+    }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -3674,6 +3689,15 @@ async function _originalExport(){
     const rendered=await offCtx.startRendering();
     const isHouse=curPreset==='house';
     let normalized=normalizeLUFS(rendered,isHouse?0.224:0.178);
+    // ── TP LIMITER no export (auditoria D2): MESMO kernel do realtime ──
+    // Garante true-peak ≤ ceiling (inter-sample incluído) no ficheiro final.
+    let tpReport=null;
+    if(window.PiradexTPLimiter){
+      try{
+        tpReport=PiradexTPLimiter.processAudioBuffer(normalized,{ceilingDb:-1.0});
+        console.log('[EXPORT] True-peak: '+tpReport.beforeDbTP.toFixed(2)+' → '+tpReport.afterDbTP.toFixed(2)+' dBTP (ceiling '+tpReport.ceilingDb+')');
+      }catch(e){ console.warn('[EXPORT] TP limiter falhou, a exportar sem verificação:',e); }
+    }
     // Measure true LUFS BS.1770
     const trueLUFS=_measureLUFS_BS1770(normalized);
     // Apply TPDF dither before 16-bit conversion
@@ -5017,11 +5041,11 @@ function _applyLicense(key,L){
   hasStudioPro=(L.tier==='advanced');
 }
 function checkLicense(){
-  const saved=sessionStorage.getItem('piradex_license');
+  const saved=localStorage.getItem('piradex_license')||sessionStorage.getItem('piradex_license');
   if(saved){
     const L=_licenseValid(saved);
     if(L && !L.expired){ _applyLicense(saved,L); }
-    else if(L && L.expired){ sessionStorage.removeItem('piradex_license'); setStatus('⏱ A tua licença mensal expirou — renova para continuar'); }
+    else if(L && L.expired){ localStorage.removeItem('piradex_license');sessionStorage.removeItem('piradex_license'); setStatus('⏱ A tua licença mensal expirou — renova para continuar'); }
   }
   updateLicenseBadge();
 }
@@ -5032,7 +5056,7 @@ function activateLicense(){
   const L=_licenseValid(key);
   if(L && !L.expired){
     _applyLicense(key,L); exportCount=0;
-    sessionStorage.setItem('piradex_license',key);
+    localStorage.setItem('piradex_license',key);
     document.getElementById('license-modal').style.display='none';
     const pm=document.getElementById('paywall-modal'); if(pm) pm.style.display='none';
     updateLicenseBadge();

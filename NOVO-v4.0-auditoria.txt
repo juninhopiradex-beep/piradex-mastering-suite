@@ -1,0 +1,58 @@
+═══════════════════════════════════════════════════════════════
+  v4.0 — IMPLEMENTAÇÃO DA AUDITORIA (fundações)
+═══════════════════════════════════════════════════════════════
+
+Implementado nesta versão (referências = relatório PIRADEX-AUDITORIA-EXECUTIVA):
+
+■ E2 — LIMITER TRUE-PEAK COM LOOKAHEAD  (novo: piradex-limiter-pro.js)
+  O estágio final deixa de depender do DynamicsCompressor do browser.
+  • Lookahead 1.5 ms com rampa de ataque que chega ANTES do pico
+  • Deteção de pico com sobreamostragem 4x (apanha inter-sample peaks)
+  • Release exponencial (80 ms), stereo-linked, ceiling −1.0 dBTP
+  • Inserido no caminho processado: masterGain → [TP LIM] → analyser
+    (o caminho ORIGINAL/dry não é tocado). Transparente abaixo do ceiling.
+  • API: PiradexTPLimiter.setCeiling(db) / setRelease(ms) / setEnabled(on)
+
+■ D2 + princípio E1 — MESMO KERNEL NO EXPORT
+  O export principal aplica o MESMO algoritmo (fonte única de código) ao
+  buffer renderizado, depois da normalização e antes do dither/encode.
+  → O ficheiro final tem true-peak ≤ −1.0 dBTP garantido (inter-sample incl.)
+  → console mostra: True-peak antes → depois no export.
+
+■ E3 — TESTES NUMÉRICOS DSP  (novo: tests/run-tests.js — correr: node tests/run-tests.js)
+  9 testes, todos a passar:
+  T1 EBU 3341 (tom −23 dBFS → −22.99 LUFS) · T2 mono correto (−26, sem +3 LU)
+  T3 ceiling garantido a +3 dBFS (−1.00 dBTP) · T4 transparência (null −240 dB)
+  T5 transiente 0 dBFS limitado · T6 medição TP exata
+
+■ E4 — EVENT-BUS PRDX
+  window.PRDX (on/emit) criado no app.js; buildChain emite 'chain:rebuilt';
+  o módulo de análise religa os taps automaticamente. A classe de bugs
+  "tap agarrado a nó antigo" fica estruturalmente prevenida.
+
+■ E5 — LICENÇA EM localStorage
+  A licença ativada persiste entre sessões (deixou de expirar ao fechar o tab).
+  Sessão/beta continuam em sessionStorage (comportamento inalterado).
+
+■ E7 — ERROS DE DECODE ÚTEIS
+  Falha ao carregar ficheiro agora diz porquê e o que fazer (ALAC/M4A → converte;
+  FLAC/OGG variável por browser; WAV/MP3 corrompido; formato desconhecido).
+
+■ O2 — GENRE DNA → TARGET DO RADAR
+  Ao carregar uma faixa, o género detetado (GenreDNA) define automaticamente
+  o alvo LUFS do radar ANALYTIC PRO (Kuduro −9, Afro House −9, Kizomba −12,
+  Semba −14, …, valores do próprio GenreDNA).
+
+■ A4 — PREVISÃO POR PLATAFORMA (novo painel no ANALYTIC PRO)
+  A partir do Integrated da saída: quanto o Spotify/YouTube (−14) e a Apple
+  (−16) vão baixar, e a que nível toca em clube/sem normalização.
+
+NÃO implementado nesta ronda (deliberado, ver auditoria):
+  • E1 completo (grafo único realtime/offline para TODA a cadeia): refactor
+    grande que exige sessão dedicada + null tests A/B com escuta. O princípio
+    já foi aplicado ao estágio mais crítico (limiter: mesmo kernel nos dois
+    mundos). Recomendo ser o próximo passo.
+  • Backend de licenças/export server-side (R3): decisão de negócio, a tomar
+    antes da primeira campanha paga.
+
+Validação: node --check OK em todos os ficheiros · 9/9 testes DSP a passar.

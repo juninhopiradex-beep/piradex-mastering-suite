@@ -126,6 +126,12 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
       <div class="r"><span class="l">True-peak in → out</span><span data-r="tpio">−∞ → −∞</span></div>
       <div class="r"><span class="l">Δ LRA (out − in)</span><span data-r="dLra">0.0 LU</span></div>
     </div>
+    <div class="pap-card2 pap-delta">
+      <div class="r"><span class="l" style="letter-spacing:1.5px">NAS PLATAFORMAS (ajuste de normalização previsto)</span><span></span></div>
+      <div class="r"><span class="l">Spotify / YouTube (−14)</span><span data-r="pSp">—</span></div>
+      <div class="r"><span class="l">Apple Music (−16)</span><span data-r="pAp">—</span></div>
+      <div class="r"><span class="l">Clube / sem normalização</span><span data-r="pCl">—</span></div>
+    </div>
     <div class="pap-card2 pap-rta">
       <div class="hd"><span>RTA · 1/3 OITAVA</span><span><span style="color:#36c46a">▮</span> saída &nbsp; <span style="color:#f4c430">—</span> entrada &nbsp; <span style="color:#e23b3b">▮</span> peak</span></div>
       <canvas data-r="rta" width="1120" height="190"></canvas>
@@ -214,6 +220,13 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
         drawBal(o.corr,o.balance,o.side);
         const now=performance.now();if(now-(loop._ls||0)>90&&isFinite(o.shortTerm)){loop._ls=now;HIST.push({ang:((now-STARTT)%PER)/PER*2*Math.PI,lu:o.shortTerm-TARGET,t:now});if(HIST.length>320)HIST.shift();}}
       if(i)Q('inI').textContent=plain(i.integrated)+' LUFS';
+      // previsão de normalização por plataforma (a partir do integrated da saída)
+      if(o&&isFinite(o.integrated)){
+        const I=o.integrated;
+        const f=(t)=>{const adj=t-I; return (adj<0?adj.toFixed(1)+' dB (baixa o volume)':(adj>0.2?'sem boost — toca a '+I.toFixed(1):'±0 — no alvo'));};
+        Q('pSp').textContent=f(-14); Q('pAp').textContent=f(-16);
+        Q('pCl').textContent='toca a '+I.toFixed(1)+' LUFS';
+      }
       if(i&&o){const dL=(isFinite(o.integrated)&&isFinite(i.integrated))?o.integrated-i.integrated:NaN;
         const e=Q('dL');e.textContent=(isFinite(dL)?fmt(dL):'0.0')+' LU';e.className=(dL>0.05?'pap-pos':dL<-0.05?'pap-neg':'');
         const dLra=(isFinite(o.lra)&&isFinite(i.lra))?o.lra-i.lra:NaN;const e2=Q('dLra');e2.textContent=(isFinite(dLra)?fmt(dLra):'0.0')+' LU';e2.className=(dLra<-0.1?'pap-pos':dLra>0.1?'pap-neg':'');}
@@ -242,8 +255,40 @@ registerProcessor('piradex-loudness', LoudnessProcessor);
   global.PiradexAnalisePro = {
     show, mount: show,
     setTarget(v){ TARGET=v; HIST.length=0; },
+    getTarget(){ return TARGET; },
     reset(){ HIST.length=0; PEAKS.fill(-90);
       if(CORE){CORE.outMeter.port.postMessage('resetInt');CORE.outMeter.port.postMessage('resetTP');
         if(CORE.inMeter){CORE.inMeter.port.postMessage('resetInt');CORE.inMeter.port.postMessage('resetTP');}} }
   };
+
+  // ── E4 (auditoria): religação automática quando a cadeia é reconstruída ──
+  if(typeof window!=='undefined'){
+    const _rehook=function(){
+      try{
+        if(CORE && global.__papOutputTap && CORE._outSrc!==global.__papOutputTap){
+          global.__papOutputTap.connect(CORE.outMeter); global.__papOutputTap.connect(CORE.outA);
+          CORE._outSrc=global.__papOutputTap;
+        }
+      }catch(e){}
+    };
+    const _sub=function(){ if(global.PRDX&&global.PRDX.on){ global.PRDX.on('chain:rebuilt',_rehook); } else setTimeout(_sub,500); };
+    _sub();
+  }
+
+  // ── O2 (auditoria): Genre DNA → target do radar, automático ──
+  // O GenreDNA da suite dispara após 'piradex:fileLoaded'; cada género tem lufs alvo.
+  if(typeof document!=='undefined'){
+    document.addEventListener('piradex:fileLoaded', function(){
+      setTimeout(function(){
+        try{
+          const r=global.GenreDNA && global.GenreDNA.getLastResult && global.GenreDNA.getLastResult();
+          if(r && r.genre && global.GenreDNA.getGenre){
+            const g=global.GenreDNA.getGenre(r.genre);
+            if(g && typeof g.lufs==='number'){ TARGET=g.lufs; HIST.length=0;
+              console.log('[ANALYTIC] target ajustado ao género '+(g.name||r.genre)+': '+g.lufs+' LUFS'); }
+          }
+        }catch(e){}
+      }, 1500); // depois do GenreDNA analisar
+    });
+  }
 })(typeof window!=='undefined'?window:globalThis);
