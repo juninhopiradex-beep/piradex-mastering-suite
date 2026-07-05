@@ -1,41 +1,33 @@
 ═══════════════════════════════════════════════════════════════
-  v4.1 — HOTFIX: efeitos/presets voltam a afetar a processada
+  v4.1 — HOTFIX DEFINITIVO: cadeia processada intocada
 ═══════════════════════════════════════════════════════════════
 
-PROBLEMA (v4.0): depois de inserir o limiter true-peak, a cadeia processada
-deixou de responder a efeitos/presets. Causa: liguei o limiter ao caminho
-principal com nós de ganho extra (__tpLimIn/__tpLimOut) + um rewire assíncrono
-que, em certos momentos, deixava o caminho masterGain→saída sem ligação válida.
+SINTOMA (v4.0): efeitos, presets, headroom, EQ, width, image, Piradex
+Mastering — nada afetava a música processada.
 
-DIAGNÓSTICO CONFIRMADO:
-  • O kernel do limiter está CORRETO (testado em streaming: transparente,
-    null −240 dB abaixo do teto). O problema era só o ENCAMINHAMENTO.
-  • initAudio() tem guard (if(audioCtx)return) → buildChain corre UMA vez e o
-    masterGain é estável. Logo não havia problema de rebuild — havia problema
-    de ligação frágil.
+DUAS CAUSAS ELIMINADAS:
 
-CORRIGIDO:
-  • app.js — encaminhamento REPOSTO ao original: masterGain → analyserNode.
-    A cadeia processada volta a funcionar exatamente como antes da v4.0.
-    (Os nós __tpLimIn/__tpLimOut foram removidos.)
-  • piradex-limiter-pro.js — o limiter passa a inserir-se por SPLICE SEGURO:
-      1) liga masterGain → limiter → analyser  (caminho novo PRIMEIRO)
-      2) só DEPOIS corta masterGain → analyser  (o direto)
-    Nunca há um instante sem saída. Se o worklet não carregar ou algo falhar,
-    reverte automaticamente para masterGain → analyser (caminho direto).
-  • Novo escape: PiradexTPLimiter.setEnabled(false) desliga o limiter em
-    tempo real (repõe o caminho direto na hora); setEnabled(true) volta a inserir.
+1) EXTRAÇÃO CORROMPIDA (muito provável no teu caso)
+   O download do v4.0 deu "dados corrompidos". Se foi extraído assim, os
+   ficheiros ficaram truncados e o app.js parte por inteiro → nada funciona.
+   → Este v4.1 foi reconstruído e verificado (unzip -t OK). Extrai-o LIMPO.
+   → Para confirmar na app: abre a consola (F12) e escreve  PIRADEX_DIAGNOSE()
+     Se disser que o app.js não carregou por inteiro = era a extração.
 
-MANTIDO INTACTO:
-  • Limiter no export (D2) — independente do realtime, continua a garantir
-    true-peak ≤ −1.0 dBTP no ficheiro.
-  • Tap do radar (analyser → __papOutputTap), event-bus, licença localStorage,
-    erros de decode, Genre→target, previsão por plataforma.
+2) O SPLICE DO LIMITER AO VIVO (eliminado por precaução)
+   O limiter true-peak DEIXOU de se ligar sozinho ao caminho ao vivo.
+   O caminho processado fica IDÊNTICO ao original que funcionava:
+       fonte → EQ → comp → clip → M/S → masterGain → analyser → saída
+   O limiter continua a proteger o EXPORT (offline, ficheiro final seguro).
+   Para o ativares no monitor, quando quiseres:  PiradexTPLimiter.setEnabled(true)
+   Para desligar:  PiradexTPLimiter.setEnabled(false)
 
-Validação: node --check OK · 9/9 testes DSP a passar · sem referências órfãs.
+NOVO: piradex-diag.js — diagnóstico de consola.  PIRADEX_DIAGNOSE()
+   Diz se os ficheiros carregaram, o estado do áudio, se estás em BEFORE/AFTER,
+   e aponta a causa exata.
 
-SE ainda notares algo estranho na processada: abre a consola e escreve
-  PiradexTPLimiter.setEnabled(false)
-— se o problema desaparecer, é o limiter; se persistir, é outra coisa e digo-te
-onde procurar. Mas com o caminho reposto ao original, a processada tem de
-responder aos efeitos como antes.
+LEMBRETE ÚTIL: o modo BEFORE toca o ORIGINAL (sem efeitos), o AFTER toca o
+MASTERIZADO. Se estiveres em BEFORE, é normal não ouvires processamento —
+carrega no A/B para AFTER.
+
+Validação: 8/8 ficheiros JS íntegros (sintaxe + chavetas) · 9/9 testes DSP.

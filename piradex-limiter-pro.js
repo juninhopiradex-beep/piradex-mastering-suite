@@ -224,7 +224,12 @@ registerProcessor('piradex-tp-limiter', TPLimiterProcessor);
     mg.__tpSpliced=false;
     console.log('[TP-LIM] limiter em bypass (caminho direto).');
   }
-  if(typeof window!=='undefined') setTimeout(_autoWire,300);
+  // IMPORTANTE: por omissão o limiter NÃO se liga ao caminho ao vivo.
+  // O caminho processado fica idêntico ao original (masterGain → analyser).
+  // O limiter continua a proteger o EXPORT (offline). Para o ativar ao vivo:
+  //   PiradexTPLimiter.setEnabled(true)
+  // (setEnabled(false) volta a desligar). Isto elimina qualquer risco de o
+  // limiter afetar a cadeia processada.
 
   function _send(m){ if(node)node.port.postMessage(m); }
 
