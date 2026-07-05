@@ -593,10 +593,7 @@ function buildChain() {
     limiterNode.connect(kn.tight.in); kn.tight.out.connect(masterGain);
   }
 
-  // ── PONTOS DE INSERÇÃO do TP Limiter (worklet liga-se aqui async) ──
-  if(!window.__tpLimIn){ window.__tpLimIn=audioCtx.createGain(); window.__tpLimOut=audioCtx.createGain(); window.__tpLimIn.connect(window.__tpLimOut); }
-  masterGain.connect(window.__tpLimIn);
-  window.__tpLimOut.connect(analyserNode);
+  masterGain.connect(analyserNode);
 
   // DRY CHAIN (ORIGINAL): source → dryGain → analyser → out
   dryGain.connect(analyserNode);

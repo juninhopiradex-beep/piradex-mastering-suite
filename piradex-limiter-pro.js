@@ -191,19 +191,38 @@ registerProcessor('piradex-tp-limiter', TPLimiterProcessor);
     return node;
   }
 
-  // Auto-wire: insere-se entre __tpLimIn e __tpLimOut (criados no app.js)
+  // Auto-splice SEGURO: insere-se entre masterGain e analyserNode.
+  // Regra de ouro: liga o caminho novo ANTES de cortar o direto — nunca há
+  // um instante sem saída. Se algo falhar, reverte para masterGain→analyser.
   async function _autoWire(){
-    const ctx=global.audioCtx, gin=global.__tpLimIn, gout=global.__tpLimOut;
-    if(!ctx||!gin||!gout){ setTimeout(_autoWire,200); return; }
-    if(gin.__papWired)return;
+    const ctx=global.audioCtx, mg=global.masterGain, an=global.analyserNode;
+    if(!ctx||!mg||!an){ setTimeout(_autoWire,200); return; }
+    if(mg.__tpSpliced) return;
+    let n;
+    try{ n=await _ensureNode(ctx); }
+    catch(e){ console.warn('[TP-LIM] worklet não carregou; caminho normal mantém-se.',e); return; }
     try{
-      const n=await _ensureNode(ctx);
-      try{ gin.disconnect(gout); }catch(e){}
-      gin.connect(n); n.connect(gout);
-      gin.__papWired=true;
-      console.log('[TP-LIM] limiter true-peak ativo (ceiling '+state.ceilingDb+' dBTP, lookahead 1.5 ms)');
+      mg.connect(n);            // 1) novo caminho primeiro
+      n.connect(an);
+      try{ mg.disconnect(an); }catch(e){}   // 2) só depois corta o direto
+      mg.__tpSpliced=true; mg.__tpNode=n;
+      console.log('[TP-LIM] limiter true-peak ATIVO (ceiling '+state.ceilingDb+' dBTP, lookahead 1.5 ms)');
       try{ if(global.PRDX&&PRDX.emit)PRDX.emit('tplimiter:ready'); }catch(e){}
-    }catch(e){ console.warn('[TP-LIM] falha ao ativar; caminho direto mantém-se.',e); }
+    }catch(e){
+      // reverter para o caminho direto garantido
+      try{ mg.disconnect(n); }catch(_){}
+      try{ mg.connect(an); }catch(_){}
+      console.warn('[TP-LIM] splice falhou; caminho direto reposto.',e);
+    }
+  }
+  function _unsplice(){
+    const mg=global.masterGain, an=global.analyserNode, n=mg&&mg.__tpNode;
+    if(!mg||!mg.__tpSpliced||!n)return;
+    try{ mg.connect(an); }catch(e){}        // repõe direto primeiro
+    try{ n.disconnect(an); }catch(e){}
+    try{ mg.disconnect(n); }catch(e){}
+    mg.__tpSpliced=false;
+    console.log('[TP-LIM] limiter em bypass (caminho direto).');
   }
   if(typeof window!=='undefined') setTimeout(_autoWire,300);
 
@@ -212,7 +231,9 @@ registerProcessor('piradex-tp-limiter', TPLimiterProcessor);
   global.PiradexTPLimiter={
     setCeiling(db){ state.ceilingDb=db; _send({ceilingDb:db}); },
     setRelease(ms){ state.releaseMs=ms; _send({releaseMs:ms}); },
-    setEnabled(on){ state.enabled=!!on; _send({enabled:!!on}); },
+    setEnabled(on){ state.enabled=!!on; _send({enabled:!!on});
+      // liga/desliga também o splice no caminho realtime
+      if(!on){ _unsplice(); } else if(global.masterGain && !global.masterGain.__tpSpliced){ _autoWire(); } },
     getGR(){ return lastGR; },
     get state(){ return Object.assign({},state); },
 

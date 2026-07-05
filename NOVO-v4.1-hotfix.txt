@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════════
+  v4.1 — HOTFIX: efeitos/presets voltam a afetar a processada
+═══════════════════════════════════════════════════════════════
+
+PROBLEMA (v4.0): depois de inserir o limiter true-peak, a cadeia processada
+deixou de responder a efeitos/presets. Causa: liguei o limiter ao caminho
+principal com nós de ganho extra (__tpLimIn/__tpLimOut) + um rewire assíncrono
+que, em certos momentos, deixava o caminho masterGain→saída sem ligação válida.
+
+DIAGNÓSTICO CONFIRMADO:
+  • O kernel do limiter está CORRETO (testado em streaming: transparente,
+    null −240 dB abaixo do teto). O problema era só o ENCAMINHAMENTO.
+  • initAudio() tem guard (if(audioCtx)return) → buildChain corre UMA vez e o
+    masterGain é estável. Logo não havia problema de rebuild — havia problema
+    de ligação frágil.
+
+CORRIGIDO:
+  • app.js — encaminhamento REPOSTO ao original: masterGain → analyserNode.
+    A cadeia processada volta a funcionar exatamente como antes da v4.0.
+    (Os nós __tpLimIn/__tpLimOut foram removidos.)
+  • piradex-limiter-pro.js — o limiter passa a inserir-se por SPLICE SEGURO:
+      1) liga masterGain → limiter → analyser  (caminho novo PRIMEIRO)
+      2) só DEPOIS corta masterGain → analyser  (o direto)
+    Nunca há um instante sem saída. Se o worklet não carregar ou algo falhar,
+    reverte automaticamente para masterGain → analyser (caminho direto).
+  • Novo escape: PiradexTPLimiter.setEnabled(false) desliga o limiter em
+    tempo real (repõe o caminho direto na hora); setEnabled(true) volta a inserir.
+
+MANTIDO INTACTO:
+  • Limiter no export (D2) — independente do realtime, continua a garantir
+    true-peak ≤ −1.0 dBTP no ficheiro.
+  • Tap do radar (analyser → __papOutputTap), event-bus, licença localStorage,
+    erros de decode, Genre→target, previsão por plataforma.
+
+Validação: node --check OK · 9/9 testes DSP a passar · sem referências órfãs.
+
+SE ainda notares algo estranho na processada: abre a consola e escreve
+  PiradexTPLimiter.setEnabled(false)
+— se o problema desaparecer, é o limiter; se persistir, é outra coisa e digo-te
+onde procurar. Mas com o caminho reposto ao original, a processada tem de
+responder aos efeitos como antes.
