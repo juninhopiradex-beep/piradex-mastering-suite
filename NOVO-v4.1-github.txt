@@ -1,0 +1,29 @@
+═══════════════════════════════════════════════════════════════
+  v4.1 — PRONTO PARA GITHUB PAGES (com cache-busting)
+═══════════════════════════════════════════════════════════════
+
+O QUE MUDOU PARA O GITHUB:
+• index.html: todos os scripts/CSS locais levam ?v=4.1.0
+  → o browser é OBRIGADO a buscar a versão nova; nunca serve JS antigo em cache.
+  (Era a cache que fazia o limiter "ATIVO" reaparecer mesmo depois de atualizar.)
+• .nojekyll: impede o GitHub Pages de processar os ficheiros com Jekyll.
+
+CONFIRMAÇÃO DO FIX (v4.1):
+• O limiter true-peak NÃO se liga ao caminho ao vivo por omissão.
+  → No arranque, a linha "[TP-LIM] ... ATIVO" JÁ NÃO aparece.
+  → A cadeia processada é idêntica ao original: os efeitos/presets funcionam.
+• O limiter continua a proteger o EXPORT (ficheiro final ≤ -1.0 dBTP).
+• Ativar ao vivo quando quiseres:  PiradexTPLimiter.setEnabled(true)
+• Diagnóstico na consola:  PIRADEX_DIAGNOSE()
+
+COMO PÔR NO GITHUB (2 opções):
+A) Web: no repo → "Add file" → "Upload files" → arrasta TODOS os ficheiros
+   desta pasta (incluindo .nojekyll e a pasta tests/) → Commit.
+B) Git:
+     git add -A
+     git commit -m "v4.1: limiter fora do caminho ao vivo + cache-busting"
+     git push
+
+IMPORTANTE PARA O FUTURO:
+Sempre que mudares um .js, sobe o número da versão no index.html
+(?v=4.1.0 → ?v=4.1.1). É a garantia de que ninguém fica com JS velho em cache.
