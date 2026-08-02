@@ -44,6 +44,14 @@ const PRESETS = {
   house:    {name:'HOUSE',    refs:'Adam Port · HUGEL', desc:'Sub dominante, kick 4x4, dancefloor',
     knobs:{CLEAN:52,BASS:35,LOUD:70,WIDE:52,PUNCH:58,FOCUS:50},eq:{sub:4.0,bass:-0.5,low:-0.5,mid:-0.3,high:0.5,air:0.5},
     sugs:[['Sub punch @ 50Hz','+4.0 dB','c2'],['Bass definition','-0.5 dB','c3'],['Club energy','+72%','c5']]},
+  rock: {name:'ROCK', refs:'Foo Fighters · Queens of the Stone Age', desc:'Guitarras com presença, bateria com punch, low-end firme — energia orgânica',
+    knobs:{CLEAN:58,BASS:45,LOUD:64,WIDE:55,PUNCH:68,FOCUS:62},
+    eq:{sub:-1.5,bass:1.0,low:0.5,mid:1.5,high:1.2,air:0.8},
+    sugs:[['Guitar presence @ 3kHz','+1.5 dB','c2'],['Drum punch','+68%','c5'],['Air nos pratos','+0.8 dB','c3']]},
+  metal: {name:'HEAVY METAL', refs:'Metallica · Gojira · Pantera', desc:'Parede de som: mids agressivos, low-mid controlado, punch rápido e alto',
+    knobs:{CLEAN:55,BASS:50,LOUD:72,WIDE:50,PUNCH:74,FOCUS:66},
+    eq:{sub:1.0,bass:1.5,low:-1.5,mid:1.8,high:1.5,air:0.5},
+    sugs:[['Corte de mud @ 500Hz','−1.5 dB','c2'],['Presença agressiva @ 1.2k–3k','+1.8 dB','c3'],['Wall of sound punch','+74%','c5']]},
   suno: {name:'AI SUNO', refs:'Suno v3 · v4 · v5 — AI Generated Music', desc:'Noise gate · EQ correction · Stereo wide · Limiter → −9 LUFS',
     knobs:{CLEAN:62,BASS:35,LOUD:68,WIDE:58,PUNCH:48,FOCUS:60},
     eq:{sub:-1.0,bass:0.5,low:-2.5,mid:-1.8,high:1.5,air:2.0},
@@ -71,6 +79,7 @@ let headroomApplied = false;
 
 // Audio nodes
 let audioCtx=null, audioBuffer=null, sourceNode=null;
+let dryRouteGain=null, procInGain=null; // portas de rota A/B (crossfade, topologia fixa)
 
 /* ═══════════════════════════════════════════════════════════════════════
  * AUDIO MANAGER GLOBAL — garante que apenas 1 player toca de cada vez
@@ -595,8 +604,18 @@ function buildChain() {
 
   masterGain.connect(analyserNode);
 
-  // DRY CHAIN (ORIGINAL): source → dryGain → analyser → out
-  dryGain.connect(analyserNode);
+  // ── ROUTING A/B POR CROSSFADE (topologia fixa — a source NUNCA se religa) ──
+  // source → dryGain(trim entrada) → { dryRouteGain → analyser   (ORIGINAL)
+  //                                  { procInGain   → eqSub      (PROCESSADO)
+  // O setMode alterna APENAS os ganhos das rotas (rampa 20ms, sem click).
+  // FIX CRÍTICO: a versão anterior ligava a source directamente a eqSub OU
+  // dryGain no playAudio e o setMode "suave" não religava — resultado: em
+  // PROCESSADO o sinal continuava pela rota dry e NENHUM efeito era audível.
+  dryRouteGain = audioCtx.createGain(); dryRouteGain.gain.value = (playMode==='after') ? 0 : 1;
+  procInGain   = audioCtx.createGain(); procInGain.gain.value   = (playMode==='after') ? 1 : 0;
+  dryGain.connect(dryRouteGain); dryRouteGain.connect(analyserNode);
+  dryGain.connect(procInGain);   procInGain.connect(eqSub);
+  window.dryRouteGain = dryRouteGain; window.procInGain = procInGain;
 
   analyserNode.connect(audioCtx.destination);
   // ── tap de saída persistente para o medidor ANALYTIC PRO (sobrevive a rebuilds) ──
@@ -2942,17 +2961,11 @@ function playAudio(){
   sourceNode = audioCtx.createBufferSource();
   sourceNode.buffer = audioBuffer;
 
-  if(playMode==='after'){
-    // PROCESSADO: source → EQ chain → ... → analyser → out
-    // NOTE: do NOT call applyDSP() here — the chain already holds the current
-    // settings (knobs + manual fader edits). Re-running applyDSP would recompute
-    // EQ from the knobs and wipe any manual fader changes.
-    sourceNode.connect(eqSub);
-  } else {
-    // ORIGINAL: source → dryGain(1.0) → analyser → out
-    // Completely bypasses all processing — bit-perfect
-    sourceNode.connect(dryGain);
-  }
+  // Topologia fixa: a source liga SEMPRE ao trim de entrada (dryGain).
+  // O sinal segue depois pelas DUAS rotas (dry e processada) e o setMode
+  // decide qual é audível via crossfade de dryRouteGain/procInGain.
+  // NOTE: não chamar applyDSP() aqui — a cadeia já guarda os settings actuais.
+  sourceNode.connect(dryGain);
   // Both paths already connect to analyserNode via buildChain
   // ── tap de entrada (pré-processamento) para o medidor Análise PRO ──
   try{ if(window.__papInputTap) sourceNode.connect(window.__papInputTap); }catch(e){}
@@ -3042,12 +3055,21 @@ function setMode(mode){
     }
   }
   playMode=mode;
-  // ── Suave: alterna o DSP em tempo real sem parar a source ──
-  // (evita o "click"/travagem que vinha do stopSource() + playAudio() de novo)
-  if(mode==='before'){
-    resetAllDSP();
-    resetModuleBypasses();
-  } else {
+  // ── A/B por CROSSFADE de rotas (20ms, sem click, sem parar a source) ──
+  // ORIGINAL:   dryRouteGain=1 · procInGain=0  → bit-perfect, cadeia inaudível
+  // PROCESSADO: dryRouteGain=0 · procInGain=1  → cadeia com os settings actuais
+  // A cadeia DSP mantém o estado nos dois modos: A/B verdadeiro e instantâneo.
+  if(audioCtx && dryRouteGain && procInGain){
+    const tX=audioCtx.currentTime, tcX=0.02;
+    if(mode==='before'){
+      dryRouteGain.gain.setTargetAtTime(1, tX, tcX);
+      procInGain.gain.setTargetAtTime(0, tX, tcX);
+    } else {
+      dryRouteGain.gain.setTargetAtTime(0, tX, tcX);
+      procInGain.gain.setTargetAtTime(1, tX, tcX);
+      applyDSP();
+    }
+  } else if(mode==='after'){
     applyDSP();
   }
   updateModeUI(mode);
@@ -3352,14 +3374,30 @@ function updateLUFSDisplay(){
 }
 
 // ===== PRESETS =====
-function setPreset(key,el){
-  if(audioBuffer && !headroomApplied){
-    const hb=document.getElementById('headroom-btn');
-    if(hb){hb.style.boxShadow='0 0 0 3px var(--c3),0 0 20px var(--c3)';hb.style.transform='scale(1.1)';
-      setTimeout(()=>{hb.style.boxShadow='';hb.style.transform='';},1500);}
-    setStatus('Aplica primeiro o HEADROOM -6dB (botão amarelo) para desbloquear os presets');
-    return;
+// ── HEADROOM AUTOMÁTICO −6 dBFS ──────────────────────────────────
+// Mede o pico da fonte e ajusta o ganho de saída para deixar 6 dB de
+// altura antes de qualquer EQ/saturação. Gain-staging correcto feito
+// pela suite, sem obrigar o utilizador a carregar num botão primeiro.
+function applyHeadroomAuto(){
+  if(!audioBuffer) return false;
+  let peak=0;
+  for(let c=0;c<audioBuffer.numberOfChannels;c++){
+    const d=audioBuffer.getChannelData(c);
+    for(let i=0;i<d.length;i++){ const a=Math.abs(d[i]); if(a>peak) peak=a; }
   }
+  if(peak<=0) return false;
+  outputGainDb=Math.max(-24,Math.min(6,20*Math.log10(0.501/peak))); // −6 dBFS
+  applyIOGain(); updateIODisplay();
+  headroomApplied=true;
+  document.querySelectorAll('.preset-chip').forEach(c=>c.classList.remove('headroom-locked'));
+  return true;
+}
+
+function setPreset(key,el){
+  // FIX v4.3: antes, o preset fazia return se o headroom não estivesse
+  // aplicado — carregar num preset não fazia absolutamente nada ao som.
+  // Agora aplica-se o headroom sozinho e o preset entra sempre.
+  if(audioBuffer && !headroomApplied) applyHeadroomAuto();
   curPreset=key; const p=PRESETS[key];
   document.querySelectorAll('.preset-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
@@ -3376,8 +3414,10 @@ function setPreset(key,el){
   if(key==='suno'&&audioCtx){
     compNode.threshold.value=-45;compNode.ratio.value=6;compNode.attack.value=0.004;compNode.release.value=0.18;compNode.knee.value=8;
     limiterNode.threshold.value=-1.0;limiterNode.ratio.value=20;limiterNode.attack.value=0.001;limiterNode.release.value=0.05;limiterNode.knee.value=0;
-    if(playMode==='before') setMode('after');
   }
+  // FIX v4.3: escolher um preset passa sempre a PROCESSADO — senão o
+  // utilizador fica em ORIGINAL (bit-perfect) e não ouve o preset nenhum.
+  if(audioBuffer && playMode==='before') setMode('after');
   refreshKnobs(); updateSugs(p.sugs); applyDSP(); syncEQSliders();
   const lufsTarget=key==='house'?'-8':'-9';
   setStatus('Preset '+p.name+' aplicado · Alvo '+lufsTarget+' LUFS');

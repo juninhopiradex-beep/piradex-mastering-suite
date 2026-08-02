@@ -1,0 +1,38 @@
+═══════════════════════════════════════════════════════════════
+  v4.3 — DUAS CAUSAS DO "NADA AFECTA O SOM", CORRIGIDAS
+═══════════════════════════════════════════════════════════════
+
+CAUSA 1 (v4.2) — ROTEAMENTO
+  O playAudio ligava a source a UM caminho conforme o modo no
+  instante do play; o setMode nunca religava. Em PROCESSADO
+  continuava a ouvir-se a rota dry e a cadeia processava silêncio.
+  FIX: topologia fixa + crossfade de 20 ms.
+    source → dryGain ─┬─ dryRouteGain → analyser   (ORIGINAL)
+                      └─ procInGain   → eqSub …    (PROCESSADO)
+
+CAUSA 2 (v4.3) — PRESETS BLOQUEADOS
+  setPreset fazia `return` logo à entrada se o HEADROOM −6 dB não
+  tivesse sido premido. Carregar num preset não fazia rigorosamente
+  nada ao som — só uma mensagem de estado que passa despercebida.
+  FIX: applyHeadroomAuto() mede o pico da fonte e aplica os −6 dBFS
+  sozinho; o preset entra sempre. E escolher preset passa a
+  PROCESSADO automaticamente (em ORIGINAL nunca seria audível).
+
+AUDITORIA (Chromium real, sinal multi-tom em 15 bandas):
+  14/14 knobs alteram o espectro:
+    LOUD 12.2 · DRIVE 11.2 · SUB 6.9 · PRESENCE 5.8 · BASS 4.7
+    WARMTH 4.5 · PUNCH 3.8 · TIGHT 3.6 · SPACE 2.8 · CLEAN 2.4
+    AIR 2.0 · FOCUS 1.6 · PHASE 1.4 · WIDE 0.8   (dB de delta)
+  Presets com assinatura própria (dB vs neutro):
+    metal 5.4 · suno 6.0 · kuduro 5.7 · afrohouse 4.6
+    kizomba 4.5 · rock 3.8
+  A/B ORIGINAL vs PROCESSADO: 8.6 dB de separação
+  Módulos: comp 4.4 · eq 1.8 · excite 0.6 · width 0.35 · warmth 0.2
+  UI: 16 chips · Rock ×1 · Heavy Metal ×1 (sem duplicados)
+  9/9 testes DSP · sintaxe OK em 13 ficheiros JS
+
+ATENÇÃO: NÃO usar o piradex-fix-v42.js. Esse patch era para a
+versão antiga; sobre a v4.2/v4.3 duplica as rotas e os chips e
+volta a mascarar o processamento. Se existir no repo, apagar.
+
+ALTERADOS NESTA VERSÃO: app.js · index.html  (mais nada)

@@ -1,0 +1,38 @@
+═══════════════════════════════════════════════════════════════
+  v4.2 — FIX DEFINITIVO: crossfade de rotas A/B (+ ROCK / HEAVY METAL)
+═══════════════════════════════════════════════════════════════
+
+O BUG (raiz, provado com medição em browser real):
+  O playAudio ligava a source a UM caminho (dryGain OU eqSub) conforme o
+  modo no momento do play. O setMode "suave" (sem parar a source) alterava
+  apenas valores de nós — NUNCA religava a source. Resultado: quem tocava
+  em ORIGINAL e passava a PROCESSADO continuava a ouvir a rota dry
+  (bit-perfect) e NENHUM knob/preset/módulo/Piradex afectava o som.
+  Medição pré-fix: em PROCESSADO, rota dry a -13 dB e entrada do EQ a
+  -120 dB (silêncio absoluto na cadeia).
+
+O FIX (topologia fixa, prática profissional):
+  source → dryGain(trim de entrada) → ┬ dryRouteGain → analyser  (ORIGINAL)
+                                      └ procInGain   → eqSub …   (PROCESSADO)
+  • A source liga SEMPRE às duas rotas; nunca mais se religa nada.
+  • O setMode faz apenas crossfade dos ganhos de rota (rampa 20 ms):
+    sem click, sem parar a música, A/B instantâneo e verdadeiro.
+  • A cadeia DSP mantém o estado nos dois modos — voltar a PROCESSADO
+    devolve exactamente os settings que lá estavam.
+  • Bónus: o INPUT (I/O) passa a afectar também o caminho processado,
+    como manda a boa prática de gain-staging.
+
+MEDIÇÃO PÓS-FIX (tom de teste 60Hz+3k+12k, Chromium real):
+  • PROCESSADO: rota dry fechada (-120 dB), cadeia com sinal ✓
+  • BASS 100: banda 60 Hz +5.3 dB ✓ · CLEAN 100: 3k/12k sobem ✓
+  • Drag REAL de rato no knob → kval 100 → eqSub +9 dB → som muda ✓
+  • Mastering by Piradex: EQ/comp/gain activos e audíveis ✓
+
+NOVO:
+  • Presets ROCK (Foo Fighters · QOTSA — presença de guitarra, punch
+    de bateria) e HEAVY METAL (Metallica · Gojira — corte de mud a
+    500 Hz, mids agressivos, punch 74%).
+  • Cache-busting subiu para ?v=4.2.0 — extrai limpo e sobe TUDO.
+
+Validação: sintaxe OK em 13 ficheiros JS · CSS/divs balanceados ·
+9/9 testes DSP · bancada Playwright com medição espectral a passar.
