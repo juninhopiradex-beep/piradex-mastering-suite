@@ -1,0 +1,49 @@
+═══════════════════════════════════════════════════════════════
+  v4.3.1 — RESON COM ON/OFF + MIX · ANÁLISES CORRIGIDAS
+═══════════════════════════════════════════════════════════════
+
+① RESON — aplicava-se sozinho, sem retorno possível
+   ANTES: abrir o separador chamava _startResonLoop() e o módulo
+   começava logo a cortar até 6 ressonâncias. Não havia forma de
+   desfazer nem de dosear o efeito.
+   AGORA:
+   • Arranca DESLIGADO. Abrir o separador só analisa e desenha.
+   • Botão ACTIVAR / DESACTIVAR no cabeçalho, com indicador de
+     estado (● DESLIGADO / ● ACTIVO).
+   • Slider MIX (dry/wet) 0–100%: dosea a profundidade aplicada.
+     Ao desligar, os 6 filtros voltam a 0 dB — sinal intacto.
+   Verificado: arranque com os 6 filtros a 0.0 dB · MIX 30% com
+   DEPTH 6 dB → −1.8 dB exactos · desligar → volta a 0.0 dB.
+
+② ANÁLISES SONORAS — números impossíveis (+6.4 dBTP)
+   CAUSA RAIZ: existiam DUAS cadeias offline diferentes. A da
+   exportação era completa; a das Análises era uma versão
+   reduzida (só EQ + shape + comp + limiter) que ainda por cima
+   aplicava o masterGain DEPOIS do limitador e sem tecto. Faltavam
+   shape dry/wet, trim, transiente, clipper, trim de entrada,
+   normalização e limitador true-peak.
+   AGORA: uma única função _renderMasteredBuffer() serve a
+   exportação E a análise. O que a análise mede é exactamente o
+   que sai no ficheiro. Acrescentado também o trim de ENTRADA
+   (knob INPUT), que faltava em ambas as cadeias.
+   Verificado: True Peak −1.2 dBTP (era +6.4) · Peak ≤ 0 dBFS.
+
+③ LOUDNESS — o alvo nunca era o anunciado
+   A função chamada normalizeLUFS() normalizava por RMS, não por
+   LUFS, e clampava a ±0.99 — clipping duro aplicado ANTES do
+   limitador true-peak, o que sujava o master e tornava o
+   limitador inútil.
+   AGORA: _normalizeToLUFS() mede com o medidor BS.1770 que já
+   existia na suite e aplica o ganho exacto para o alvo (−8 LUFS
+   House · −9 os restantes), sem clamp — o tecto fica a cargo do
+   limitador true-peak. Depois do limitador, re-mede e corrige o
+   desvio uma vez.
+   NOTA: o alvo é limitado pela física. Com tecto de −1 dBTP, uma
+   faixa com 11 dB de crest não chega a −9 LUFS sem esmagar a
+   dinâmica; a suite aproxima-se do máximo possível sem destruir
+   o material, em vez de mentir no número.
+
+REGRESSÃO (auditoria em Chromium real):
+   14/14 knobs com efeito · A/B 8.55 dB · presets distintos
+   (metal 5.35 · suno 6.02 · kuduro 5.66 · rock 3.76)
+   chips 16 · Rock ×1 · Heavy Metal ×1 · 9/9 testes DSP

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Piradex Mastering Suite</title>
-  <link rel="stylesheet" href="style.css?v=4.3.0">
+  <link rel="stylesheet" href="style.css?v=4.3.1">
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -99,7 +99,7 @@
       <span class="logo-main">PIRADEX</span>
       <div class="logo-row2">
         <span class="logo-sub">MASTERING SUITE</span>
-        <span class="logo-engine">ENGINE v4.3.0</span>
+        <span class="logo-engine">ENGINE v4.3.1</span>
       </div>
     </div>
     <div class="hdr-right">
@@ -476,16 +476,20 @@
   <div class="tab-panel" id="tab-reson">
     <div class="module-panel">
       <div class="module-title-row">
-        <div class="module-title">RESON — Detetor de Ressonâncias Dinâmico</div>
-        <button class="module-bypass-btn" id="bypass-reson" onclick="toggleModuleBypass('reson')" title="Bypass Reson">BYPASS</button>
+        <div class="module-title">RESON — Detetor de Ressonâncias Dinâmico <span id="rs-state" style="font-size:10px;font-family:monospace;letter-spacing:1px;color:var(--muted);margin-left:8px;">● DESLIGADO</span></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="module-bypass-btn" id="rs-power" onclick="toggleResonPower()" title="Ligar/desligar o RESON" style="border-color:rgba(45,255,138,0.4);color:#2dff8a;">ACTIVAR</button>
+          <button class="module-bypass-btn" id="bypass-reson" onclick="toggleModuleBypass('reson')" title="Bypass Reson">BYPASS</button>
+        </div>
       </div>
       <canvas id="reson-cv" width="900" height="220" style="width:100%;height:220px;background:#07070e;border-radius:6px;border:1px solid var(--border);margin-top:8px;"></canvas>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px;">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:10px;">
         <div class="mod-ctrl"><label>SENSITIVITY</label><input type="range" min="0" max="100" value="50" step="1" id="rs-sens" oninput="updateReson()"><span id="rs-sens-v">50%</span></div>
         <div class="mod-ctrl"><label>DEPTH (dB)</label><input type="range" min="0" max="18" value="6" step="0.5" id="rs-depth" oninput="updateReson()"><span id="rs-depth-v">-6 dB</span></div>
         <div class="mod-ctrl"><label>SELECTIVITY (Q)</label><input type="range" min="20" max="100" value="60" step="1" id="rs-q" oninput="updateReson()"><span id="rs-q-v">6.0</span></div>
         <div class="mod-ctrl"><label>ATTACK (ms)</label><input type="range" min="1" max="200" value="20" step="1" id="rs-atk" oninput="updateReson()"><span id="rs-atk-v">20 ms</span></div>
         <div class="mod-ctrl"><label>RELEASE (ms)</label><input type="range" min="20" max="1000" value="200" step="10" id="rs-rel" oninput="updateReson()"><span id="rs-rel-v">200 ms</span></div>
+        <div class="mod-ctrl"><label>MIX (dry/wet)</label><input type="range" min="0" max="100" value="100" step="1" id="rs-mix" oninput="updateReson()"><span id="rs-mix-v">100%</span></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button onclick="toggleResonMode('attenuate')" id="rs-mode-att" class="rs-mode rs-mode-active" style="padding:10px 22px;font-size:12px;letter-spacing:1px;">▼  ATENUAR RESSONÂNCIAS</button>
@@ -493,7 +497,7 @@
         <span style="flex:1;"></span>
         <span style="font-size:10px;color:var(--muted);align-self:center;font-family:monospace;">picos ativos: <span id="rs-peaks" style="color:var(--c2)">0</span></span>
       </div>
-      <div class="module-info">Deteta picos ressonantes ao longo do espectro em tempo real e aplica corte dinâmico apenas onde e quando precisa. Não toca em frequências limpas. <b>SOOTHE</b> = suaviza tudo. <b>RESO</b> = só atua nas piores zonas.</div>
+      <div class="module-info">Deteta picos ressonantes ao longo do espectro em tempo real e aplica corte dinâmico apenas onde e quando precisa. Não toca em frequências limpas. Arranca <b>DESLIGADO</b> — carrega em <b>ACTIVAR</b> para o pôr a trabalhar e usa o <b>MIX</b> para doseares entre sinal limpo (0%) e efeito completo (100%).</div>
     </div>
   </div>
 
@@ -2018,20 +2022,20 @@
   }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="app.js?v=4.3.0"></script>
-<script src="features.js?v=4.3.0"></script>
-<script src="voicelab.js?v=4.3.0"></script>
-<script src="voicetune.js?v=4.3.0"></script>
+<script src="app.js?v=4.3.1"></script>
+<script src="features.js?v=4.3.1"></script>
+<script src="voicelab.js?v=4.3.1"></script>
+<script src="voicetune.js?v=4.3.1"></script>
 
 <!-- Toasts / Banners globais -->
 <div id="session-banner" style="display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);background:rgba(45,255,138,0.12);border:1px solid #2dff8a;color:#2dff8a;padding:8px 18px;border-radius:5px;font-family:monospace;font-size:10px;z-index:9999;letter-spacing:1px;transition:opacity .5s;"></div>
 <div id="undo-toast" style="display:block;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:7px 16px;border-radius:5px;font-family:monospace;font-size:10px;z-index:9999;opacity:0;transition:opacity .4s;pointer-events:none;"></div>
 <div id="memory-toast" style="display:none;position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:rgba(10,10,20,0.95);border:1px solid rgba(255,255,255,0.1);color:#fff;padding:10px 18px;border-radius:5px;font-family:'Rajdhani',monospace;font-size:11px;z-index:9999;transition:opacity .5s;max-width:400px;text-align:center;"></div>
-<script src="features2.js?v=4.3.0"></script>
-<script src="features3.js?v=4.3.0"></script>
-<script src="piradex-analise-pro.js?v=4.3.0"></script>
-<script src="piradex-limiter-pro.js?v=4.3.0"></script>
-<script src="piradex-diag.js?v=4.3.0"></script>
+<script src="features2.js?v=4.3.1"></script>
+<script src="features3.js?v=4.3.1"></script>
+<script src="piradex-analise-pro.js?v=4.3.1"></script>
+<script src="piradex-limiter-pro.js?v=4.3.1"></script>
+<script src="piradex-diag.js?v=4.3.1"></script>
 <script>
 /* Liga o Stereo Vectorscope do painel principal (canvas vectorscope-cv) ao
    módulo window.Vectorscope, alimentado por analisadores L/R do masterGain.

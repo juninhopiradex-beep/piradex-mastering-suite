@@ -191,7 +191,9 @@ function openTab(name, el) {
   setTimeout(function(){
     document.dispatchEvent(new CustomEvent('piradex:tab', {detail: name}));
   }, 80);
-  if(name==='reson')setTimeout(()=>{ if(typeof _ensureResonAnalyser==='function'){ _ensureResonAnalyser(); _startResonLoop(); } updateReson(); },60);
+  // v4.3: abrir o separador RESON so liga a analise/desenho — o processamento
+  // so entra quando o utilizador carregar em ACTIVAR (resonPower).
+  if(name==='reson')setTimeout(()=>{ if(typeof _ensureResonAnalyser==='function'){ _ensureResonAnalyser(); _startResonLoop(); } updateReson(); _updateResonPowerUI(); },60);
   if(name==='image')setTimeout(()=>{ if(typeof _ensureVectorscope==='function') _ensureVectorscope(); updateImager(); },60);
   if(name==='lowfocus')setTimeout(()=>{ if(typeof updateLowFocus==='function') updateLowFocus(); },60);
   if(name==='highfocus')setTimeout(()=>{ if(typeof updateHighFocus==='function') updateHighFocus(); },60);
@@ -2287,6 +2289,10 @@ function _drawVectorscope(){
 // + 4 filtros peaking adicionais para atenuar dinamicamente esses picos.
 // ═══════════════════════════════════════════════════════════════════════════
 let resonBypassed=false;
+// v4.3: o RESON arranca DESLIGADO. Antes bastava abrir o separador para ele
+// comecar a cortar o som, sem forma de desfazer nem dosear.
+let resonPower=false;      // ligado/desligado explicito pelo utilizador
+let resonMix=1.0;          // 0 = sinal limpo · 1 = efeito completo
 let resonMode='attenuate'; // 'attenuate' = atenua picos · 'boost' = aumenta picos
 let resonNodes=[]; // filtros peaking dedicados
 let resonInterval=null;
@@ -2311,8 +2317,31 @@ function updateReson(){
   document.getElementById('rs-q-v').textContent=q.toFixed(1);
   document.getElementById('rs-atk-v').textContent=document.getElementById('rs-atk').value+' ms';
   document.getElementById('rs-rel-v').textContent=document.getElementById('rs-rel').value+' ms';
+  const mixEl=document.getElementById('rs-mix');
+  if(mixEl){ resonMix=parseFloat(mixEl.value)/100; const mv=document.getElementById('rs-mix-v'); if(mv) mv.textContent=mixEl.value+'%'; }
   _ensureResonAnalyser();
   _startResonLoop();
+}
+function toggleResonPower(){
+  resonPower=!resonPower;
+  if(!resonPower && typeof _resonNodes!=='undefined' && audioCtx){
+    // ao desligar, devolve todos os filtros a ganho 0 (sinal intacto)
+    _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
+  }
+  _updateResonPowerUI();
+  if(typeof setStatus==='function') setStatus(resonPower?'RESON activado · usa o MIX para dosear':'RESON desligado · sinal intacto');
+}
+function _updateResonPowerUI(){
+  const b=document.getElementById('rs-power'), st=document.getElementById('rs-state');
+  if(b){
+    b.textContent = resonPower ? 'DESACTIVAR' : 'ACTIVAR';
+    b.style.borderColor = resonPower ? 'rgba(255,107,53,0.6)' : 'rgba(45,255,138,0.4)';
+    b.style.color = resonPower ? '#ff6b35' : '#2dff8a';
+  }
+  if(st){
+    st.textContent = resonPower ? '● ACTIVO' : '● DESLIGADO';
+    st.style.color = resonPower ? '#ff6b35' : 'var(--muted)';
+  }
 }
 function toggleResonMode(m){
   resonMode=m;
@@ -2363,7 +2392,8 @@ function _startResonLoop(){
     const atk = parseFloat(document.getElementById('rs-atk')?.value||20)/1000;
     const qVal = parseFloat(document.getElementById('rs-q')?.value||60)/10;
     // Atribui picos aos 6 nós dedicados; nós sem pico → gain 0
-    if(resonBypassed){
+    if(resonBypassed || !resonPower){
+      // desligado ou em bypass → filtros a 0 dB: o sinal passa intacto
       _resonNodes.forEach(n=>{ if(n) n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); });
     } else {
       _resonNodes.forEach((n,idx)=>{
@@ -2373,7 +2403,8 @@ function _startResonLoop(){
           n.frequency.setTargetAtTime(p.f, audioCtx.currentTime, atk*0.5+0.01);
           n.Q.setTargetAtTime(qVal, audioCtx.currentTime, 0.02);
           const intensity = Math.min(1, p.excess/12);
-          n.gain.setTargetAtTime(sign * depth * intensity, audioCtx.currentTime, atk*0.5+0.01);
+          // MIX dosea a profundidade aplicada: 0% = sem efeito, 100% = total
+          n.gain.setTargetAtTime(sign * depth * intensity * resonMix, audioCtx.currentTime, atk*0.5+0.01);
         } else {
           n.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
         }
@@ -2697,26 +2728,10 @@ function _measureBuffer(buf){
 }
 
 async function _renderProcessedForAnalysis(){
-  const nCh=audioBuffer.numberOfChannels, sr=audioBuffer.sampleRate, len=audioBuffer.length;
-  const off=new OfflineAudioContext(nCh,len,sr);
-  const mk=(t,f,g,Q)=>{const x=off.createBiquadFilter();x.type=t;x.frequency.value=f;x.gain.value=g||0;if(Q)x.Q.value=Q;return x;};
-  const oSub=mk('lowshelf',60,eqSub.gain.value),oBass=mk('peaking',150,eqBass.gain.value,0.8),
-        oLow=mk('peaking',500,eqLowNode.gain.value,1.0),oMid=mk('peaking',1200,eqMid.gain.value,0.9),
-        oHigh=mk('peaking',4000,eqHigh.gain.value,1.0),oAir=mk('highshelf',12000,eqAir.gain.value);
-  const oComp=off.createDynamicsCompressor();
-  oComp.threshold.value=compNode.threshold.value;oComp.ratio.value=compNode.ratio.value;
-  oComp.attack.value=compNode.attack.value;oComp.release.value=compNode.release.value;oComp.knee.value=6;
-  const oLim=off.createDynamicsCompressor();
-  oLim.threshold.value=limiterNode.threshold.value;oLim.ratio.value=20;oLim.attack.value=0.001;oLim.release.value=0.05;oLim.knee.value=0;
-  const oShape=off.createWaveShaper();
-  const drive=parseFloat(document.getElementById('shape-drive')?.value||0)/100;
-  const mix=parseFloat(document.getElementById('shape-mix')?.value||0)/100;
-  oShape.curve=makeShapeCurve(shapeMode,drive,mix);oShape.oversample='4x';
-  const oGain=off.createGain();oGain.gain.value=masterGain.gain.value;
-  oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
-  oAir.connect(oShape);oShape.connect(oComp);oComp.connect(oLim);oLim.connect(oGain);oGain.connect(off.destination);
-  const src=off.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
-  return await off.startRendering();
+  // v4.3: usa a MESMA cadeia offline da exportacao. Antes tinha uma cadeia
+  // paralela reduzida (so EQ+shape+comp+lim), com o masterGain DEPOIS do
+  // limiter e sem tecto — dai os True Peak positivos, impossiveis num master.
+  return await _renderMasteredBuffer();
 }
 
 async function runFullAnalysis(){
@@ -3604,6 +3619,145 @@ CLEAN 30 · BASS 12 · LOUD 25 · WIDE 22 · PUNCH 35 · FOCUS 40<br>
 <div class="ai-applied">✓ Aplicado · Alvo ${lufsTarget} LUFS · Activa AFTER para ouvir</div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERIZADOR MESTRE OFFLINE — FONTE ÚNICA DE VERDADE (v4.3)
+// Antes existiam DUAS cadeias offline diferentes: uma completa para a
+// exportação e outra reduzida para as Análises. A das Análises não tinha
+// shape dry/wet, trim, transiente, clipper, trim de entrada, normalização
+// nem limitador true-peak — e aplicava o masterGain DEPOIS do limiter, sem
+// tecto, o que produzia leituras impossíveis (ex.: +6.4 dBTP).
+// Agora ambas usam esta função: o que a análise mede é exactamente o que
+// sai no ficheiro exportado.
+// ═══════════════════════════════════════════════════════════════════════════
+async function _renderMasteredBuffer(){
+  if(!audioBuffer) return null;
+  const nCh=audioBuffer.numberOfChannels,sr=audioBuffer.sampleRate,len=audioBuffer.length;
+  const offCtx=new OfflineAudioContext(nCh,len,sr);
+  const mk2=(t,f,g,Q)=>{const n=offCtx.createBiquadFilter();n.type=t;n.frequency.value=f;n.gain.value=g||0;if(Q)n.Q.value=Q;return n;};
+  const oSub=mk2('lowshelf',60,eqSub.gain.value);
+  const oBass=mk2('peaking',150,eqBass.gain.value,0.8);
+  const oLow=mk2('peaking',500,eqLowNode.gain.value,1.0);
+  const oMid=mk2('peaking',1200,eqMid.gain.value,0.9);
+  const oHigh=mk2('peaking',4000,eqHigh.gain.value,1.0);
+  const oAir=mk2('highshelf',12000,eqAir.gain.value);
+  const oComp=offCtx.createDynamicsCompressor();
+  oComp.threshold.value=compNode.threshold.value;oComp.ratio.value=compNode.ratio.value;
+  oComp.attack.value=compNode.attack.value;oComp.release.value=compNode.release.value;oComp.knee.value=6;
+  // True peak limiter — hard brickwall -1 dBTP
+  const oLim=offCtx.createDynamicsCompressor();
+  oLim.threshold.value=-1.0;oLim.ratio.value=20;oLim.attack.value=0.001;oLim.release.value=0.05;oLim.knee.value=0;
+  const oShape=offCtx.createWaveShaper();
+  const drive=parseFloat(document.getElementById('shape-drive').value)/100;
+  const mix=parseFloat(document.getElementById('shape-mix').value)/100;
+  oShape.curve=makeShapeCurve(shapeMode,drive);oShape.oversample='4x';
+  const oSDry=offCtx.createGain();oSDry.gain.value=1-mix;
+  const oSWet=offCtx.createGain();oSWet.gain.value=mix;
+  const oSMix=offCtx.createGain();oSMix.gain.value=1;
+  const oSTrim=offCtx.createGain();oSTrim.gain.value=shapeTrimGain?shapeTrimGain.gain.value:1;
+  // Transient (mirror live node)
+  const oTrans=offCtx.createDynamicsCompressor();
+  if(_transientNode){
+    oTrans.threshold.value=_transientNode.threshold.value;
+    oTrans.ratio.value=_transientNode.ratio.value;
+    oTrans.attack.value=_transientNode.attack.value;
+    oTrans.release.value=_transientNode.release.value;
+    oTrans.knee.value=6;
+  } else { oTrans.threshold.value=0; oTrans.ratio.value=1; }
+  const oGain=offCtx.createGain();oGain.gain.value=masterGain.gain.value;
+  oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
+  oAir.connect(oSDry);oSDry.connect(oSMix);
+  oAir.connect(oShape);oShape.connect(oSWet);oSWet.connect(oSMix);
+  oSMix.connect(oSTrim);
+  oSTrim.connect(oComp);oComp.connect(oTrans);
+  // Clipper (mirror live full Gold-Clip chain) — only if engaged
+  const clipOn=document.getElementById('clip-toggle')?.checked && !clipBypassed;
+  if(clipOn){
+    const dDb=parseFloat(document.getElementById('clip-drive')?.value||0);
+    const cDb=parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
+    const mode=document.getElementById('clip-mode')?.value||'modern';
+    const gold=parseFloat(document.getElementById('clip-gold')?.value||0);
+    const goldMode=document.getElementById('clip-gold-mode')?.value||'smooth';
+    const alch=parseFloat(document.getElementById('clip-alchemy')?.value||0);
+    const box=parseFloat(document.getElementById('clip-boxtone')?.value||0);
+    const mix=parseFloat(document.getElementById('clip-mix')?.value||100);
+    const out=parseFloat(document.getElementById('clip-out')?.value||0);
+    const unity=document.getElementById('clip-unity')?.checked;
+    const ceil=Math.pow(10,cDb/20);
+    const n=8192;
+    // clip curve
+    const oIn=offCtx.createGain();oIn.gain.value=Math.pow(10,dDb/20);
+    const oWS=offCtx.createWaveShaper();oWS.oversample='4x';
+    const cc=new Float32Array(n);
+    for(let i=0;i<n;i++){let x=((i*2/(n-1))-1);let y;
+      if(mode==='hard')y=Math.max(-ceil,Math.min(ceil,x));
+      else if(mode==='classic'){const k=1.6,t=x/ceil;y=ceil*Math.tanh(t*k)/Math.tanh(k);}
+      else if(mode==='off')y=x;
+      else {const t=x/ceil;y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2));}
+      cc[i]=Math.max(-1,Math.min(1,y));}
+    oWS.curve=cc;
+    // gold curve
+    const oGold=offCtx.createWaveShaper();oGold.oversample='4x';
+    const gc=new Float32Array(n);const a=Math.max(0,Math.min(1,gold/100));
+    if(a<0.001){for(let i=0;i<n;i++)gc[i]=(i*2/(n-1))-1;}
+    else{const dr=1+a*(goldMode==='aggressive'?2.0:1.0);
+      for(let i=0;i<n;i++){const x=((i*2/(n-1))-1);let y=Math.sign(x)*Math.pow(Math.abs(x),1/(1+a*0.6));y=Math.tanh(y*dr)/Math.tanh(dr);gc[i]=Math.max(-1,Math.min(1,(1-a)*x+a*y));}}
+    oGold.curve=gc;
+    // alchemy + boxtone
+    const oAlch=offCtx.createBiquadFilter();oAlch.type='highshelf';oAlch.frequency.value=8000;oAlch.gain.value=-(alch/100)*4;
+    const oBox=offCtx.createBiquadFilter();oBox.type='peaking';oBox.frequency.value=3000;oBox.Q.value=0.7;oBox.gain.value=(box/100)*4;
+    // parallel mix + output
+    const oWet=offCtx.createGain();oWet.gain.value=mix/100;
+    const oDry=offCtx.createGain();oDry.gain.value=1-(mix/100);
+    const oSum=offCtx.createGain();oSum.gain.value=1;
+    let outG=Math.pow(10,out/20); if(unity) outG*=Math.pow(10,-dDb/20);
+    const oOut=offCtx.createGain();oOut.gain.value=outG;
+    oTrans.connect(oIn);
+    oIn.connect(oWS);oWS.connect(oGold);oGold.connect(oAlch);oAlch.connect(oBox);oBox.connect(oWet);oWet.connect(oSum);
+    oIn.connect(oDry);oDry.connect(oSum);
+    oSum.connect(oOut);oOut.connect(oLim);
+  } else {
+    oTrans.connect(oLim);
+  }
+  oLim.connect(oGain);
+  oGain.connect(offCtx.destination);
+  // v4.3: trim de ENTRADA (knob INPUT do I/O) — faltava na cadeia offline.
+  const oInTrim=offCtx.createGain();
+  const _inDb=(typeof inputGainDb!=='undefined')?inputGainDb:0;
+  oInTrim.gain.value=(_inDb<=-60)?0:Math.pow(10,_inDb/20);
+  oInTrim.connect(oSub);
+  const src=offCtx.createBufferSource();src.buffer=audioBuffer;src.connect(oInTrim);src.start(0);
+  const rendered=await offCtx.startRendering();
+  const isHouse=curPreset==='house';
+  // v4.3: alvo em LUFS reais (−8 House · −9 restantes), medidos por BS.1770
+  const _lufsTarget = isHouse ? -8 : -9;
+  let normalized=_normalizeToLUFS(rendered,_lufsTarget);
+  // ── TP LIMITER no export (auditoria D2): MESMO kernel do realtime ──
+  // Garante true-peak ≤ ceiling (inter-sample incluído) no ficheiro final.
+  let tpReport=null;
+  if(window.PiradexTPLimiter){
+    try{
+      tpReport=PiradexTPLimiter.processAudioBuffer(normalized,{ceilingDb:-1.0});
+      console.log('[EXPORT] True-peak: '+tpReport.beforeDbTP.toFixed(2)+' → '+tpReport.afterDbTP.toFixed(2)+' dBTP (ceiling '+tpReport.ceilingDb+')');
+    }catch(e){ console.warn('[EXPORT] TP limiter falhou, a exportar sem verificação:',e); }
+  }
+  // v4.3: o limitador true-peak baixa ligeiramente a loudness. Re-medir e
+  // corrigir uma vez, para o ficheiro sair mesmo no alvo anunciado.
+  try{
+    const _after=_measureLUFS_BS1770(normalized);
+    if(_after!==null&&isFinite(_after)){
+      const _err=_lufsTarget-_after;
+      if(Math.abs(_err)>0.25&&Math.abs(_err)<12){
+        normalized=_applyGainToBuffer(normalized,Math.pow(10,_err/20));
+        if(window.PiradexTPLimiter){
+          try{ PiradexTPLimiter.processAudioBuffer(normalized,{ceilingDb:-1.0}); }catch(e){}
+        }
+        console.log('[RENDER] loudness: '+_after.toFixed(1)+' → alvo '+_lufsTarget+' LUFS ('+(_err>=0?'+':'')+_err.toFixed(1)+' dB)');
+      }
+    }
+  }catch(e){}
+  return normalized;
+}
+
 // ===== EXPORT =====
 // lamejs loader
 let _lamejsLoaded=false;
@@ -3633,108 +3787,9 @@ async function _originalExport(){
   btn.style.opacity='0.5';btn.style.pointerEvents='none';
   setStatus('A renderizar'+( fmt==='mp3'?' MP3 320kbps':' WAV')+'...');
   try{
-    const nCh=audioBuffer.numberOfChannels,sr=audioBuffer.sampleRate,len=audioBuffer.length;
-    const offCtx=new OfflineAudioContext(nCh,len,sr);
-    const mk2=(t,f,g,Q)=>{const n=offCtx.createBiquadFilter();n.type=t;n.frequency.value=f;n.gain.value=g||0;if(Q)n.Q.value=Q;return n;};
-    const oSub=mk2('lowshelf',60,eqSub.gain.value);
-    const oBass=mk2('peaking',150,eqBass.gain.value,0.8);
-    const oLow=mk2('peaking',500,eqLowNode.gain.value,1.0);
-    const oMid=mk2('peaking',1200,eqMid.gain.value,0.9);
-    const oHigh=mk2('peaking',4000,eqHigh.gain.value,1.0);
-    const oAir=mk2('highshelf',12000,eqAir.gain.value);
-    const oComp=offCtx.createDynamicsCompressor();
-    oComp.threshold.value=compNode.threshold.value;oComp.ratio.value=compNode.ratio.value;
-    oComp.attack.value=compNode.attack.value;oComp.release.value=compNode.release.value;oComp.knee.value=6;
-    // True peak limiter — hard brickwall -1 dBTP
-    const oLim=offCtx.createDynamicsCompressor();
-    oLim.threshold.value=-1.0;oLim.ratio.value=20;oLim.attack.value=0.001;oLim.release.value=0.05;oLim.knee.value=0;
-    const oShape=offCtx.createWaveShaper();
-    const drive=parseFloat(document.getElementById('shape-drive').value)/100;
-    const mix=parseFloat(document.getElementById('shape-mix').value)/100;
-    oShape.curve=makeShapeCurve(shapeMode,drive);oShape.oversample='4x';
-    const oSDry=offCtx.createGain();oSDry.gain.value=1-mix;
-    const oSWet=offCtx.createGain();oSWet.gain.value=mix;
-    const oSMix=offCtx.createGain();oSMix.gain.value=1;
-    const oSTrim=offCtx.createGain();oSTrim.gain.value=shapeTrimGain?shapeTrimGain.gain.value:1;
-    // Transient (mirror live node)
-    const oTrans=offCtx.createDynamicsCompressor();
-    if(_transientNode){
-      oTrans.threshold.value=_transientNode.threshold.value;
-      oTrans.ratio.value=_transientNode.ratio.value;
-      oTrans.attack.value=_transientNode.attack.value;
-      oTrans.release.value=_transientNode.release.value;
-      oTrans.knee.value=6;
-    } else { oTrans.threshold.value=0; oTrans.ratio.value=1; }
-    const oGain=offCtx.createGain();oGain.gain.value=masterGain.gain.value;
-    oSub.connect(oBass);oBass.connect(oLow);oLow.connect(oMid);oMid.connect(oHigh);oHigh.connect(oAir);
-    oAir.connect(oSDry);oSDry.connect(oSMix);
-    oAir.connect(oShape);oShape.connect(oSWet);oSWet.connect(oSMix);
-    oSMix.connect(oSTrim);
-    oSTrim.connect(oComp);oComp.connect(oTrans);
-    // Clipper (mirror live full Gold-Clip chain) — only if engaged
-    const clipOn=document.getElementById('clip-toggle')?.checked && !clipBypassed;
-    if(clipOn){
-      const dDb=parseFloat(document.getElementById('clip-drive')?.value||0);
-      const cDb=parseFloat(document.getElementById('clip-ceiling')?.value||-0.1);
-      const mode=document.getElementById('clip-mode')?.value||'modern';
-      const gold=parseFloat(document.getElementById('clip-gold')?.value||0);
-      const goldMode=document.getElementById('clip-gold-mode')?.value||'smooth';
-      const alch=parseFloat(document.getElementById('clip-alchemy')?.value||0);
-      const box=parseFloat(document.getElementById('clip-boxtone')?.value||0);
-      const mix=parseFloat(document.getElementById('clip-mix')?.value||100);
-      const out=parseFloat(document.getElementById('clip-out')?.value||0);
-      const unity=document.getElementById('clip-unity')?.checked;
-      const ceil=Math.pow(10,cDb/20);
-      const n=8192;
-      // clip curve
-      const oIn=offCtx.createGain();oIn.gain.value=Math.pow(10,dDb/20);
-      const oWS=offCtx.createWaveShaper();oWS.oversample='4x';
-      const cc=new Float32Array(n);
-      for(let i=0;i<n;i++){let x=((i*2/(n-1))-1);let y;
-        if(mode==='hard')y=Math.max(-ceil,Math.min(ceil,x));
-        else if(mode==='classic'){const k=1.6,t=x/ceil;y=ceil*Math.tanh(t*k)/Math.tanh(k);}
-        else if(mode==='off')y=x;
-        else {const t=x/ceil;y=ceil*(t/Math.pow(1+Math.pow(Math.abs(t),2.2),1/2.2));}
-        cc[i]=Math.max(-1,Math.min(1,y));}
-      oWS.curve=cc;
-      // gold curve
-      const oGold=offCtx.createWaveShaper();oGold.oversample='4x';
-      const gc=new Float32Array(n);const a=Math.max(0,Math.min(1,gold/100));
-      if(a<0.001){for(let i=0;i<n;i++)gc[i]=(i*2/(n-1))-1;}
-      else{const dr=1+a*(goldMode==='aggressive'?2.0:1.0);
-        for(let i=0;i<n;i++){const x=((i*2/(n-1))-1);let y=Math.sign(x)*Math.pow(Math.abs(x),1/(1+a*0.6));y=Math.tanh(y*dr)/Math.tanh(dr);gc[i]=Math.max(-1,Math.min(1,(1-a)*x+a*y));}}
-      oGold.curve=gc;
-      // alchemy + boxtone
-      const oAlch=offCtx.createBiquadFilter();oAlch.type='highshelf';oAlch.frequency.value=8000;oAlch.gain.value=-(alch/100)*4;
-      const oBox=offCtx.createBiquadFilter();oBox.type='peaking';oBox.frequency.value=3000;oBox.Q.value=0.7;oBox.gain.value=(box/100)*4;
-      // parallel mix + output
-      const oWet=offCtx.createGain();oWet.gain.value=mix/100;
-      const oDry=offCtx.createGain();oDry.gain.value=1-(mix/100);
-      const oSum=offCtx.createGain();oSum.gain.value=1;
-      let outG=Math.pow(10,out/20); if(unity) outG*=Math.pow(10,-dDb/20);
-      const oOut=offCtx.createGain();oOut.gain.value=outG;
-      oTrans.connect(oIn);
-      oIn.connect(oWS);oWS.connect(oGold);oGold.connect(oAlch);oAlch.connect(oBox);oBox.connect(oWet);oWet.connect(oSum);
-      oIn.connect(oDry);oDry.connect(oSum);
-      oSum.connect(oOut);oOut.connect(oLim);
-    } else {
-      oTrans.connect(oLim);
-    }
-    oLim.connect(oGain);
-    oGain.connect(offCtx.destination);
-    const src=offCtx.createBufferSource();src.buffer=audioBuffer;src.connect(oSub);src.start(0);
-    const rendered=await offCtx.startRendering();
-    const isHouse=curPreset==='house';
-    let normalized=normalizeLUFS(rendered,isHouse?0.224:0.178);
-    // ── TP LIMITER no export (auditoria D2): MESMO kernel do realtime ──
-    // Garante true-peak ≤ ceiling (inter-sample incluído) no ficheiro final.
-    let tpReport=null;
-    if(window.PiradexTPLimiter){
-      try{
-        tpReport=PiradexTPLimiter.processAudioBuffer(normalized,{ceilingDb:-1.0});
-        console.log('[EXPORT] True-peak: '+tpReport.beforeDbTP.toFixed(2)+' → '+tpReport.afterDbTP.toFixed(2)+' dBTP (ceiling '+tpReport.ceilingDb+')');
-      }catch(e){ console.warn('[EXPORT] TP limiter falhou, a exportar sem verificação:',e); }
-    }
+    const nCh=audioBuffer.numberOfChannels,sr=audioBuffer.sampleRate;
+    // v4.3: cadeia offline unificada (ver _renderMasteredBuffer)
+    let normalized = await _renderMasteredBuffer();
     // Measure true LUFS BS.1770
     const trueLUFS=_measureLUFS_BS1770(normalized);
     // Apply TPDF dither before 16-bit conversion
@@ -3772,6 +3827,39 @@ async function _originalExport(){
   btn.style.opacity='1';btn.style.pointerEvents='auto';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NORMALIZAÇÃO POR LUFS REAL (v4.3)
+// A antiga normalizeLUFS() era, apesar do nome, um normalizador de RMS com
+// clamp a ±0.99 — ou seja: (a) nunca acertava no alvo anunciado em LUFS,
+// porque RMS e loudness percebida nao sao a mesma coisa, e (b) o clamp era
+// clipping duro aplicado ANTES do limitador true-peak, o que sujava o master
+// e tornava o limitador inutil. Agora mede-se com o medidor BS.1770 que ja
+// existe na suite e aplica-se o ganho exacto para o alvo, sem clamp: o tecto
+// fica a cargo do limitador true-peak, como deve ser.
+function _applyGainToBuffer(buffer,g){
+  const nCh=buffer.numberOfChannels,len=buffer.length;
+  const nb=new AudioBuffer({numberOfChannels:nCh,length:len,sampleRate:buffer.sampleRate});
+  for(let c=0;c<nCh;c++){
+    const src=buffer.getChannelData(c),dst=nb.getChannelData(c);
+    for(let i=0;i<len;i++){ let v=src[i]*g; if(v>4)v=4; else if(v<-4)v=-4; dst[i]=v; }
+  }
+  return nb;
+}
+function _normalizeToLUFS(buffer,targetLufs){
+  let meas=null;
+  try{ meas=_measureLUFS_BS1770(buffer); }catch(e){}
+  if(meas===null||!isFinite(meas)){
+    const nCh=buffer.numberOfChannels,len=buffer.length;
+    let sq=0,cnt=0;
+    for(let c=0;c<nCh;c++){const d=buffer.getChannelData(c);for(let i=0;i<len;i++){sq+=d[i]*d[i];cnt++;}}
+    const rms=Math.sqrt(sq/cnt);
+    const targetRMS=Math.pow(10,(targetLufs+6)/20);
+    return _applyGainToBuffer(buffer, rms>0?Math.min(targetRMS/rms,8):1);
+  }
+  let g=Math.pow(10,(targetLufs-meas)/20);
+  g=Math.max(0.02,Math.min(g,12));
+  return _applyGainToBuffer(buffer,g);
+}
 function normalizeLUFS(buffer,targetRMS){
   const nCh=buffer.numberOfChannels,len=buffer.length;
   let sq=0,cnt=0;
